@@ -118,10 +118,15 @@ def load_model(ckpt, cfg_path, device):
     return model, cfg
 
 
+_CACHE_DTYPES = {"fp32": torch.float32, "bf16": torch.bfloat16, "fp16": torch.float16}
+
+
 @torch.no_grad()
-def extract_and_cache_H(model, cfg, ds, indices, batch_size, device, cache_path, desc):
+def extract_and_cache_H(model, cfg, ds, indices, batch_size, device,
+                        cache_path, desc, cache_dtype="bf16"):
     """Run the frozen backbone once per molecule; save H concatenated plus
-    a per-molecule offset array + targets.
+    a per-molecule offset array + targets. H is stored in `cache_dtype`
+    (bf16 by default to halve disk/RAM footprint at full-dataset scale).
     """
     t_type = str(cfg.interpolant.time_type)
     t_max = cfg.interpolant.timesteps - 1 if t_type == "discrete" else 1.0
@@ -158,13 +163,22 @@ def extract_and_cache_H(model, cfg, ds, indices, batch_size, device, cache_path,
         targets.append(tgt.cpu())
 
     H_all = torch.cat(H_chunks, dim=0).contiguous()
+    target_dtype = _CACHE_DTYPES[cache_dtype]
+    if target_dtype != torch.float32:
+        H_all = H_all.to(target_dtype)
     offsets = torch.tensor(offsets, dtype=torch.long)
     targets = torch.cat(targets, dim=0).contiguous()
 
-    torch.save({"H": H_all, "offsets": offsets, "targets": targets}, cache_path)
+    torch.save(
+        {"H": H_all, "offsets": offsets, "targets": targets,
+         "cache_dtype": cache_dtype},
+        cache_path,
+    )
+    bytes_per = {"fp32": 4, "bf16": 2, "fp16": 2}[cache_dtype]
+    mb = H_all.numel() * bytes_per / (1024 ** 2)
     print(f"  saved H cache -> {cache_path}  "
-          f"H.shape={tuple(H_all.shape)}  offsets={offsets.shape}  "
-          f"targets={targets.shape}")
+          f"H.shape={tuple(H_all.shape)} dtype={cache_dtype}  "
+          f"H size={mb:.1f} MB")
 
 
 def load_H_cache(path):
@@ -263,7 +277,8 @@ class ThermoHeadModel(nn.Module):
 # ---------------------------------------------------------------------------
 
 def batch_iter(H, offsets, targets, indices, batch_size, device, shuffle=True):
-    """Yield (H_batch, batch_index, targets_batch) from a cached index subset."""
+    """Yield (H_batch, batch_index, targets_batch) from a cached index subset.
+    Casts H to fp32 on transfer (cache may be bf16/fp16)."""
     order = np.array(indices)
     if shuffle:
         np.random.shuffle(order)
@@ -275,7 +290,7 @@ def batch_iter(H, offsets, targets, indices, batch_size, device, shuffle=True):
             s, e = int(offsets[mi]), int(offsets[mi + 1])
             H_list.append(H[s:e])
             batch_list.append(torch.full((e - s,), bi, dtype=torch.long))
-        H_b = torch.cat(H_list, dim=0).to(device)
+        H_b = torch.cat(H_list, dim=0).to(device=device, dtype=torch.float32)
         b_b = torch.cat(batch_list, dim=0).to(device)
         t_b = targets[mol_ids].to(device)
         yield H_b, b_b, t_b
@@ -374,6 +389,9 @@ def main():
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--no-cache", action="store_true")
+    p.add_argument("--cache-dtype", choices=list(_CACHE_DTYPES.keys()), default="bf16",
+                   help="H cache storage dtype. bf16 halves footprint vs fp32 with "
+                        "effectively no quality loss for head training.")
     args = p.parse_args()
 
     torch.manual_seed(args.seed)
@@ -393,12 +411,12 @@ def main():
             ds_tr, idx_tr = load_labeled_indices(args.train_pt, args.max_train, args.seed)
             extract_and_cache_H(model_back, cfg, ds_tr, idx_tr,
                                 args.extract_batch_size, args.device, cache_tr,
-                                desc="train-H")
+                                desc="train-H", cache_dtype=args.cache_dtype)
         if not cache_te.exists() or args.no_cache:
             ds_te, idx_te = load_labeled_indices(args.test_pt, args.max_test, args.seed)
             extract_and_cache_H(model_back, cfg, ds_te, idx_te,
                                 args.extract_batch_size, args.device, cache_te,
-                                desc="test-H")
+                                desc="test-H", cache_dtype=args.cache_dtype)
         del model_back
         torch.cuda.empty_cache() if args.device == "cuda" else None
 
