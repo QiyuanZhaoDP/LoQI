@@ -36,15 +36,15 @@ Usage:
 Re-running with the same --cache-dir reuses cached H; only heads retrain.
 """
 import argparse
+import glob
 import json
 import math
+import sys
 import time
 from pathlib import Path
 
 import numpy as np
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 from omegaconf import OmegaConf
 from rdkit.Chem.rdchem import Mol
 from sklearn.metrics import mean_absolute_error, r2_score
@@ -52,20 +52,17 @@ from torch_geometric.data import InMemoryDataset
 from torch_geometric.data.data import DataEdgeAttr, DataTensorAttr
 from torch_geometric.data.storage import GlobalStorage
 from torch_geometric.loader import DataLoader
-from torch_scatter import scatter_mean, scatter_softmax, scatter_sum
 from tqdm import tqdm
 
 from megalodon.data.batch_preprocessor import BatchPreProcessor
 from megalodon.models.module import Graph3DInterpolantModel
-
-TARGET_FIELDS = ["enthalpy_298", "gibbs_298", "cv_gas", "entropy_gas", "enthalpy_0"]
-# Treat as additive (sum over atoms is physical):
-EXTENSIVE_IDX = [0, 1, 2, 4]   # enthalpy_298, gibbs_298, cv_gas, enthalpy_0
-TARGET_UNITS = {
-    "enthalpy_298": "kJ/mol", "gibbs_298": "kJ/mol",
-    "cv_gas": "J/(mol*K)",    "entropy_gas": "J/(mol*K)",
-    "enthalpy_0": "kJ/mol",
-}
+from megalodon.models.thermo_heads import (
+    EXTENSIVE_IDX,
+    TARGET_FIELDS,
+    TARGET_UNITS,
+    ThermoHeadModel,
+    masked_mse,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -186,91 +183,37 @@ def load_H_cache(path):
     return d["H"], d["offsets"], d["targets"]
 
 
+def merge_shard_caches(shard_paths, out_path):
+    """Concatenate per-shard H caches into the merged cache file expected by
+    the training loop. Order across shards is preserved; offsets are
+    adjusted so each molecule's atom-slice still lands on the right rows.
+    """
+    H_parts, target_parts = [], []
+    merged_offsets = [0]
+    saved_dtype = None
+    for path in shard_paths:
+        d = torch.load(path)
+        H, offsets, tgt = d["H"], d["offsets"], d["targets"]
+        saved_dtype = d.get("cache_dtype", "fp32")
+        H_parts.append(H)
+        target_parts.append(tgt)
+        base = merged_offsets[-1]
+        # offsets[0] is 0, subsequent entries are cumulative within shard
+        for o in offsets[1:].tolist():
+            merged_offsets.append(int(o) + base)
+    torch.save(
+        {"H": torch.cat(H_parts, dim=0),
+         "offsets": torch.tensor(merged_offsets, dtype=torch.long),
+         "targets": torch.cat(target_parts, dim=0),
+         "cache_dtype": saved_dtype},
+        out_path,
+    )
+    return len(H_parts)
+
+
 # ---------------------------------------------------------------------------
 # Step B — heads
 # ---------------------------------------------------------------------------
-
-class ExtensiveSumHead(nn.Module):
-    """per-atom MLP → scatter_sum → extensive property."""
-    def __init__(self, dim=256, hidden=128, n_targets=4):
-        super().__init__()
-        self.mlp = nn.Sequential(
-            nn.LayerNorm(dim),
-            nn.Linear(dim, hidden),
-            nn.SiLU(),
-            nn.Linear(hidden, hidden),
-            nn.SiLU(),
-            nn.Linear(hidden, n_targets),
-        )
-
-    def forward(self, H, batch):
-        per_atom = self.mlp(H)
-        return scatter_sum(per_atom, batch, dim=0)  # [N_mols, n_targets]
-
-
-class AtomMolMP(nn.Module):
-    """Bidirectional message passing between atoms and a per-molecule virtual
-    node with attention-based atom → mol pooling.
-
-    Each layer:
-        q = W_q * mol_H,  k = W_k * H,  v = W_v * H
-        alpha_i = softmax_per_mol(q_{b(i)} . k_i / sqrt(d))
-        mol_H  ← mol_H  + MLP1( sum_i alpha_i * v_i )
-        H      ← H      + MLP2( [H | mol_H[b(i)]] )
-    """
-    def __init__(self, dim=256, n_layers=2, hidden=128, n_targets=5):
-        super().__init__()
-        self.n_layers = n_layers
-        self.dim = dim
-        self.q_proj = nn.ModuleList(nn.Linear(dim, dim) for _ in range(n_layers))
-        self.k_proj = nn.ModuleList(nn.Linear(dim, dim) for _ in range(n_layers))
-        self.v_proj = nn.ModuleList(nn.Linear(dim, dim) for _ in range(n_layers))
-        self.mol_update = nn.ModuleList(
-            nn.Sequential(nn.LayerNorm(dim), nn.Linear(dim, dim),
-                          nn.SiLU(), nn.Linear(dim, dim))
-            for _ in range(n_layers)
-        )
-        self.atom_update = nn.ModuleList(
-            nn.Sequential(nn.LayerNorm(2 * dim), nn.Linear(2 * dim, dim),
-                          nn.SiLU(), nn.Linear(dim, dim))
-            for _ in range(n_layers)
-        )
-        self.final = nn.Sequential(
-            nn.LayerNorm(dim),
-            nn.Linear(dim, hidden),
-            nn.SiLU(),
-            nn.Linear(hidden, n_targets),
-        )
-
-    def forward(self, H, batch):
-        mol_H = scatter_mean(H, batch, dim=0)  # [N_mols, dim]
-        scale = 1.0 / math.sqrt(self.dim)
-        for l in range(self.n_layers):
-            q = self.q_proj[l](mol_H)              # [N_mols, dim]
-            k = self.k_proj[l](H)                  # [N_atoms, dim]
-            v = self.v_proj[l](H)                  # [N_atoms, dim]
-            q_at = q[batch]                         # [N_atoms, dim]
-            scores = (q_at * k).sum(-1) * scale     # [N_atoms]
-            alpha = scatter_softmax(scores, batch, dim=0)  # [N_atoms]
-            weighted = alpha.unsqueeze(-1) * v             # [N_atoms, dim]
-            agg = scatter_sum(weighted, batch, dim=0)      # [N_mols, dim]
-            mol_H = mol_H + self.mol_update[l](agg)
-
-            mol_at = mol_H[batch]
-            H = H + self.atom_update[l](torch.cat([H, mol_at], dim=-1))
-        return self.final(mol_H)                   # [N_mols, n_targets]
-
-
-class ThermoHeadModel(nn.Module):
-    def __init__(self, dim=256, n_mp_layers=2):
-        super().__init__()
-        self.ext = ExtensiveSumHead(dim=dim, n_targets=len(EXTENSIVE_IDX))
-        self.mp  = AtomMolMP(dim=dim, n_layers=n_mp_layers,
-                              n_targets=len(TARGET_FIELDS))
-
-    def forward(self, H, batch):
-        return {"ext": self.ext(H, batch), "mp": self.mp(H, batch)}
-
 
 # ---------------------------------------------------------------------------
 # Training / evaluation
@@ -294,15 +237,6 @@ def batch_iter(H, offsets, targets, indices, batch_size, device, shuffle=True):
         b_b = torch.cat(batch_list, dim=0).to(device)
         t_b = targets[mol_ids].to(device)
         yield H_b, b_b, t_b
-
-
-def masked_mse(pred, target):
-    """pred, target: [B, K], target may have NaN; returns scalar mean over valid."""
-    mask = ~torch.isnan(target)
-    if mask.sum() == 0:
-        return torch.tensor(0.0, device=pred.device)
-    diff = (pred - torch.nan_to_num(target)) * mask
-    return (diff ** 2).sum() / mask.sum()
 
 
 def evaluate(model, H_te, off_te, tgt_te_norm, indices, batch_size, device,
@@ -392,6 +326,17 @@ def main():
     p.add_argument("--cache-dtype", choices=list(_CACHE_DTYPES.keys()), default="bf16",
                    help="H cache storage dtype. bf16 halves footprint vs fp32 with "
                         "effectively no quality loss for head training.")
+    p.add_argument("--shard-id", type=int, default=None,
+                   help="For multi-GPU extraction: 0..(n_shards-1). When set, this "
+                        "process extracts only its shard and exits (no training). "
+                        "Training run (shard-id=None) auto-merges shard files.")
+    p.add_argument("--n-shards", type=int, default=1)
+    # wandb
+    p.add_argument("--wandb", action="store_true", help="Log to Weights & Biases.")
+    p.add_argument("--wandb-project", default="thermogen")
+    p.add_argument("--wandb-name", default=None,
+                   help="Run name. Default: ft_thermo_n<max_train>_s<seed>.")
+    p.add_argument("--wandb-group", default=None)
     args = p.parse_args()
 
     torch.manual_seed(args.seed)
@@ -402,7 +347,44 @@ def main():
     cache_tr = cache_dir / f"train_H_n{args.max_train}_s{args.seed}.pt"
     cache_te = cache_dir / f"test_H_n{args.max_test}_s{args.seed}.pt"
 
-    # --- Step A: extract H if needed ---
+    # --- Shard extraction mode: extract my slice, exit ---
+    if args.shard_id is not None:
+        assert 0 <= args.shard_id < args.n_shards, "shard-id out of range"
+        shard_tr = cache_tr.with_name(
+            cache_tr.stem + f".shard{args.shard_id}_of_{args.n_shards}.pt"
+        )
+        print(f"[shard {args.shard_id}/{args.n_shards}] loading frozen backbone")
+        model_back, cfg = load_model(args.ckpt, args.config, args.device)
+        if not shard_tr.exists() or args.no_cache:
+            ds_tr, idx_tr = load_labeled_indices(args.train_pt, args.max_train, args.seed)
+            my_idx = idx_tr[args.shard_id::args.n_shards]
+            print(f"[shard {args.shard_id}] extracting {len(my_idx):,} molecules")
+            extract_and_cache_H(
+                model_back, cfg, ds_tr, my_idx,
+                args.extract_batch_size, args.device, shard_tr,
+                desc=f"train-H[{args.shard_id}]",
+                cache_dtype=args.cache_dtype,
+            )
+        # Shard 0 also extracts test (small, single-GPU is fine)
+        if args.shard_id == 0 and (not cache_te.exists() or args.no_cache):
+            ds_te, idx_te = load_labeled_indices(args.test_pt, args.max_test, args.seed)
+            extract_and_cache_H(
+                model_back, cfg, ds_te, idx_te,
+                args.extract_batch_size, args.device, cache_te,
+                desc="test-H", cache_dtype=args.cache_dtype,
+            )
+        print(f"[shard {args.shard_id}] done.")
+        sys.exit(0)
+
+    # --- Merge shard files into main cache if present ---
+    if not cache_tr.exists() or args.no_cache:
+        shard_pattern = str(cache_tr.with_name(cache_tr.stem + ".shard*_of_*.pt"))
+        shard_paths = sorted(glob.glob(shard_pattern))
+        if shard_paths:
+            print(f"Merging {len(shard_paths)} shard cache(s) -> {cache_tr}")
+            merge_shard_caches(shard_paths, cache_tr)
+
+    # --- Step A: extract H if still needed (non-shard single-GPU path) ---
     need_extract = args.no_cache or not cache_tr.exists() or not cache_te.exists()
     if need_extract:
         print("Loading frozen backbone")
@@ -443,6 +425,18 @@ def main():
     tgt_tr_norm = (tgt_tr - torch.tensor(target_mean)) / torch.tensor(target_std)
     tgt_te_norm = (tgt_te - torch.tensor(target_mean)) / torch.tensor(target_std)
 
+    # --- wandb init (optional) ---
+    wb = None
+    if args.wandb:
+        import wandb as _wandb
+        wb = _wandb
+        wb.init(
+            project=args.wandb_project,
+            name=args.wandb_name or f"ft_thermo_n{args.max_train}_s{args.seed}",
+            group=args.wandb_group,
+            config=vars(args),
+        )
+
     # --- Step B: train heads ---
     device = torch.device(args.device)
     model = ThermoHeadModel(dim=H_tr.shape[-1], n_mp_layers=args.n_mp_layers).to(device)
@@ -454,6 +448,7 @@ def main():
 
     best_test_mae = float("inf")
     t0 = time.time()
+    global_step = 0
     for epoch in range(args.epochs):
         model.train()
         losses = []
@@ -469,6 +464,12 @@ def main():
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step()
             losses.append(loss.item())
+            if wb is not None:
+                wb.log({"train/loss": float(loss.item()),
+                         "train/loss_ext": float(loss_ext.item()),
+                         "train/loss_mp":  float(loss_mp.item()),
+                         "train/lr": sched.get_last_lr()[0]}, step=global_step)
+            global_step += 1
         sched.step()
 
         if (epoch + 1) % max(1, args.epochs // 10) == 0 or epoch == args.epochs - 1:
@@ -482,6 +483,18 @@ def main():
                   f"lr={sched.get_last_lr()[0]:.2e}")
             if avg_mae_mp < best_test_mae:
                 best_test_mae = avg_mae_mp
+            if wb is not None:
+                eval_log = {"epoch": epoch + 1,
+                            "train/loss_epoch": float(np.mean(losses)),
+                            "test/mae_avg_norm_mp": float(avg_mae_mp)}
+                for r in rows:
+                    if "mae_mp" in r:
+                        eval_log[f"test/mae_mp_{r['target']}"] = r["mae_mp"]
+                        eval_log[f"test/r2_mp_{r['target']}"]  = r["r2_mp"]
+                    if "mae_ext" in r:
+                        eval_log[f"test/mae_ext_{r['target']}"] = r["mae_ext"]
+                        eval_log[f"test/r2_ext_{r['target']}"]  = r["r2_ext"]
+                wb.log(eval_log, step=global_step)
 
     print(f"\nTotal training time: {time.time()-t0:.1f}s")
 
@@ -495,6 +508,18 @@ def main():
         json.dump({"args": vars(args), "rows": rows,
                    "target_mean": target_mean.tolist(),
                    "target_std":  target_std.tolist()}, f, indent=2)
+    # Save heads so continuation_training.py can --head-init from here.
+    heads_path = cache_dir / "heads_final.pt"
+    torch.save(model.state_dict(), heads_path)
+    print(f"Heads saved -> {heads_path}")
+    if wb is not None:
+        final_log = {}
+        for r in rows:
+            for k in ("mae_ext", "r2_ext", "mae_mp", "r2_mp"):
+                if k in r:
+                    final_log[f"final/{k}_{r['target']}"] = r[k]
+        wb.log(final_log, step=global_step)
+        wb.finish()
     print(f"\nReport saved -> {out_path}")
 
 
