@@ -351,7 +351,13 @@ def main():
         param_groups.append({"params": bb_trainable, "lr": args.backbone_lr,
                               "name": "backbone_tail"})
     opt = torch.optim.AdamW(param_groups, weight_decay=args.weight_decay)
-    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.epochs)
+    # Step-wise cosine so LR decays smoothly every batch rather than
+    # jumping at epoch boundaries.
+    steps_per_epoch = max(1, len(train_loader))
+    total_steps = steps_per_epoch * args.epochs
+    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=total_steps)
+    print(f"Cosine schedule: T_max={total_steps:,} optimizer steps "
+          f"({steps_per_epoch:,}/epoch × {args.epochs} epochs)")
 
     # --- wandb ---
     wb = None
@@ -386,6 +392,7 @@ def main():
                 list(heads.parameters()) + bb_trainable, args.grad_clip
             )
             opt.step()
+            sched.step()
             losses.append(loss.item())
             if wb is not None:
                 lrs = {g["name"]: g["lr"] for g in opt.param_groups}
@@ -395,7 +402,6 @@ def main():
                          **{f"lr/{k}": v for k, v in lrs.items()}},
                        step=global_step)
             global_step += 1
-        sched.step()
 
         if (epoch + 1) % args.eval_every == 0 or epoch == args.epochs - 1:
             rows = eval_loop(backbone, heads, val_loader, device,

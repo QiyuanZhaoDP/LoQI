@@ -487,7 +487,13 @@ def main():
         hidden=args.head_hidden,
     ).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
-    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.epochs)
+    # Step-wise cosine: decay smoothly across every optimizer step rather
+    # than jumping at epoch boundaries.
+    steps_per_epoch = (n_train + args.batch_size - 1) // args.batch_size
+    total_steps = max(1, steps_per_epoch * args.epochs)
+    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=total_steps)
+    print(f"Cosine schedule: T_max={total_steps:,} optimizer steps "
+          f"({steps_per_epoch:,}/epoch × {args.epochs} epochs)")
 
     idx_train = np.arange(n_train)
     idx_val   = np.arange(n_val)
@@ -510,6 +516,7 @@ def main():
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step()
+            sched.step()
             losses.append(loss.item())
             if wb is not None:
                 wb.log({"train/loss": float(loss.item()),
@@ -517,7 +524,6 @@ def main():
                          "train/loss_mp":  float(loss_mp.item()),
                          "train/lr": sched.get_last_lr()[0]}, step=global_step)
             global_step += 1
-        sched.step()
 
         if (epoch + 1) % max(1, args.epochs // 10) == 0 or epoch == args.epochs - 1:
             rows = evaluate(model, H_va, off_va, tgt_va_norm, idx_val,
