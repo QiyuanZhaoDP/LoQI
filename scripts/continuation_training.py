@@ -107,20 +107,52 @@ def load_backbone(ckpt, cfg_path, device):
     return model, cfg
 
 
-def _unwrap_dynamics(backbone):
-    """backbone.dynamics may be a ModelWithEMA wrapper. Return the actual
-    trainable backbone module (the one with dit_layers/egnn_layers), and
-    also disable EMA forward dispatch so eval uses current (fine-tuned)
-    weights instead of the stale averaged copy."""
+def _unwrap_dynamics(backbone, use_ema_weights=True):
+    """Return the trainable backbone (the module with dit_layers/egnn_layers).
+
+    `backbone.dynamics` is typically a ModelWithEMA wrapper with TWO copies
+    of the weights:
+      - `dynamics.model`      = last training-step weights (base)
+      - `dynamics.ema_model`  = exponentially-averaged copy (smoother)
+
+    ft (scripts/finetune_thermo_head.py) calls model.eval() before extracting
+    H, which dispatches forward through `ema_model`. Any warm-started heads
+    were therefore fit to the EMA-H distribution.
+
+    Continuation needs to train the base weights (you can't update the
+    ema_model directly — it's recomputed each step), so forward MUST go
+    through `model`. That creates a distribution mismatch: forward-through-
+    base gives base-H ≠ EMA-H the heads expect → the train loss jumps
+    10-20x at the start of continuation.
+
+    Fix (enabled by default): copy EMA-averaged weights into the base model
+    before training. Now forward-through-base reproduces the EMA-H
+    distribution, heads stay at their converged loss, and further training
+    of the last N layers fine-tunes from that starting point.
+
+    Set use_ema_weights=False to skip the copy (useful if you're NOT warm-
+    starting heads, or want to see the raw base-model behavior).
+    """
     dyn = backbone.dynamics
-    # ModelWithEMA.forward uses self.ema_model in eval mode when self.ema=True;
-    # we need eval-time forward to reflect the weights we're training.
+    if (use_ema_weights
+            and getattr(dyn, "ema", False)
+            and getattr(dyn, "ema_model", None) is not None):
+        try:
+            inner_ema = (dyn.ema_model.module
+                         if hasattr(dyn.ema_model, "module")
+                         else dyn.ema_model)
+            dyn.model.load_state_dict(inner_ema.state_dict())
+            print("Copied EMA-averaged weights into base model "
+                  "(aligning with the distribution ft heads were trained on).")
+        except Exception as e:
+            print(f"Warning: couldn't copy EMA weights to base ({e!r}); "
+                  f"continuing with base-model weights as-is.")
     if hasattr(dyn, "ema"):
         dyn.ema = False
     return dyn.model if hasattr(dyn, "model") else dyn
 
 
-def unfreeze_last_n_layers(backbone, n):
+def unfreeze_last_n_layers(backbone, n, use_ema_weights=True):
     """Freeze the whole backbone, then unfreeze the last n DiTeBlock AND the
     last n XEGNN layers (each round uses both in lockstep).
     Returns the list of trainable backbone parameters (for a separate LR group).
@@ -128,7 +160,7 @@ def unfreeze_last_n_layers(backbone, n):
     for p in backbone.parameters():
         p.requires_grad = False
 
-    inner = _unwrap_dynamics(backbone)
+    inner = _unwrap_dynamics(backbone, use_ema_weights=use_ema_weights)
     dit = inner.dit_layers
     egnn = inner.egnn_layers
     assert len(dit) == len(egnn), \
@@ -296,6 +328,12 @@ def main():
                         "can be larger (more MP layers, etc.) and new params "
                         "get random init.")
     p.add_argument("--unfreeze-layers", type=int, default=2)
+    p.add_argument("--no-ema-init", action="store_true",
+                   help="Skip copying ema_model weights into the base model at "
+                        "startup. Default ON for distribution alignment with "
+                        "ft warm-starts — pass this flag only if you're "
+                        "NOT warm-starting heads, or deliberately want the "
+                        "raw base-model H.")
     p.add_argument("--max-train", type=int, default=None,
                    help="Cap on labeled train molecules (default: use all).")
     p.add_argument("--max-val",   type=int, default=None,
@@ -387,7 +425,10 @@ def main():
 
     # --- Load backbone + heads ---
     backbone, cfg = load_backbone(args.ckpt, args.config, device)
-    bb_trainable = unfreeze_last_n_layers(backbone, args.unfreeze_layers)
+    bb_trainable = unfreeze_last_n_layers(
+        backbone, args.unfreeze_layers,
+        use_ema_weights=not args.no_ema_init,
+    )
 
     heads = ThermoHeadModel(
         dim=cfg.dynamics.model_args.invariant_node_feat_dim,
