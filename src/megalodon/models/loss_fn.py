@@ -197,6 +197,10 @@ class ThermoPropertyLoss:
         self.timesteps = timesteps
         self._mean_t = None
         self._std_t = None
+        # Counters for label-density telemetry.
+        self.last_batch_size = 0
+        self.last_gated_in = 0           # molecules with t >= min_time
+        self.last_labeled_active = 0     # molecules contributing to loss
 
     def _ensure_stats(self, device, dtype):
         if self._mean_t is None or self._mean_t.device != device:
@@ -227,6 +231,9 @@ class ThermoPropertyLoss:
             has_label = ~torch.isnan(targets).any(dim=1)
 
         mol_mask = time_mask & has_label
+        self.last_batch_size = int(time_mask.numel())
+        self.last_gated_in = int(time_mask.sum().item())
+        self.last_labeled_active = int(mol_mask.sum().item())
         if not mol_mask.any():
             return torch.tensor(0.0, device=device)
 

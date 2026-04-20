@@ -413,6 +413,12 @@ class Graph3DInterpolantModel(pl.LightningModule):
             loss += add_loss
             self.log(f"{stage}/additional_loss_term", add_loss, batch_size=batch_size,
                      prog_bar=True)
+            # Surface semi-supervised label density if the aux loss tracks it.
+            for _attr in ("last_batch_size", "last_gated_in", "last_labeled_active"):
+                if hasattr(self.loss_fn, _attr):
+                    self.log(f"{stage}/thermo_{_attr}",
+                              float(getattr(self.loss_fn, _attr)),
+                              batch_size=batch_size)
         self.log(f"{stage}/loss", loss, batch_size=batch_size)
         self.log(f"{stage}/loss_epoch", loss, batch_size=batch_size, on_step=False, on_epoch=True)
         return loss, predictions
