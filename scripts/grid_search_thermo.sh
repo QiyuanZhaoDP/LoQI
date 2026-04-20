@@ -37,10 +37,11 @@ N_GPUS=""
 # Each array is a dimension. Cartesian product = all combos.
 # Leave an array with a single element to pin that dimension.
 LAYERS=(2 4)                   # --n-mp-layers
-HEADS=(2 4 8)                  # --mp-n-heads  (must divide 256)
+HEADS=(4 8)                    # --mp-n-heads  (must divide 256)
 HIDDEN=(128 256 512)           # --head-hidden
 LRS=(3e-4 1e-4)                # --lr
-EPOCHS=30                      # constant across the grid (tune if you want)
+BATCH_SIZES=(64 128 256 512)   # --batch-size (larger = fewer steps/epoch)
+EPOCHS=100                     # constant across the grid
 # ==============================
 
 # --- Auto-detect GPUs ---
@@ -71,7 +72,9 @@ for L in "${LAYERS[@]}"; do
   for H in "${HEADS[@]}"; do
     for D in "${HIDDEN[@]}"; do
       for LR in "${LRS[@]}"; do
-        CONFIGS+=("$L $H $D $LR")
+        for BS in "${BATCH_SIZES[@]}"; do
+          CONFIGS+=("$L $H $D $LR $BS")
+        done
       done
     done
   done
@@ -89,9 +92,9 @@ for ((wave_start=0; wave_start<TOTAL; wave_start+=N_GPUS)); do
         slot=$((wave_start + gpu))
         [[ $slot -ge $TOTAL ]] && break
         # shellcheck disable=SC2086
-        read -r L H D LR <<<"${CONFIGS[$slot]}"
+        read -r L H D LR BS <<<"${CONFIGS[$slot]}"
         # Hparam-tagged run name → easy to filter/plot in wandb.
-        name="L${L}_H${H}_D${D}_LR${LR}_ep${EPOCHS}_s${SEED}"
+        name="L${L}_H${H}_D${D}_LR${LR}_BS${BS}_ep${EPOCHS}_s${SEED}"
         outdir="$GRID_OUT/$name"
         mkdir -p "$outdir"
         CUDA_VISIBLE_DEVICES="$gpu" python scripts/finetune_thermo_head.py \
@@ -100,7 +103,7 @@ for ((wave_start=0; wave_start<TOTAL; wave_start+=N_GPUS)); do
             --cache-dir "$CACHE" \
             --out-dir "$outdir" \
             --n-mp-layers "$L" --mp-n-heads "$H" --head-hidden "$D" \
-            --lr "$LR" --epochs "$EPOCHS" \
+            --lr "$LR" --batch-size "$BS" --epochs "$EPOCHS" \
             --seed "$SEED" \
             --wandb --wandb-project "$WANDB_PROJECT" \
             --wandb-group "$WANDB_GROUP" --wandb-name "$name" \
