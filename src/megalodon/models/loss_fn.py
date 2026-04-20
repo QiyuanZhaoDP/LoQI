@@ -135,3 +135,196 @@ class AIMNet2ForcesLoss:
             batch_charge[i] = charge[mask].sum() - 2 * n_atoms
 
         return {"coord": batch_coord, "numbers": batch_atomics, "charge": batch_charge}
+
+
+# =============================================================================
+# Phase 1/2 auxiliary losses for thermo-aware foundation-model pre-training.
+# =============================================================================
+
+TARGET_FIELDS_DEFAULT = ["enthalpy_298", "gibbs_298", "cv_gas",
+                          "entropy_gas", "enthalpy_0"]
+EXTENSIVE_IDX_DEFAULT = [0, 1, 2, 4]
+
+
+def _t_frac(time, timesteps):
+    """Normalize time to [0, 1] fraction regardless of discrete/continuous."""
+    if time.is_floating_point():
+        return time
+    return time.float() / max(timesteps - 1, 1)
+
+
+class ThermoPropertyLoss:
+    """Auxiliary thermo-prediction loss applied at late denoising timesteps.
+
+    Reads per-molecule thermo targets attached by scripts/label_thermo.py:
+    enthalpy_298, gibbs_298, cv_gas, entropy_gas, enthalpy_0 (+ a
+    `thermo_has_label` bool). Semi-supervised: unlabeled molecules
+    (NaN targets or `thermo_has_label == False`) contribute 0 to the loss.
+
+    Requires the backbone to expose `out["thermo_ext"]` and/or
+    `out["thermo_mp"]` — obtained by building MegaFNV3Conf with
+    `thermo_head_args` set.
+
+    Args:
+        min_time: only apply loss when t >= min_time (as fraction in [0,1]).
+                  Rationale: at early t, H encodes "direction of denoising"
+                  rather than molecule identity — thermo loss would be noise.
+        weights:  {"ext": float, "mp": float} — relative to main denoising loss.
+        target_mean / target_std: per-target z-score stats (list of len 5);
+                  typically precomputed from the training split.
+        timesteps: needed to normalize discrete-time to fraction [0, 1].
+    """
+
+    def __init__(self, min_time=0.8,
+                 weights=None,
+                 target_fields=None,
+                 extensive_idx=None,
+                 target_mean=None,
+                 target_std=None,
+                 timesteps=25):
+        self.min_time = min_time
+        self.weights = dict(weights) if weights else {"ext": 0.05, "mp": 0.05}
+        self.target_fields = list(target_fields) if target_fields else list(TARGET_FIELDS_DEFAULT)
+        self.extensive_idx = list(extensive_idx) if extensive_idx else list(EXTENSIVE_IDX_DEFAULT)
+        if target_mean is None or target_std is None:
+            raise ValueError(
+                "ThermoPropertyLoss requires target_mean and target_std "
+                "(per-target z-score stats; use the values printed by "
+                "scripts/label_thermo.py or finetune_thermo_head.py)."
+            )
+        self.target_mean = list(target_mean)
+        self.target_std = list(target_std)
+        self.timesteps = timesteps
+        self._mean_t = None
+        self._std_t = None
+
+    def _ensure_stats(self, device, dtype):
+        if self._mean_t is None or self._mean_t.device != device:
+            self._mean_t = torch.tensor(self.target_mean, device=device, dtype=dtype)
+            self._std_t  = torch.tensor(self.target_std,  device=device, dtype=dtype)
+
+    def __call__(self, batch, out, time, ws_t, stage="train"):
+        if "thermo_ext" not in out and "thermo_mp" not in out:
+            return torch.tensor(0.0, device=time.device)
+
+        device = time.device
+        self._ensure_stats(device, torch.float32)
+
+        # Time gate — only compute loss when coords are nearly clean.
+        t_frac = _t_frac(time, self.timesteps)
+        time_mask = t_frac >= self.min_time                          # [B]
+
+        if not time_mask.any():
+            return torch.tensor(0.0, device=device)
+
+        targets = torch.stack(
+            [batch[f].view(-1).float() for f in self.target_fields], dim=1
+        )  # [B, 5]
+
+        if hasattr(batch, "thermo_has_label"):
+            has_label = batch.thermo_has_label.view(-1).bool()
+        else:
+            has_label = ~torch.isnan(targets).any(dim=1)
+
+        mol_mask = time_mask & has_label
+        if not mol_mask.any():
+            return torch.tensor(0.0, device=device)
+
+        targets_norm = (targets - self._mean_t) / self._std_t        # [B, 5]
+
+        total = torch.tensor(0.0, device=device)
+
+        def _masked_mse(pred, tgt, row_mask):
+            # Per-element valid = row_mask AND target not NaN.
+            valid = row_mask.unsqueeze(-1) & ~torch.isnan(tgt)
+            if not valid.any():
+                return torch.tensor(0.0, device=pred.device)
+            diff = (pred - torch.nan_to_num(tgt)) * valid
+            return (diff ** 2).sum() / valid.sum()
+
+        if "thermo_ext" in out and self.weights.get("ext", 0) > 0:
+            pred = out["thermo_ext"]
+            tgt = targets_norm[:, self.extensive_idx]
+            total = total + self.weights["ext"] * _masked_mse(pred, tgt, mol_mask)
+
+        if "thermo_mp" in out and self.weights.get("mp", 0) > 0:
+            pred = out["thermo_mp"]
+            total = total + self.weights["mp"] * _masked_mse(pred, targets_norm, mol_mask)
+
+        return total
+
+
+class EnergyPredictionLoss:
+    """Auxiliary per-molecule energy loss (Phase 1).
+
+    Expects `out["energy_pred"]` (build MegaFNV3Conf with energy_head=True)
+    and `batch.energy` attached by scripts/label_energy.py. Optional
+    per-atom normalization to decouple from molecule size.
+
+    Args:
+        min_time: only apply loss when t >= min_time (fraction in [0,1]).
+        weight:   scalar weight relative to main denoising loss.
+        normalize: "per_atom" | "zscore" | "none".
+        timesteps: for discrete→fraction conversion.
+        target_mean / target_std: required when normalize == "zscore".
+    """
+
+    def __init__(self, min_time=0.8, weight=0.1, normalize="per_atom",
+                 timesteps=25, target_mean=None, target_std=None):
+        assert normalize in ("per_atom", "zscore", "none")
+        self.min_time = min_time
+        self.weight = weight
+        self.normalize = normalize
+        self.timesteps = timesteps
+        if normalize == "zscore" and (target_mean is None or target_std is None):
+            raise ValueError("zscore normalization requires target_mean and target_std")
+        self.target_mean = target_mean
+        self.target_std = target_std
+
+    def __call__(self, batch, out, time, ws_t, stage="train"):
+        if "energy_pred" not in out:
+            return torch.tensor(0.0, device=time.device)
+        if not hasattr(batch, "energy"):
+            return torch.tensor(0.0, device=time.device)
+
+        t_frac = _t_frac(time, self.timesteps)
+        mask = t_frac >= self.min_time
+        if not mask.any():
+            return torch.tensor(0.0, device=time.device)
+
+        pred = out["energy_pred"][mask]
+        target = batch.energy.view(-1)[mask].float()
+        valid = ~torch.isnan(target)
+        if not valid.any():
+            return torch.tensor(0.0, device=time.device)
+        pred, target = pred[valid], target[valid]
+
+        if self.normalize == "per_atom":
+            counts = torch.bincount(batch.batch, minlength=pred.size(0))
+            # counts is over all mols; we need the active subset
+            n_atoms = counts[mask][valid].float().clamp(min=1)
+            pred = pred / n_atoms
+            target = target / n_atoms
+        elif self.normalize == "zscore":
+            m = torch.tensor(self.target_mean, device=pred.device, dtype=pred.dtype)
+            s = torch.tensor(self.target_std,  device=pred.device, dtype=pred.dtype)
+            pred   = (pred   - m) / s
+            target = (target - m) / s
+
+        return self.weight * torch.nn.functional.mse_loss(pred, target)
+
+
+class CombinedAuxiliaryLoss:
+    """Optional wrapper to run ThermoPropertyLoss + EnergyPredictionLoss together."""
+
+    def __init__(self, thermo_loss=None, energy_loss=None):
+        self.thermo_loss = thermo_loss
+        self.energy_loss = energy_loss
+
+    def __call__(self, batch, out, time, ws_t, stage="train"):
+        loss = torch.tensor(0.0, device=time.device)
+        if self.thermo_loss is not None:
+            loss = loss + self.thermo_loss(batch, out, time, ws_t, stage)
+        if self.energy_loss is not None:
+            loss = loss + self.energy_loss(batch, out, time, ws_t, stage)
+        return loss

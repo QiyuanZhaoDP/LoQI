@@ -702,6 +702,8 @@ class MegaFNV3Conf(nn.Module):
             dist_size=4,
             prune_edges=False,
             return_features=False,
+            thermo_head_args=None,
+            energy_head=False,
     ):
         super(MegaFNV3Conf, self).__init__()
         self.scale_dist_features = scale_dist_features
@@ -740,6 +742,34 @@ class MegaFNV3Conf(nn.Module):
         self.dist_projection = nn.Linear(n_vector_features, dist_size, bias=False)
         self.return_features = return_features
 
+        # Optional thermo heads for multi-task (Phase 1/2) pre-training.
+        # Reuses the ExtensiveSumHead + AtomMolMP from downstream fine-tuning
+        # so the same head architecture can be warm-started later.
+        self.thermo_heads = None
+        if thermo_head_args is not None:
+            from omegaconf import OmegaConf as _OC
+            if not isinstance(thermo_head_args, dict):
+                thermo_head_args = _OC.to_container(thermo_head_args, resolve=True)
+            from megalodon.models.thermo_heads import ThermoHeadModel
+            self.thermo_heads = ThermoHeadModel(
+                dim=invariant_node_feat_dim,
+                n_mp_layers=thermo_head_args.get("n_mp_layers", 2),
+                n_mp_heads=thermo_head_args.get("mp_n_heads", 4),
+                hidden=thermo_head_args.get("hidden", 256),
+            )
+
+        # Optional scalar energy head (Phase 1). Predicts a per-molecule energy
+        # from scatter_mean(H). Forces can be obtained via autograd of energy
+        # wrt input coords — no separate force head needed.
+        self.energy_head = None
+        if energy_head:
+            self.energy_head = nn.Sequential(
+                nn.LayerNorm(invariant_node_feat_dim),
+                nn.Linear(invariant_node_feat_dim, invariant_node_feat_dim // 2),
+                nn.SiLU(),
+                nn.Linear(invariant_node_feat_dim // 2, 1),
+            )
+
     def forward(self, batch, X, H, E_idx, E, t):
         torch.max(batch) + 1
         pos = self.coord_emb(X.unsqueeze(-1))  # N x 3 x K
@@ -765,7 +795,14 @@ class MegaFNV3Conf(nn.Module):
         x = X - scatter_mean(X, index=batch, dim=0)[batch]
 
         out = {
-            "x_hat": x, 
+            "x_hat": x,
             "H": H
         }
+        if self.thermo_heads is not None:
+            th = self.thermo_heads(H, batch)
+            out["thermo_ext"] = th["ext"]   # [N_mols, 4]
+            out["thermo_mp"]  = th["mp"]    # [N_mols, 5]
+        if self.energy_head is not None:
+            mol_repr = scatter_mean(H, batch, dim=0)
+            out["energy_pred"] = self.energy_head(mol_repr).squeeze(-1)
         return out

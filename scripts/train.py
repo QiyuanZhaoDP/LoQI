@@ -43,7 +43,43 @@ def main(cfg: DictConfig) -> None:
     cfg.outdir = os.path.join(cfg.outdir, cfg.run_name)
     os.makedirs(cfg.outdir, exist_ok=True)
     os.makedirs(os.path.join(cfg.outdir, 'checkpoints'), exist_ok=True)
-    loss_fn = None
+    # Optional auxiliary losses for thermo-aware / energy-aware pre-training
+    # (Phase 1/2). Enabled by non-null `thermo_loss` / `energy_loss` sections
+    # in the YAML. Both can be active simultaneously via CombinedAuxiliaryLoss.
+    from megalodon.models.loss_fn import (
+        CombinedAuxiliaryLoss,
+        EnergyPredictionLoss,
+        ThermoPropertyLoss,
+    )
+    tl_cfg = OmegaConf.select(cfg, "thermo_loss", default=None)
+    el_cfg = OmegaConf.select(cfg, "energy_loss", default=None)
+    thermo_loss = None
+    energy_loss = None
+    if tl_cfg is not None:
+        thermo_loss = ThermoPropertyLoss(
+            min_time=tl_cfg.min_time,
+            weights=OmegaConf.to_container(tl_cfg.weights, resolve=True),
+            target_mean=list(tl_cfg.target_mean),
+            target_std=list(tl_cfg.target_std),
+            timesteps=cfg.interpolant.timesteps,
+        )
+        logging.info(f"Enabled ThermoPropertyLoss (min_time={tl_cfg.min_time}, "
+                     f"weights={thermo_loss.weights})")
+    if el_cfg is not None:
+        energy_loss = EnergyPredictionLoss(
+            min_time=el_cfg.min_time,
+            weight=el_cfg.weight,
+            normalize=el_cfg.get("normalize", "per_atom"),
+            timesteps=cfg.interpolant.timesteps,
+            target_mean=OmegaConf.select(el_cfg, "target_mean", default=None),
+            target_std=OmegaConf.select(el_cfg,  "target_std",  default=None),
+        )
+        logging.info(f"Enabled EnergyPredictionLoss (min_time={el_cfg.min_time}, "
+                     f"weight={el_cfg.weight})")
+    if thermo_loss is not None and energy_loss is not None:
+        loss_fn = CombinedAuxiliaryLoss(thermo_loss=thermo_loss, energy_loss=energy_loss)
+    else:
+        loss_fn = thermo_loss or energy_loss
 
     batch_preprocessor = BatchPreProcessor(aug_rotations=cfg.data.aug_rotations,
                                         scale_coords=cfg.data.scale_coords)
@@ -85,11 +121,14 @@ def main(cfg: DictConfig) -> None:
     )
     logger.log_hyperparams(cfg)
 
-    datamodule = MoleculeDataModule(cfg.data.dataset_root,
-                                    cfg.data.processed_folder,
-                                    cfg.data.batch_size,
-                                    cfg.data.data_loader_type,
-                                    cfg.data.inference_batch_size)
+    datamodule = MoleculeDataModule(
+        cfg.data.dataset_root,
+        cfg.data.processed_folder,
+        cfg.data.batch_size,
+        cfg.data.data_loader_type,
+        cfg.data.inference_batch_size,
+        data_suffix=OmegaConf.select(cfg, "data.data_suffix", default="_h"),
+    )
 
     lr_monitor = LearningRateMonitor(logging_interval="step")
 

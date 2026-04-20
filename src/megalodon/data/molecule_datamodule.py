@@ -45,6 +45,7 @@ class MoleculeDataModule(LightningDataModule):
             batch_size: Optional[int] = None,
             data_loader_type: str = "adaptive",
             inference_batch_size: Optional[int] = None,
+            data_suffix: str = "_h",
             **sampler_kwargs,
     ):
         super().__init__()
@@ -53,25 +54,29 @@ class MoleculeDataModule(LightningDataModule):
         self.batch_size = batch_size
         self.inference_batch_size = inference_batch_size or batch_size
         self.data_loader_type = data_loader_type
+        self.data_suffix = data_suffix
         self.sampler_kwargs = sampler_kwargs
         self.pin_memory = True
-        
+
         try:
             self.train_dataset = MoleculeDataset(
                 split="train",
                 root=self.dataset_root,
-                processed_folder=self.processed_folder
+                processed_folder=self.processed_folder,
+                data_suffix=self.data_suffix,
             )
             self.val_dataset = MoleculeDataset(
                 split="val",
                 root=self.dataset_root,
                 processed_folder=self.processed_folder,
+                data_suffix=self.data_suffix,
             )
             self.test_dataset = MoleculeDataset(
                 split="test",
                 root=self.dataset_root,
-                    processed_folder=self.processed_folder,
-                )
+                processed_folder=self.processed_folder,
+                data_suffix=self.data_suffix,
+            )
         except Exception as e:
             print(f"Error loading dataset: {e}")
 
