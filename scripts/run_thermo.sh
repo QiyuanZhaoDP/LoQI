@@ -14,48 +14,55 @@ set -euo pipefail
 cd "$(dirname "$0")/.."  # project root
 
 # ============ CONFIG ============
+# Model architecture + training hyperparameters live in YAML (edit there):
+#   scripts/conf/thermo/finetune.yaml
+#   scripts/conf/thermo/continuation.yaml
+# This shell script only handles paths, GPU orchestration, and wandb naming.
+
 CKPT=data/loqi.ckpt
-CONFIG=scripts/conf/loqi/loqi.yaml
+LOQI_CONFIG=scripts/conf/loqi/loqi.yaml
+FT_CFG=scripts/conf/thermo/finetune.yaml
+CONT_CFG=scripts/conf/thermo/continuation.yaml
+
 TRAIN_PT=data/chembl3d_stereo/processed/train_h_thermo.pt
+VAL_PT=data/chembl3d_stereo/processed/val_h_thermo.pt
 TEST_PT=data/chembl3d_stereo/processed/test_h_thermo.pt
-CACHE=/tmp/ft_cache_500k
+
+CACHE=/tmp/ft_cache_full
 CONT_OUT=/tmp/continuation_u2
 
-MAX_TRAIN=500000
-MAX_TEST=20000
+# Empty string = "use all labeled samples" (scripts default to None).
+MAX_TRAIN=""
+MAX_VAL=""
+MAX_TEST=""
+# continuation typically uses a smaller subset because backbone is in the loop:
+CONT_MAX_TRAIN="200000"
+
 N_GPUS=4
 SEED=0
-
-# Head-training (frozen backbone)
-EXTRACT_BS=128
-TRAIN_BS=512
-TRAIN_EPOCHS=30
-TRAIN_LR=3e-4
-
-# Continuation (unfreeze last N backbone layer pairs)
-CONT_MAX_TRAIN=200000
-CONT_BS=32
-CONT_EPOCHS=10
-CONT_UNFREEZE=2
-CONT_HEAD_LR=3e-4
-CONT_BB_LR=1e-5
 
 # wandb
 WANDB_PROJECT=thermogen
 # ================================
 
+# Helper: emit --max-<name> <value> only when non-empty.
+_cap() { [[ -n "${2:-}" ]] && printf ' --%s %s' "$1" "$2" || true; }
+
 mkdir -p "$CACHE" "$CONT_OUT"
+
+_common_data_args() {
+    echo "--train-pt $TRAIN_PT --val-pt $VAL_PT --test-pt $TEST_PT"
+    printf '%s' "$(_cap max-train "$MAX_TRAIN")$(_cap max-val "$MAX_VAL")$(_cap max-test "$MAX_TEST")"
+}
 
 stage_extract() {
     echo "==> [$(date +%T)] Launching ${N_GPUS}-GPU H extraction"
     local pids=()
     for ((i=0; i<N_GPUS; i++)); do
         CUDA_VISIBLE_DEVICES=$i python scripts/finetune_thermo_head.py \
-            --ckpt "$CKPT" --config "$CONFIG" \
-            --train-pt "$TRAIN_PT" --test-pt "$TEST_PT" \
+            --ckpt "$CKPT" --config "$LOQI_CONFIG" --thermo-config "$FT_CFG" \
+            $(_common_data_args) \
             --cache-dir "$CACHE" \
-            --max-train "$MAX_TRAIN" --max-test "$MAX_TEST" \
-            --cache-dtype bf16 --extract-batch-size "$EXTRACT_BS" \
             --shard-id "$i" --n-shards "$N_GPUS" \
             --seed "$SEED" --device cuda \
             > "$CACHE/extract_shard$i.log" 2>&1 &
@@ -72,38 +79,32 @@ stage_extract() {
 stage_train() {
     echo "==> [$(date +%T)] Single-GPU head training (auto-merges shards if present)"
     CUDA_VISIBLE_DEVICES=0 python scripts/finetune_thermo_head.py \
-        --ckpt "$CKPT" --config "$CONFIG" \
-        --train-pt "$TRAIN_PT" --test-pt "$TEST_PT" \
+        --ckpt "$CKPT" --config "$LOQI_CONFIG" --thermo-config "$FT_CFG" \
+        $(_common_data_args) \
         --cache-dir "$CACHE" \
-        --max-train "$MAX_TRAIN" --max-test "$MAX_TEST" \
-        --cache-dtype bf16 \
-        --epochs "$TRAIN_EPOCHS" --batch-size "$TRAIN_BS" --lr "$TRAIN_LR" \
         --seed "$SEED" \
         --wandb --wandb-project "$WANDB_PROJECT" \
-        --wandb-name "ft_n${MAX_TRAIN}_s${SEED}" \
+        --wandb-name "ft_$(basename ${FT_CFG%.yaml})_s${SEED}" \
         --device cuda 2>&1 | tee "$CACHE/train.log"
     echo "==> [$(date +%T)] train DONE"
 }
 
 stage_continue() {
-    echo "==> [$(date +%T)] Continuation training (unfreeze last ${CONT_UNFREEZE} backbone layer pairs)"
+    echo "==> [$(date +%T)] Continuation training (config: $CONT_CFG)"
     local head_init="$CACHE/heads_final.pt"
     if [[ ! -f "$head_init" ]]; then
         echo "ERROR: $head_init not found — run 'train' stage first"
         exit 1
     fi
     CUDA_VISIBLE_DEVICES=0 python scripts/continuation_training.py \
-        --ckpt "$CKPT" --config "$CONFIG" \
-        --train-pt "$TRAIN_PT" --test-pt "$TEST_PT" \
+        --ckpt "$CKPT" --config "$LOQI_CONFIG" --thermo-config "$CONT_CFG" \
+        --train-pt "$TRAIN_PT" --val-pt "$VAL_PT" --test-pt "$TEST_PT" \
+        $(_cap max-train "$CONT_MAX_TRAIN")$(_cap max-val "$MAX_VAL")$(_cap max-test "$MAX_TEST") \
         --head-init "$head_init" \
         --out-dir "$CONT_OUT" \
-        --unfreeze-layers "$CONT_UNFREEZE" \
-        --max-train "$CONT_MAX_TRAIN" --max-test "$MAX_TEST" \
-        --epochs "$CONT_EPOCHS" --batch-size "$CONT_BS" \
-        --lr "$CONT_HEAD_LR" --backbone-lr "$CONT_BB_LR" \
         --seed "$SEED" \
         --wandb --wandb-project "$WANDB_PROJECT" \
-        --wandb-name "cont_u${CONT_UNFREEZE}_n${CONT_MAX_TRAIN}_s${SEED}" \
+        --wandb-name "cont_$(basename ${CONT_CFG%.yaml})_s${SEED}" \
         --device cuda 2>&1 | tee "$CONT_OUT/train.log"
     echo "==> [$(date +%T)] continue DONE"
 }
@@ -113,15 +114,13 @@ stage_seeds() {
     local pids=()
     for s in 1 2 3; do
         CUDA_VISIBLE_DEVICES=$s python scripts/finetune_thermo_head.py \
-            --ckpt "$CKPT" --config "$CONFIG" \
-            --train-pt "$TRAIN_PT" --test-pt "$TEST_PT" \
+            --ckpt "$CKPT" --config "$LOQI_CONFIG" --thermo-config "$FT_CFG" \
+            $(_common_data_args) \
             --cache-dir "$CACHE" \
-            --max-train "$MAX_TRAIN" --max-test "$MAX_TEST" \
-            --cache-dtype bf16 \
-            --epochs "$TRAIN_EPOCHS" --batch-size "$TRAIN_BS" --lr "$TRAIN_LR" \
             --seed "$s" \
             --wandb --wandb-project "$WANDB_PROJECT" \
-            --wandb-group "ft_n${MAX_TRAIN}_seeds" --wandb-name "seed_${s}" \
+            --wandb-group "ft_$(basename ${FT_CFG%.yaml})_seeds" \
+            --wandb-name "seed_${s}" \
             --device cuda > "$CACHE/train_seed${s}.log" 2>&1 &
         pids+=("$!")
         echo "   seed $s -> pid ${pids[-1]}, GPU $s"

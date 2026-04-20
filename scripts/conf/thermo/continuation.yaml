@@ -1,0 +1,25 @@
+# Continuation training: unfreeze last N backbone layer pairs + train heads
+# end-to-end. Consumed by scripts/continuation_training.py via --thermo-config.
+#
+# Precedence: argparse defaults  <  this YAML  <  CLI flags.
+# Leaf keys must match argparse `dest` names.
+
+heads:
+  n_mp_layers: 2
+  mp_n_heads:  4
+  head_hidden: 256
+
+backbone:
+  unfreeze_layers: 2    # last-N DiTeBlock + XEGNN pairs to unfreeze
+  backbone_lr: 1.0e-5   # LR for unfrozen backbone params
+                        # (heads use `train.lr`)
+
+train:
+  epochs:       15
+  batch_size:   32      # small because backbone forward is now in the loop
+  lr:           3.0e-4  # heads LR
+  weight_decay: 1.0e-5
+  grad_clip:    1.0
+
+eval:
+  eval_every:   1       # run val-set eval every N epochs

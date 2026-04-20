@@ -61,6 +61,7 @@ from megalodon.models.thermo_heads import (
     TARGET_FIELDS,
     TARGET_UNITS,
     ThermoHeadModel,
+    apply_thermo_config_yaml,
     masked_mse,
 )
 
@@ -308,18 +309,37 @@ def print_report(rows):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--ckpt", required=True)
-    p.add_argument("--config", required=True)
+    p.add_argument("--config", required=True,
+                   help="LoQI backbone config YAML (scripts/conf/loqi/loqi.yaml).")
+    p.add_argument("--thermo-config", default=None,
+                   help="Thermo head + training YAML "
+                        "(scripts/conf/thermo/finetune.yaml). "
+                        "YAML values override argparse defaults; CLI flags "
+                        "still override the YAML.")
     p.add_argument("--train-pt", required=True)
-    p.add_argument("--test-pt", required=True)
+    p.add_argument("--val-pt", required=True,
+                   help="Used for per-epoch evaluation during training.")
+    p.add_argument("--test-pt", required=True,
+                   help="Used ONLY for final evaluation after training.")
     p.add_argument("--cache-dir", required=True)
-    p.add_argument("--max-train", type=int, default=50000)
-    p.add_argument("--max-test",  type=int, default=20000)
+    p.add_argument("--max-train", type=int, default=None,
+                   help="Cap on labeled train molecules (default: use all).")
+    p.add_argument("--max-val",   type=int, default=None,
+                   help="Cap on labeled val molecules (default: use all).")
+    p.add_argument("--max-test",  type=int, default=None,
+                   help="Cap on labeled test molecules (default: use all).")
     p.add_argument("--extract-batch-size", type=int, default=64)
     p.add_argument("--batch-size", type=int, default=256)
     p.add_argument("--epochs", type=int, default=50)
     p.add_argument("--lr", type=float, default=3e-4)
     p.add_argument("--weight-decay", type=float, default=1e-5)
-    p.add_argument("--n-mp-layers", type=int, default=2)
+    p.add_argument("--n-mp-layers", type=int, default=2,
+                   help="Number of atom<->mol MP rounds in AtomMolMP.")
+    p.add_argument("--mp-n-heads", type=int, default=4,
+                   help="Attention heads in AtomMolMP. Must divide 256.")
+    p.add_argument("--head-hidden", type=int, default=128,
+                   help="Hidden dim inside both heads. Scale up to 256/512 "
+                        "for more capacity.")
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--no-cache", action="store_true")
@@ -337,6 +357,13 @@ def main():
     p.add_argument("--wandb-name", default=None,
                    help="Run name. Default: ft_thermo_n<max_train>_s<seed>.")
     p.add_argument("--wandb-group", default=None)
+
+    # Two-pass parsing: read --thermo-config first, then apply its values as
+    # new argparse defaults so subsequent CLI flags still win.
+    known, _ = p.parse_known_args()
+    if known.thermo_config:
+        applied = apply_thermo_config_yaml(p, known.thermo_config)
+        print(f"Loaded thermo config {known.thermo_config}: {applied}")
     args = p.parse_args()
 
     torch.manual_seed(args.seed)
@@ -345,6 +372,7 @@ def main():
     cache_dir = Path(args.cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
     cache_tr = cache_dir / f"train_H_n{args.max_train}_s{args.seed}.pt"
+    cache_va = cache_dir / f"val_H_n{args.max_val}_s{args.seed}.pt"
     cache_te = cache_dir / f"test_H_n{args.max_test}_s{args.seed}.pt"
 
     # --- Shard extraction mode: extract my slice, exit ---
@@ -365,14 +393,22 @@ def main():
                 desc=f"train-H[{args.shard_id}]",
                 cache_dtype=args.cache_dtype,
             )
-        # Shard 0 also extracts test (small, single-GPU is fine)
-        if args.shard_id == 0 and (not cache_te.exists() or args.no_cache):
-            ds_te, idx_te = load_labeled_indices(args.test_pt, args.max_test, args.seed)
-            extract_and_cache_H(
-                model_back, cfg, ds_te, idx_te,
-                args.extract_batch_size, args.device, cache_te,
-                desc="test-H", cache_dtype=args.cache_dtype,
-            )
+        # Shard 0 also extracts val + test (small, single-GPU is fine)
+        if args.shard_id == 0:
+            if not cache_va.exists() or args.no_cache:
+                ds_va, idx_va = load_labeled_indices(args.val_pt, args.max_val, args.seed)
+                extract_and_cache_H(
+                    model_back, cfg, ds_va, idx_va,
+                    args.extract_batch_size, args.device, cache_va,
+                    desc="val-H", cache_dtype=args.cache_dtype,
+                )
+            if not cache_te.exists() or args.no_cache:
+                ds_te, idx_te = load_labeled_indices(args.test_pt, args.max_test, args.seed)
+                extract_and_cache_H(
+                    model_back, cfg, ds_te, idx_te,
+                    args.extract_batch_size, args.device, cache_te,
+                    desc="test-H", cache_dtype=args.cache_dtype,
+                )
         print(f"[shard {args.shard_id}] done.")
         sys.exit(0)
 
@@ -385,30 +421,34 @@ def main():
             merge_shard_caches(shard_paths, cache_tr)
 
     # --- Step A: extract H if still needed (non-shard single-GPU path) ---
-    need_extract = args.no_cache or not cache_tr.exists() or not cache_te.exists()
+    need_extract = args.no_cache or not all(
+        c.exists() for c in (cache_tr, cache_va, cache_te)
+    )
     if need_extract:
         print("Loading frozen backbone")
         model_back, cfg = load_model(args.ckpt, args.config, args.device)
-        if not cache_tr.exists() or args.no_cache:
-            ds_tr, idx_tr = load_labeled_indices(args.train_pt, args.max_train, args.seed)
-            extract_and_cache_H(model_back, cfg, ds_tr, idx_tr,
-                                args.extract_batch_size, args.device, cache_tr,
-                                desc="train-H", cache_dtype=args.cache_dtype)
-        if not cache_te.exists() or args.no_cache:
-            ds_te, idx_te = load_labeled_indices(args.test_pt, args.max_test, args.seed)
-            extract_and_cache_H(model_back, cfg, ds_te, idx_te,
-                                args.extract_batch_size, args.device, cache_te,
-                                desc="test-H", cache_dtype=args.cache_dtype)
+        for (pt, cache_path, mx, desc) in [
+            (args.train_pt, cache_tr, args.max_train, "train-H"),
+            (args.val_pt,   cache_va, args.max_val,   "val-H"),
+            (args.test_pt,  cache_te, args.max_test,  "test-H"),
+        ]:
+            if not cache_path.exists() or args.no_cache:
+                ds, idx = load_labeled_indices(pt, mx, args.seed)
+                extract_and_cache_H(model_back, cfg, ds, idx,
+                                    args.extract_batch_size, args.device, cache_path,
+                                    desc=desc, cache_dtype=args.cache_dtype)
         del model_back
         torch.cuda.empty_cache() if args.device == "cuda" else None
 
     # --- Load cached H ---
     H_tr, off_tr, tgt_tr = load_H_cache(cache_tr)
+    H_va, off_va, tgt_va = load_H_cache(cache_va)
     H_te, off_te, tgt_te = load_H_cache(cache_te)
     n_train = tgt_tr.shape[0]
+    n_val   = tgt_va.shape[0]
     n_test  = tgt_te.shape[0]
     print(f"\nLoaded cache — train: {n_train:,} mols / {H_tr.shape[0]:,} atoms,  "
-          f"test: {n_test:,} mols / {H_te.shape[0]:,} atoms")
+          f"val: {n_val:,} mols,  test: {n_test:,} mols")
 
     # --- z-score normalize targets (from train stats, masking NaN) ---
     mask_tr = ~torch.isnan(tgt_tr)
@@ -423,6 +463,7 @@ def main():
     print(f"target stds:  {dict(zip(TARGET_FIELDS, target_std))}")
 
     tgt_tr_norm = (tgt_tr - torch.tensor(target_mean)) / torch.tensor(target_std)
+    tgt_va_norm = (tgt_va - torch.tensor(target_mean)) / torch.tensor(target_std)
     tgt_te_norm = (tgt_te - torch.tensor(target_mean)) / torch.tensor(target_std)
 
     # --- wandb init (optional) ---
@@ -439,14 +480,20 @@ def main():
 
     # --- Step B: train heads ---
     device = torch.device(args.device)
-    model = ThermoHeadModel(dim=H_tr.shape[-1], n_mp_layers=args.n_mp_layers).to(device)
+    model = ThermoHeadModel(
+        dim=H_tr.shape[-1],
+        n_mp_layers=args.n_mp_layers,
+        n_mp_heads=args.mp_n_heads,
+        hidden=args.head_hidden,
+    ).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.epochs)
 
     idx_train = np.arange(n_train)
+    idx_val   = np.arange(n_val)
     idx_test  = np.arange(n_test)
 
-    best_test_mae = float("inf")
+    best_val_mae = float("inf")
     t0 = time.time()
     global_step = 0
     for epoch in range(args.epochs):
@@ -473,32 +520,33 @@ def main():
         sched.step()
 
         if (epoch + 1) % max(1, args.epochs // 10) == 0 or epoch == args.epochs - 1:
-            rows = evaluate(model, H_te, off_te, tgt_te_norm, idx_test,
+            rows = evaluate(model, H_va, off_va, tgt_va_norm, idx_val,
                             args.batch_size, device,
                             target_mean, target_std)
             avg_mae_mp = np.mean([r["mae_mp"] / target_std[TARGET_FIELDS.index(r["target"])]
                                    for r in rows if "mae_mp" in r])
             print(f"[ep {epoch+1:>3d}]  train_loss={np.mean(losses):.4f}  "
-                  f"test_mae(std-norm avg)={avg_mae_mp:.4f}  "
+                  f"val_mae(std-norm avg)={avg_mae_mp:.4f}  "
                   f"lr={sched.get_last_lr()[0]:.2e}")
-            if avg_mae_mp < best_test_mae:
-                best_test_mae = avg_mae_mp
+            if avg_mae_mp < best_val_mae:
+                best_val_mae = avg_mae_mp
             if wb is not None:
                 eval_log = {"epoch": epoch + 1,
                             "train/loss_epoch": float(np.mean(losses)),
-                            "test/mae_avg_norm_mp": float(avg_mae_mp)}
+                            "val/mae_avg_norm_mp": float(avg_mae_mp)}
                 for r in rows:
                     if "mae_mp" in r:
-                        eval_log[f"test/mae_mp_{r['target']}"] = r["mae_mp"]
-                        eval_log[f"test/r2_mp_{r['target']}"]  = r["r2_mp"]
+                        eval_log[f"val/mae_mp_{r['target']}"] = r["mae_mp"]
+                        eval_log[f"val/r2_mp_{r['target']}"]  = r["r2_mp"]
                     if "mae_ext" in r:
-                        eval_log[f"test/mae_ext_{r['target']}"] = r["mae_ext"]
-                        eval_log[f"test/r2_ext_{r['target']}"]  = r["r2_ext"]
+                        eval_log[f"val/mae_ext_{r['target']}"] = r["mae_ext"]
+                        eval_log[f"val/r2_ext_{r['target']}"]  = r["r2_ext"]
                 wb.log(eval_log, step=global_step)
 
     print(f"\nTotal training time: {time.time()-t0:.1f}s")
 
-    # --- Step C: final report ---
+    # --- Step C: final report on HELD-OUT TEST set ---
+    print("\n=== Final evaluation on held-out test set ===")
     rows = evaluate(model, H_te, off_te, tgt_te_norm, idx_test,
                     args.batch_size, device, target_mean, target_std)
     print_report(rows)
@@ -517,7 +565,7 @@ def main():
         for r in rows:
             for k in ("mae_ext", "r2_ext", "mae_mp", "r2_mp"):
                 if k in r:
-                    final_log[f"final/{k}_{r['target']}"] = r[k]
+                    final_log[f"final_test/{k}_{r['target']}"] = r[k]
         wb.log(final_log, step=global_step)
         wb.finish()
     print(f"\nReport saved -> {out_path}")

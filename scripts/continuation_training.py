@@ -52,6 +52,7 @@ from megalodon.models.thermo_heads import (
     TARGET_FIELDS,
     TARGET_UNITS,
     ThermoHeadModel,
+    apply_thermo_config_yaml,
     masked_mse,
 )
 
@@ -101,6 +102,19 @@ def load_backbone(ckpt, cfg_path, device):
     return model, cfg
 
 
+def _unwrap_dynamics(backbone):
+    """backbone.dynamics may be a ModelWithEMA wrapper. Return the actual
+    trainable backbone module (the one with dit_layers/egnn_layers), and
+    also disable EMA forward dispatch so eval uses current (fine-tuned)
+    weights instead of the stale averaged copy."""
+    dyn = backbone.dynamics
+    # ModelWithEMA.forward uses self.ema_model in eval mode when self.ema=True;
+    # we need eval-time forward to reflect the weights we're training.
+    if hasattr(dyn, "ema"):
+        dyn.ema = False
+    return dyn.model if hasattr(dyn, "model") else dyn
+
+
 def unfreeze_last_n_layers(backbone, n):
     """Freeze the whole backbone, then unfreeze the last n DiTeBlock AND the
     last n XEGNN layers (each round uses both in lockstep).
@@ -109,8 +123,9 @@ def unfreeze_last_n_layers(backbone, n):
     for p in backbone.parameters():
         p.requires_grad = False
 
-    dit = backbone.dynamics.dit_layers
-    egnn = backbone.dynamics.egnn_layers
+    inner = _unwrap_dynamics(backbone)
+    dit = inner.dit_layers
+    egnn = inner.egnn_layers
     assert len(dit) == len(egnn), \
         f"dit/egnn layer count mismatch ({len(dit)} vs {len(egnn)})"
     total = len(dit)
@@ -220,21 +235,40 @@ def compute_target_stats(dataset):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--ckpt", required=True)
-    p.add_argument("--config", required=True)
+    p.add_argument("--config", required=True,
+                   help="LoQI backbone config YAML (scripts/conf/loqi/loqi.yaml).")
+    p.add_argument("--thermo-config", default=None,
+                   help="Thermo head + backbone-unfreeze YAML "
+                        "(scripts/conf/thermo/continuation.yaml). "
+                        "YAML values override argparse defaults; CLI flags "
+                        "still override the YAML.")
     p.add_argument("--train-pt", required=True)
-    p.add_argument("--test-pt", required=True)
+    p.add_argument("--val-pt", required=True,
+                   help="Used for per-epoch evaluation during training.")
+    p.add_argument("--test-pt", required=True,
+                   help="Used ONLY for final evaluation after training.")
     p.add_argument("--out-dir", required=True)
     p.add_argument("--head-init", default=None,
                    help="Optional .pt of heads state_dict to warm-start from.")
     p.add_argument("--unfreeze-layers", type=int, default=2)
-    p.add_argument("--max-train", type=int, default=200000)
-    p.add_argument("--max-test",  type=int, default=20000)
+    p.add_argument("--max-train", type=int, default=None,
+                   help="Cap on labeled train molecules (default: use all).")
+    p.add_argument("--max-val",   type=int, default=None,
+                   help="Cap on labeled val molecules (default: use all).")
+    p.add_argument("--max-test",  type=int, default=None,
+                   help="Cap on labeled test molecules (default: use all).")
     p.add_argument("--batch-size", type=int, default=32)
     p.add_argument("--epochs", type=int, default=10)
     p.add_argument("--lr", type=float, default=3e-4, help="Heads LR.")
     p.add_argument("--backbone-lr", type=float, default=1e-5)
     p.add_argument("--weight-decay", type=float, default=1e-5)
-    p.add_argument("--n-mp-layers", type=int, default=2)
+    p.add_argument("--n-mp-layers", type=int, default=2,
+                   help="Number of atom<->mol MP rounds in AtomMolMP.")
+    p.add_argument("--mp-n-heads", type=int, default=4,
+                   help="Attention heads in AtomMolMP. Must divide 256.")
+    p.add_argument("--head-hidden", type=int, default=128,
+                   help="Hidden dim inside both heads. Scale up to 256/512 "
+                        "for more capacity.")
     p.add_argument("--grad-clip", type=float, default=1.0)
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     p.add_argument("--seed", type=int, default=0)
@@ -243,6 +277,12 @@ def main():
     p.add_argument("--wandb-project", default="thermogen")
     p.add_argument("--wandb-name", default=None)
     p.add_argument("--wandb-group", default=None)
+
+    # Two-pass parsing so --thermo-config YAML overrides defaults.
+    known, _ = p.parse_known_args()
+    if known.thermo_config:
+        applied = apply_thermo_config_yaml(p, known.thermo_config)
+        print(f"Loaded thermo config {known.thermo_config}: {applied}")
     args = p.parse_args()
 
     torch.manual_seed(args.seed); np.random.seed(args.seed)
@@ -252,7 +292,10 @@ def main():
     print(f"Loading labeled train from {args.train_pt}")
     train_list = load_labeled_subset(args.train_pt, args.max_train, args.seed)
     print(f"  {len(train_list):,} train molecules")
-    print(f"Loading labeled test from {args.test_pt}")
+    print(f"Loading labeled val   from {args.val_pt}")
+    val_list   = load_labeled_subset(args.val_pt,   args.max_val,   args.seed)
+    print(f"  {len(val_list):,} val molecules")
+    print(f"Loading labeled test  from {args.test_pt}  (final eval only)")
     test_list  = load_labeled_subset(args.test_pt,  args.max_test,  args.seed)
     print(f"  {len(test_list):,} test molecules")
 
@@ -263,11 +306,12 @@ def main():
     # Attach normalized targets on every Data object
     t_mean_t = torch.tensor(target_mean, dtype=torch.float32)
     t_std_t  = torch.tensor(target_std,  dtype=torch.float32)
-    for d in train_list + test_list:
+    for d in train_list + val_list + test_list:
         for i, f in enumerate(TARGET_FIELDS):
             d[f + "_norm"] = (d[f].view(-1) - t_mean_t[i]) / t_std_t[i]
 
     train_loader = DataLoader(train_list, batch_size=args.batch_size, shuffle=True)
+    val_loader   = DataLoader(val_list,   batch_size=args.batch_size, shuffle=False)
     test_loader  = DataLoader(test_list,  batch_size=args.batch_size, shuffle=False)
 
     # --- Load backbone + heads ---
@@ -278,6 +322,8 @@ def main():
     heads = ThermoHeadModel(
         dim=cfg.dynamics.model_args.invariant_node_feat_dim,
         n_mp_layers=args.n_mp_layers,
+        n_mp_heads=args.mp_n_heads,
+        hidden=args.head_hidden,
     ).to(device)
     if args.head_init:
         print(f"Warm-starting heads from {args.head_init}")
@@ -336,30 +382,38 @@ def main():
         sched.step()
 
         if (epoch + 1) % args.eval_every == 0 or epoch == args.epochs - 1:
-            rows = eval_loop(backbone, heads, test_loader, device,
+            rows = eval_loop(backbone, heads, val_loader, device,
                              t_max, t_type, target_mean, target_std)
             avg_mae_mp_norm = float(np.mean(
                 [r["mae_mp"] / target_std[TARGET_FIELDS.index(r["target"])]
                  for r in rows if "mae_mp" in r]
             ))
             print(f"[ep {epoch+1:>3d}]  train_loss={np.mean(losses):.4f}  "
-                  f"test_mae(std-norm avg)={avg_mae_mp_norm:.4f}")
+                  f"val_mae(std-norm avg)={avg_mae_mp_norm:.4f}")
             if wb is not None:
                 log = {"epoch": epoch + 1,
                        "train/loss_epoch": float(np.mean(losses)),
-                       "test/mae_avg_norm_mp": avg_mae_mp_norm}
+                       "val/mae_avg_norm_mp": avg_mae_mp_norm}
                 for r in rows:
                     for k in ("mae_ext", "r2_ext", "mae_mp", "r2_mp"):
                         if k in r:
-                            log[f"test/{k}_{r['target']}"] = r[k]
+                            log[f"val/{k}_{r['target']}"] = r[k]
                 wb.log(log, step=global_step)
 
     print(f"\nTotal wall time: {time.time()-t0:.1f}s")
 
-    # --- Final report + save ---
+    # --- Final report on HELD-OUT TEST set ---
+    print("\n=== Final evaluation on held-out test set ===")
     rows = eval_loop(backbone, heads, test_loader, device,
                      t_max, t_type, target_mean, target_std)
     print_report(rows)
+    if wb is not None:
+        final_log = {}
+        for r in rows:
+            for k in ("mae_ext", "r2_ext", "mae_mp", "r2_mp"):
+                if k in r:
+                    final_log[f"final_test/{k}_{r['target']}"] = r[k]
+        wb.log(final_log, step=global_step)
 
     torch.save(heads.state_dict(), out_dir / "heads_final.pt")
     # Save a slim backbone checkpoint that includes only unfrozen weights deltas
