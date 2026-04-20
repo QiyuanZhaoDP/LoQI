@@ -199,12 +199,18 @@ def main(cfg: DictConfig) -> None:
         logging.info(_print_param_breakdown(pl_module))
 
     wandb_resume = cfg.wandb_params.resume if "resume" in cfg.wandb_params else "allow"
+    # Decouple the wandb run ID from the human-readable run name. If a prior
+    # run with the same name gets deleted on wandb.ai, the ID becomes
+    # permanently blocked — reusing run_name as id would then fail every
+    # future sync. Let wandb auto-generate a fresh ID unless the YAML
+    # explicitly pins one via cfg.wandb_params.id (handy for resume).
+    explicit_id = OmegaConf.select(cfg, "wandb_params.id", default=None)
     logger = pl.loggers.WandbLogger(
         save_dir=cfg.outdir,
         project=cfg.wandb_params.project,
         group=cfg.wandb_params.group,
         name=cfg.run_name,
-        id=cfg.run_name,
+        id=explicit_id,                       # None -> wandb generates an ID
         resume=wandb_resume,
         mode=cfg.wandb_params.mode,
     )
