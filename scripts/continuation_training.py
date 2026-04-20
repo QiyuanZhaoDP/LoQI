@@ -250,6 +250,11 @@ def main():
     p.add_argument("--out-dir", required=True)
     p.add_argument("--head-init", default=None,
                    help="Optional .pt of heads state_dict to warm-start from.")
+    p.add_argument("--strict-head-init", action="store_true",
+                   help="Require the warm-start state_dict to match the head "
+                        "architecture exactly. Default non-strict: architecture "
+                        "can be larger (more MP layers, etc.) and new params "
+                        "get random init.")
     p.add_argument("--unfreeze-layers", type=int, default=2)
     p.add_argument("--max-train", type=int, default=None,
                    help="Cap on labeled train molecules (default: use all).")
@@ -326,8 +331,19 @@ def main():
         hidden=args.head_hidden,
     ).to(device)
     if args.head_init:
-        print(f"Warm-starting heads from {args.head_init}")
-        heads.load_state_dict(torch.load(args.head_init, map_location=device))
+        print(f"Warm-starting heads from {args.head_init}"
+              f"{' (strict)' if args.strict_head_init else ' (non-strict)'}")
+        sd = torch.load(args.head_init, map_location=device)
+        res = heads.load_state_dict(sd, strict=args.strict_head_init)
+        if not args.strict_head_init:
+            if res.missing_keys:
+                print(f"  head layers missing from checkpoint (will use "
+                      f"random init): {len(res.missing_keys)} keys, e.g. "
+                      f"{res.missing_keys[:3]}")
+            if res.unexpected_keys:
+                print(f"  extra keys in checkpoint ignored: "
+                      f"{len(res.unexpected_keys)} keys, e.g. "
+                      f"{res.unexpected_keys[:3]}")
 
     # --- Optimizer with two LR groups ---
     param_groups = [{"params": heads.parameters(), "lr": args.lr, "name": "heads"}]
