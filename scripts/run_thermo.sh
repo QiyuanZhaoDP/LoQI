@@ -38,7 +38,12 @@ MAX_TEST=""
 # continuation typically uses a smaller subset because backbone is in the loop:
 CONT_MAX_TRAIN="200000"
 
-N_GPUS=4
+# GPU orchestration:
+#   Leave N_GPUS empty to auto-detect via nvidia-smi. Set to an integer
+#   to cap usage (e.g. N_GPUS=2 to reserve 2 cards for other work).
+#   CUDA_VISIBLE_DEVICES in the environment is respected — if set to
+#   "1,3" we'll see 2 GPUs and use indices 0..1 of the visible set.
+N_GPUS=""
 SEED=0
 
 # wandb
@@ -47,6 +52,28 @@ WANDB_PROJECT=thermogen
 
 # Helper: emit --max-<name> <value> only when non-empty.
 _cap() { [[ -n "${2:-}" ]] && printf ' --%s %s' "$1" "$2" || true; }
+
+# Auto-detect GPUs if N_GPUS not set.
+_detect_gpus() {
+    if [[ -n "${CUDA_VISIBLE_DEVICES:-}" ]]; then
+        # Count commas + 1 in the visible list.
+        local n
+        n=$(awk -F, '{print NF}' <<<"$CUDA_VISIBLE_DEVICES")
+        echo "$n"
+        return
+    fi
+    if command -v nvidia-smi >/dev/null 2>&1; then
+        nvidia-smi -L 2>/dev/null | wc -l | tr -d ' '
+    else
+        echo 0
+    fi
+}
+
+if [[ -z "$N_GPUS" ]]; then
+    N_GPUS=$(_detect_gpus)
+    [[ -z "$N_GPUS" || "$N_GPUS" -lt 1 ]] && N_GPUS=1
+    echo "[config] auto-detected N_GPUS=$N_GPUS"
+fi
 
 mkdir -p "$CACHE" "$CONT_OUT"
 
@@ -110,9 +137,27 @@ stage_continue() {
 }
 
 stage_seeds() {
-    echo "==> [$(date +%T)] Launching ensemble seeds 1,2,3 on GPUs 1,2,3"
+    # Run ensemble-seed runs on every GPU beyond GPU 0 (which we reserve
+    # for the primary stage). For N_GPUS=4 we get seeds 1,2,3 in parallel;
+    # for N_GPUS=1 we fall back to a single sequential seed-1 run.
+    local n_seed_gpus=$((N_GPUS - 1))
+    if (( n_seed_gpus < 1 )); then
+        echo "==> [$(date +%T)] Only $N_GPUS GPU(s) visible; running seed 1 sequentially on GPU 0"
+        CUDA_VISIBLE_DEVICES=0 python scripts/finetune_thermo_head.py \
+            --ckpt "$CKPT" --config "$LOQI_CONFIG" --thermo-config "$FT_CFG" \
+            $(_common_data_args) \
+            --cache-dir "$CACHE" \
+            --seed 1 \
+            --wandb --wandb-project "$WANDB_PROJECT" \
+            --wandb-group "ft_$(basename ${FT_CFG%.yaml})_seeds" \
+            --wandb-name "seed_1" \
+            --device cuda 2>&1 | tee "$CACHE/train_seed1.log"
+        echo "==> [$(date +%T)] seeds DONE"
+        return
+    fi
+    echo "==> [$(date +%T)] Launching $n_seed_gpus ensemble seeds on GPUs 1..$n_seed_gpus"
     local pids=()
-    for s in 1 2 3; do
+    for ((s=1; s<=n_seed_gpus; s++)); do
         CUDA_VISIBLE_DEVICES=$s python scripts/finetune_thermo_head.py \
             --ckpt "$CKPT" --config "$LOQI_CONFIG" --thermo-config "$FT_CFG" \
             $(_common_data_args) \
