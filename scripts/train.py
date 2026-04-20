@@ -18,6 +18,72 @@ import os
 import logging
 from pathlib import Path
 
+def _is_rank0():
+    return os.environ.get("LOCAL_RANK", "0") == "0"
+
+
+def _print_param_breakdown(pl_module):
+    """Detailed parameter-count breakdown of a Graph3DInterpolantModel.
+
+    Groups the monolithic `dynamics` ModuleWithEMA into:
+      - dynamics.model.<backbone pieces>  (trainable)
+      - dynamics.model.thermo_heads.ext   (trainable, if present)
+      - dynamics.model.thermo_heads.mp    (trainable, if present)
+      - dynamics.model.energy_head        (trainable, if present)
+      - dynamics.ema_model                (frozen shadow, 1× the inner model)
+      - self_conditioning_module          (if present)
+    and prints trainable / frozen / total roll-ups.
+    """
+    def count(module):
+        return sum(p.numel() for p in module.parameters())
+
+    def count_trainable(module):
+        return sum(p.numel() for p in module.parameters() if p.requires_grad)
+
+    lines = ["", "=" * 66, "Parameter breakdown", "=" * 66]
+
+    def _row(name, n, indent=2):
+        lines.append(f"{' ' * indent}{name:<45s}{n:>15,}")
+
+    dyn = pl_module.dynamics
+    inner = dyn.model if hasattr(dyn, "model") else dyn
+
+    lines.append("dynamics.model  (trainable base)")
+    backbone_subtotal = 0
+    head_rows = []
+    for name, child in inner.named_children():
+        n = count(child)
+        if name == "thermo_heads":
+            for sub_name, sub in child.named_children():
+                head_rows.append((f"thermo_heads.{sub_name}", count(sub)))
+        elif name == "energy_head":
+            head_rows.append(("energy_head", n))
+        else:
+            backbone_subtotal += n
+    _row("backbone (embedders + DiT/XEGNN stack + coord head)", backbone_subtotal)
+    for name, n in head_rows:
+        _row(name, n)
+    _row("subtotal (dynamics.model)", count(inner))
+
+    if hasattr(dyn, "ema_model") and dyn.ema_model is not None:
+        lines.append("")
+        lines.append("dynamics.ema_model  (frozen EMA shadow, mirrors dynamics.model)")
+        _row("subtotal", count(dyn.ema_model))
+
+    if getattr(pl_module, "self_conditioning_module", None) is not None:
+        lines.append("")
+        lines.append("self_conditioning_module")
+        _row("subtotal", count(pl_module.self_conditioning_module))
+
+    lines.append("-" * 66)
+    total = count(pl_module)
+    trainable = count_trainable(pl_module)
+    lines.append(f"  {'Total params':<45s}{total:>15,}")
+    lines.append(f"  {'Trainable':<45s}{trainable:>15,}  ({100*trainable/max(total,1):.1f}%)")
+    lines.append(f"  {'Frozen (incl. EMA shadow)':<45s}{total-trainable:>15,}")
+    lines.append("=" * 66)
+    return "\n".join(lines)
+
 import torch
 import hydra
 from lightning import pytorch as pl
@@ -128,6 +194,10 @@ def main(cfg: DictConfig) -> None:
             batch_preprocessor=batch_preprocessor
         )
         ckpt = None
+
+    if _is_rank0():
+        logging.info(_print_param_breakdown(pl_module))
+
     wandb_resume = cfg.wandb_params.resume if "resume" in cfg.wandb_params else "allow"
     logger = pl.loggers.WandbLogger(
         save_dir=cfg.outdir,
