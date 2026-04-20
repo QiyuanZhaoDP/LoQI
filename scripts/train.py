@@ -201,6 +201,22 @@ def main(cfg: DictConfig) -> None:
     else:
         num_nodes = 1
 
+    # When an auxiliary loss (thermo / energy) is enabled, the corresponding
+    # heads may produce outputs that ARE in the autograd graph for some
+    # batches but NOT for others — e.g. ThermoPropertyLoss with min_time=0.8
+    # contributes only when ~20% of the timesteps pass the gate, so ~80% of
+    # batches leave the thermo head params without gradients. Plain DDP
+    # raises "unused parameters" on the first such batch; we flip on the
+    # tolerant variant when we know an aux loss is in play.
+    if cfg.train.gpus > 1:
+        needs_find_unused = loss_fn is not None
+        strategy = 'ddp_find_unused_parameters_true' if needs_find_unused else 'ddp'
+        if needs_find_unused:
+            logging.info("Using DDP strategy 'ddp_find_unused_parameters_true' "
+                         "(auxiliary loss has conditionally-used heads).")
+    else:
+        strategy = 'auto'
+
     trainer = pl.Trainer(
         max_epochs=cfg.train.n_epochs,
         logger=logger,
@@ -210,7 +226,7 @@ def main(cfg: DictConfig) -> None:
         accelerator='gpu',
         devices=cfg.train.gpus,
         num_nodes=num_nodes,
-        strategy=('ddp' if cfg.train.gpus > 1 else 'auto'),
+        strategy=strategy,
         check_val_every_n_epoch=cfg.train.val_freq,
         gradient_clip_val=cfg.train.gradient_clip_value,
         log_every_n_steps=cfg.train.log_freq,  # for train steps
