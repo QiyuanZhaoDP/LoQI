@@ -321,7 +321,14 @@ def main():
                    help="Used for per-epoch evaluation during training.")
     p.add_argument("--test-pt", required=True,
                    help="Used ONLY for final evaluation after training.")
-    p.add_argument("--cache-dir", required=True)
+    p.add_argument("--cache-dir", required=True,
+                   help="Where per-split H caches live (reused across runs).")
+    p.add_argument("--out-dir", default=None,
+                   help="Where to save heads_final.pt + finetune_report.json. "
+                        "Default: same as --cache-dir. For grid search / "
+                        "hparam sweeps, point each run at a unique --out-dir "
+                        "while sharing a single --cache-dir so H isn't "
+                        "re-extracted.")
     p.add_argument("--max-train", type=int, default=None,
                    help="Cap on labeled train molecules (default: use all).")
     p.add_argument("--max-val",   type=int, default=None,
@@ -566,13 +573,15 @@ def main():
                     args.batch_size, device, target_mean, target_std)
     print_report(rows)
 
-    out_path = cache_dir / "finetune_report.json"
+    out_dir = Path(args.out_dir) if args.out_dir else cache_dir
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / "finetune_report.json"
     with open(out_path, "w") as f:
         json.dump({"args": vars(args), "rows": rows,
                    "target_mean": target_mean.tolist(),
                    "target_std":  target_std.tolist()}, f, indent=2)
     # Save heads so continuation_training.py can --head-init from here.
-    heads_path = cache_dir / "heads_final.pt"
+    heads_path = out_dir / "heads_final.pt"
     torch.save(model.state_dict(), heads_path)
     print(f"Heads saved -> {heads_path}")
     if wb is not None:
