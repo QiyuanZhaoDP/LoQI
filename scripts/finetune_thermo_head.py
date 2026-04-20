@@ -332,6 +332,11 @@ def main():
     p.add_argument("--batch-size", type=int, default=256)
     p.add_argument("--epochs", type=int, default=50)
     p.add_argument("--lr", type=float, default=3e-4)
+    p.add_argument("--lr-min", type=float, default=0.0,
+                   help="Cosine eta_min — LR floor at the end of the schedule. "
+                        "Default 0 (decay all the way to zero). Set to e.g. "
+                        "lr/10 to keep some learning rate through the final "
+                        "epoch.")
     p.add_argument("--weight-decay", type=float, default=1e-5)
     p.add_argument("--n-mp-layers", type=int, default=2,
                    help="Number of atom<->mol MP rounds in AtomMolMP.")
@@ -491,9 +496,13 @@ def main():
     # than jumping at epoch boundaries.
     steps_per_epoch = (n_train + args.batch_size - 1) // args.batch_size
     total_steps = max(1, steps_per_epoch * args.epochs)
-    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=total_steps)
+    eta_min = float(args.lr_min)
+    sched = torch.optim.lr_scheduler.CosineAnnealingLR(
+        opt, T_max=total_steps, eta_min=eta_min,
+    )
     print(f"Cosine schedule: T_max={total_steps:,} optimizer steps "
-          f"({steps_per_epoch:,}/epoch × {args.epochs} epochs)")
+          f"({steps_per_epoch:,}/epoch × {args.epochs} epochs), "
+          f"eta_min={eta_min:.2e}")
 
     idx_train = np.arange(n_train)
     idx_val   = np.arange(n_val)

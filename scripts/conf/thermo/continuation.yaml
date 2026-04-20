@@ -17,7 +17,8 @@ backbone:
 train:
   epochs:       15
   batch_size:   32      # small because backbone forward is now in the loop
-  lr:           3.0e-4  # heads LR
+  lr:           3.0e-4  # heads LR (base; cosine-annealed down to lr_min)
+  lr_min:       1.0e-6  # cosine eta_min — must be <= min(lr, backbone_lr)
   weight_decay: 1.0e-5
   grad_clip:    1.0
 

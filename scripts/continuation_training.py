@@ -342,8 +342,14 @@ def main():
                    help="Cap on labeled test molecules (default: use all).")
     p.add_argument("--batch-size", type=int, default=32)
     p.add_argument("--epochs", type=int, default=10)
-    p.add_argument("--lr", type=float, default=3e-4, help="Heads LR.")
-    p.add_argument("--backbone-lr", type=float, default=1e-5)
+    p.add_argument("--lr", type=float, default=3e-4, help="Heads LR (base).")
+    p.add_argument("--backbone-lr", type=float, default=1e-5,
+                   help="Unfrozen-backbone LR (base).")
+    p.add_argument("--lr-min", type=float, default=0.0,
+                   help="Cosine eta_min — LR floor that every param group "
+                        "decays toward. Must be <= min(base_lrs); typical "
+                        "choice is min_base_lr / 10 (e.g. 1e-6 when "
+                        "backbone_lr=1e-5). Default 0 (decay to zero).")
     p.add_argument("--weight-decay", type=float, default=1e-5)
     p.add_argument("--n-mp-layers", type=int, default=2,
                    help="Number of atom<->mol MP rounds in AtomMolMP.")
@@ -468,13 +474,19 @@ def main():
         param_groups.append({"params": bb_trainable, "lr": args.backbone_lr,
                               "name": "backbone_tail"})
     opt = torch.optim.AdamW(param_groups, weight_decay=args.weight_decay)
-    # Step-wise cosine.
+    # Step-wise cosine. eta_min is the floor for EVERY param group — so set
+    # it <= min(base_lrs) (here: backbone_lr). Otherwise the smaller-LR
+    # group's cosine inverts and LR climbs instead of decays.
     steps_per_epoch = max(1, len(train_loader))
     total_steps = steps_per_epoch * args.epochs
-    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=total_steps)
+    eta_min = float(args.lr_min)
+    sched = torch.optim.lr_scheduler.CosineAnnealingLR(
+        opt, T_max=total_steps, eta_min=eta_min,
+    )
     rank0_print(f"Cosine schedule: T_max={total_steps:,} optimizer steps "
-                f"({steps_per_epoch:,}/epoch × {args.epochs} epochs, "
-                f"effective batch={args.batch_size}x{world_size}={args.batch_size*world_size})")
+                f"({steps_per_epoch:,}/epoch × {args.epochs} epochs), "
+                f"eta_min={eta_min:.2e}, "
+                f"effective batch={args.batch_size}x{world_size}={args.batch_size*world_size}")
 
     # --- wandb (rank-0 only) ---
     wb = None
