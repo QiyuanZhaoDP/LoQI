@@ -89,12 +89,28 @@ def main(cfg: DictConfig) -> None:
             ckpt = "last"
         else:
             ckpt = cfg.resume
-        pl_module = Graph3DInterpolantModel.load_from_checkpoint(cfg.resume,
-                                                                 loss_fn=loss_fn,
-                                                                 loss_params=cfg.loss,
-                                                                 interpolant_params=cfg.interpolant,
-                                                                 sampling_params=cfg.sample,
-                                                                 batch_preprocessor=batch_preprocessor)
+        # resume_strict: when warm-starting a checkpoint that didn't have
+        # thermo / energy heads, the new head params have no matching keys
+        # in the state_dict. With strict=False they're left at random init,
+        # and the rest of the backbone loads normally. Default False is
+        # safe for our foundation-model flow (loqi.ckpt -> loqi_thermo.yaml).
+        resume_strict = bool(OmegaConf.select(cfg, "train.resume_strict",
+                                               default=False))
+        # We also pass dynamics_params through — Lightning would otherwise
+        # rebuild the model from the checkpoint's saved hparams, which
+        # predate the thermo_head_args addition.
+        pl_module = Graph3DInterpolantModel.load_from_checkpoint(
+            cfg.resume,
+            loss_fn=loss_fn,
+            loss_params=cfg.loss,
+            dynamics_params=cfg.dynamics,
+            interpolant_params=cfg.interpolant,
+            sampling_params=cfg.sample,
+            batch_preprocessor=batch_preprocessor,
+            strict=resume_strict,
+        )
+        logging.info(f"Resumed from {cfg.resume} (strict={resume_strict}). "
+                      f"Missing thermo head keys (if any) use random init.")
     else:
         pl_module = Graph3DInterpolantModel(
             loss_params=cfg.loss,

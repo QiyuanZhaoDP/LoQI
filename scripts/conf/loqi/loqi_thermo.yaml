@@ -1,0 +1,171 @@
+# Phase 1/2 foundation-model training — WARM-START flavor.
+#
+# Matches the architecture of scripts/conf/loqi/loqi.yaml (256-dim,
+# 10 layers, 4 heads, ~20M backbone) so we can resume from the
+# existing data/loqi.ckpt. Only the newly added thermo heads get
+# random init; every other weight is warm-started from the pretrained
+# denoising checkpoint.
+#
+# This is the fast path: ~1 day of fine-tuning on 4 GPUs vs 3-5 days
+# from-scratch for loqi_thermo_50m.yaml.
+#
+# Prereqs:
+#   - scripts/label_thermo.py has produced
+#     data/chembl3d_stereo/processed/{train,val,test}_h_thermo.pt
+#   - data/loqi.ckpt exists (your Phase 0 backbone)
+
+run_name: 'loqi_thermo_warm_v1'
+outdir: null
+resume: data/loqi.ckpt        # warm-start here — train.py loads with strict=False
+ema: True
+
+wandb_params:
+  mode: 'online'
+  group: 'foundation-warm'
+  project: 'thermogen'
+
+data:
+  dataset_root: "data/chembl3d_stereo"
+  processed_folder: "processed"
+  data_suffix: "_h_thermo"          # reads train_h_thermo.pt etc.
+  batch_size: &batch_size 150
+  inference_batch_size: 150
+  removed_h: False
+  data_loader_type: "midi"
+  aug_rotations: False
+  scale_coords: &scale_coords 1.0
+
+loss:
+  variables:
+    - variable_name: 'x'
+      loss_scale: 3.0
+      aggregate: 'mean'
+      continuous: True
+      use_distance: null
+      distance_scale: null
+
+interpolant:
+  timesteps: &timesteps 25
+  time_type: &time_type "discrete"
+  scheduler_type: &scheduler_type "cosine_adaptive"
+  sample_time_method: "uniform"
+  sample_time_mean: 0
+  sample_time_scale: 0.81
+  global_variable_name: 'x'
+  min_t: &min_t 0
+  variables:
+    - variable_name: 'x'
+      interpolant_type: 'continuous_diffusion'
+      diffusion_type: 'vdm'
+      prior_type: 'gaussian'
+      timesteps: *timesteps
+      num_classes: 3
+      scheduler_type: *scheduler_type
+      scheduler_cut: False
+      time_type: *time_type
+      nu: 2.5
+      com_free: True
+      min_t: *min_t
+    - variable_name: 'h'
+      interpolant_type: "discrete_null"
+      num_classes: &num_atoms 17
+      prior_type: null
+    - variable_name: 'edge_attr'
+      interpolant_type: "discrete_null"
+      num_classes: 9
+      prior_type: null
+    - variable_name: 'charges'
+      interpolant_type: "discrete_null"
+      concat: 'h'
+      num_classes: 6
+      offset: 2
+      prior_type: null
+
+# ==== Same backbone as loqi.yaml — so loqi.ckpt loads cleanly ===============
+dynamics:
+  model_name: "megav3conf"
+  model_args:
+    atom_classes: 23
+    edge_classes: 9
+    invariant_edge_feat_dim: 64
+    invariant_node_feat_dim: 256
+    n_vector_features: 64
+    equivariant_node_feature_dim: 3
+    num_layers: 10
+    num_heads: 4
+    dist_size: 16
+    prune_edges: False
+    # Thermo head — new weights, will random-init and train from scratch.
+    thermo_head_args:
+      n_mp_layers: 2
+      mp_n_heads:  4
+      hidden:      256
+  wrapper_args:
+    timesteps: *timesteps
+    time_type: *time_type
+
+self_conditioning:
+  name: "base"
+  variables:
+    - variable_name: x
+      hidden_dims: 32
+      fuse_softmax: False
+      vector: True
+      clamp_min: -100
+      clamp_max: 100
+
+sample:
+  node_distribution: "${data.dataset_root}/processed/train_n_h.pickle"
+
+# ==== Phase 2 auxiliary thermo loss =========================================
+# Target stats precomputed from the full labeled train split.
+thermo_loss:
+  min_time: 0.8
+  weights:
+    ext: 0.05
+    mp:  0.05
+  target_mean: [-315.62, 107.69, 386.73, 668.22, -115.50]
+  target_std:  [ 346.07, 342.83,  94.00, 150.17,  364.04]
+
+train:
+  seed: 42
+  gpus: 4
+  n_epochs: 50              # fine-tune from a converged ckpt — fewer epochs
+  enable_progress_bar: True
+  gradient_clip_value: 1.0
+  log_freq: 50
+  val_freq: 2
+  checkpoint_monitor: opt_median_relative_energy
+  checkpoint_monitor_mode: min
+  checkpoint_every_n_train_steps: 500
+  resume_strict: False      # allow missing thermo-head keys in the ckpt
+
+evaluation:
+  type: conformers
+  max_molecules: 300
+  timesteps: *timesteps
+  compute_3D_metrics: True
+  compute_energy_metrics: True
+  compute_stereo_metrics: True
+  scale_coords: *scale_coords
+  energy_metrics_args:
+    model_path: src/megalodon/metrics/aimnet2/cpcm_model/wb97m_cpcms_v2_0.jpt
+    batchsize: 100
+    opt_metrics: True
+    opt_params:
+      fmax: 2e-3
+      max_nstep: 3000
+
+optimizer:
+  type: adamw
+  lr: 5.e-5                 # lower than from-scratch: backbone is already fit
+  weight_decay: 1.e-12
+  amsgrad: True
+
+lr_scheduler:
+  type: linear_warmup
+  initial_lr: 1.e-6
+  final_lr: 5.e-5
+  num_warmup_steps: 500     # shorter warmup — backbone already trained
+  interval: step
+  frequency: 1
