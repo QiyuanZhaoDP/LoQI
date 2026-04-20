@@ -117,22 +117,36 @@ stage_train() {
 }
 
 stage_continue() {
-    echo "==> [$(date +%T)] Continuation training (config: $CONT_CFG)"
+    echo "==> [$(date +%T)] Continuation training (config: $CONT_CFG, N_GPUS=$N_GPUS)"
     local head_init="$CACHE/heads_final.pt"
     if [[ ! -f "$head_init" ]]; then
         echo "ERROR: $head_init not found — run 'train' stage first"
         exit 1
     fi
-    CUDA_VISIBLE_DEVICES=0 python scripts/continuation_training.py \
-        --ckpt "$CKPT" --config "$LOQI_CONFIG" --thermo-config "$CONT_CFG" \
-        --train-pt "$TRAIN_PT" --val-pt "$VAL_PT" --test-pt "$TEST_PT" \
-        $(_cap max-train "$CONT_MAX_TRAIN")$(_cap max-val "$MAX_VAL")$(_cap max-test "$MAX_TEST") \
-        --head-init "$head_init" \
-        --out-dir "$CONT_OUT" \
-        --seed "$SEED" \
-        --wandb --wandb-project "$WANDB_PROJECT" \
-        --wandb-name "cont_$(basename ${CONT_CFG%.yaml})_s${SEED}" \
-        --device cuda 2>&1 | tee "$CONT_OUT/train.log"
+    # Args shared between single-GPU and DDP launch paths.
+    local args=(
+        --ckpt "$CKPT" --config "$LOQI_CONFIG" --thermo-config "$CONT_CFG"
+        --train-pt "$TRAIN_PT" --val-pt "$VAL_PT" --test-pt "$TEST_PT"
+    )
+    # _cap produces leading " --max-train N"; split into individual tokens.
+    # shellcheck disable=SC2206
+    args+=($(_cap max-train "$CONT_MAX_TRAIN") $(_cap max-val "$MAX_VAL") $(_cap max-test "$MAX_TEST"))
+    args+=(
+        --head-init "$head_init"
+        --out-dir   "$CONT_OUT"
+        --seed      "$SEED"
+        --wandb --wandb-project "$WANDB_PROJECT"
+        --wandb-name "cont_$(basename ${CONT_CFG%.yaml})_s${SEED}_ws${N_GPUS}"
+        --device cuda
+    )
+    if (( N_GPUS > 1 )); then
+        echo "   launching DDP across $N_GPUS GPUs via torchrun"
+        torchrun --standalone --nnodes=1 --nproc_per_node="$N_GPUS" \
+            scripts/continuation_training.py "${args[@]}" 2>&1 | tee "$CONT_OUT/train.log"
+    else
+        CUDA_VISIBLE_DEVICES=0 python scripts/continuation_training.py \
+            "${args[@]}" 2>&1 | tee "$CONT_OUT/train.log"
+    fi
     echo "==> [$(date +%T)] continue DONE"
 }
 
