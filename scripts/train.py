@@ -86,19 +86,16 @@ def main(cfg: DictConfig) -> None:
     if cfg.resume:
         if os.path.isdir(cfg.resume):
             cfg.resume = f"{cfg.resume}/last.ckpt"
-            ckpt = "last"
-        else:
-            ckpt = cfg.resume
-        # resume_strict: when warm-starting a checkpoint that didn't have
-        # thermo / energy heads, the new head params have no matching keys
-        # in the state_dict. With strict=False they're left at random init,
-        # and the rest of the backbone loads normally. Default False is
-        # safe for our foundation-model flow (loqi.ckpt -> loqi_thermo.yaml).
+        # resume_strict controls BOTH:
+        #   * state_dict strictness in load_from_checkpoint (False lets new
+        #     heads initialize randomly without matching keys)
+        #   * whether we hand trainer.fit the ckpt_path for full restoration:
+        #     if strict=False, the architecture changed → optimizer /
+        #     scheduler / epoch / grad state in the checkpoint doesn't match
+        #     the current model, so we must NOT let Lightning restore them.
+        #     This is warm-start semantics: weights yes, training-state no.
         resume_strict = bool(OmegaConf.select(cfg, "train.resume_strict",
                                                default=False))
-        # We also pass dynamics_params through — Lightning would otherwise
-        # rebuild the model from the checkpoint's saved hparams, which
-        # predate the thermo_head_args addition.
         pl_module = Graph3DInterpolantModel.load_from_checkpoint(
             cfg.resume,
             loss_fn=loss_fn,
@@ -109,8 +106,14 @@ def main(cfg: DictConfig) -> None:
             batch_preprocessor=batch_preprocessor,
             strict=resume_strict,
         )
-        logging.info(f"Resumed from {cfg.resume} (strict={resume_strict}). "
-                      f"Missing thermo head keys (if any) use random init.")
+        if resume_strict:
+            ckpt = cfg.resume     # full resume — optimizer + epoch restored
+            logging.info(f"Resumed from {cfg.resume} (strict=True, full state).")
+        else:
+            ckpt = None           # warm-start — weights only, fresh training state
+            logging.info(f"Warm-started from {cfg.resume} (strict=False): "
+                          f"pretrained weights loaded, optimizer / scheduler / "
+                          f"epoch start fresh. Any new heads get random init.")
     else:
         pl_module = Graph3DInterpolantModel(
             loss_params=cfg.loss,
