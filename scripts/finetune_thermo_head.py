@@ -1,20 +1,17 @@
-"""Phase 0/1 hybrid: train thermo prediction heads on top of a frozen LoQI
+"""Phase 0/1 hybrid: train a thermo prediction head on top of a frozen LoQI
 backbone.
 
-Two heads are trained jointly on the SAME per-atom feature map H from the
-frozen checkpoint:
+A single head is trained on the per-atom feature map H from the frozen
+checkpoint:
 
-  ExtensiveSumHead  — MLP(H_atom) + scatter_sum over atoms.
-                      Physically-principled for ADDITIVE properties
-                      (Hf_0, Hf_298, Gf_298, Cv).
+  AtomMolMP  — bidirectional message passing between atoms and a per-molecule
+               virtual node with attention-based atom→mol pooling. Learns an
+               arbitrary (non-additive) aggregation that handles both
+               extensive (Hf, Gf, Cv) and intensive / shape-dependent (S0)
+               properties with a single pooling mechanism.
 
-  AtomMolMP         — bidirectional message passing between atoms and a
-                      per-molecule virtual node, with attention-based
-                      atom→mol pooling. Learns arbitrary (non-additive)
-                      aggregation — intended for intensive / shape-dependent
-                      properties (S0 is the main one; also a general fallback).
-
-Targets: 5 TCIT columns produced by scripts/label_thermo.py.
+Targets: 5 TCIT columns joined to each Data at load time via the parquet
+property table (see data_processing/build_property_table.py).
 
 Workflow:
   Step A. Cache per-molecule H tensors by running the frozen backbone once
@@ -27,8 +24,10 @@ Workflow:
 Usage:
   python scripts/finetune_thermo_head.py \\
       --ckpt data/loqi.ckpt --config scripts/conf/loqi/loqi.yaml \\
-      --train-pt data/chembl3d_stereo/processed/train_h_thermo.pt \\
-      --test-pt  data/chembl3d_stereo/processed/test_h_thermo.pt \\
+      --train-pt data/chembl3d_stereo/processed/train_h.pt \\
+      --val-pt   data/chembl3d_stereo/processed/val_h.pt \\
+      --test-pt  data/chembl3d_stereo/processed/test_h.pt \\
+      --property-table data/property_table.parquet \\
       --cache-dir /tmp/ft_cache \\
       --max-train 50000 --max-test 20000 \\
       --epochs 50 --lr 3e-4 --batch-size 256 --device cuda
@@ -76,17 +75,34 @@ class _TempDataset(InMemoryDataset):
         self._indices = None
 
 
-def load_labeled_indices(pt_path, max_n=None, seed=0):
+def load_labeled_indices(pt_path, property_table_path, max_n=None, seed=0,
+                          transform=None):
+    """Load a split's *_h.pt, attach the AttachProperties transform so every
+    fetched Data has thermo + RDKit fields, filter to molecules with
+    thermo_has_label=True, optionally cap + shuffle.
+
+    If `transform` is passed (pre-built AttachProperties), uses it directly
+    — avoids reloading the 1.85M-row parquet dict for every split.
+    """
     with torch.serialization.safe_globals(
         [DataEdgeAttr, DataTensorAttr, GlobalStorage, Mol]
     ):
         data, slices = torch.load(pt_path)
     ds = _TempDataset(data, slices)
+
+    if transform is None:
+        from megalodon.data.attach_properties import AttachProperties
+        transform = AttachProperties(property_table_path)
+    ds.transform = transform
+
     idx = []
-    flag = ds.data.thermo_has_label.view(-1)
-    for i in range(len(ds)):
-        if bool(flag[i].item()):
+    from tqdm import tqdm as _tqdm
+    for i in _tqdm(range(len(ds)), desc=f"filter labeled {Path(pt_path).name}"):
+        d = ds[i]                       # attach transform runs here
+        if bool(d.thermo_has_label.item()):
             idx.append(i)
+    print(f"  {len(idx):,} / {len(ds):,} molecules have thermo labels")
+
     rng = np.random.default_rng(seed)
     rng.shuffle(idx)
     if max_n is not None:
@@ -296,11 +312,16 @@ def main():
                         "(scripts/conf/thermo/finetune.yaml). "
                         "YAML values override argparse defaults; CLI flags "
                         "still override the YAML.")
-    p.add_argument("--train-pt", required=True)
+    p.add_argument("--train-pt", required=True,
+                   help="Original *_h.pt file (geometry); no pre-labeled variant needed.")
     p.add_argument("--val-pt", required=True,
                    help="Used for per-epoch evaluation during training.")
     p.add_argument("--test-pt", required=True,
                    help="Used ONLY for final evaluation after training.")
+    p.add_argument("--property-table", required=True,
+                   help="Parquet file produced by "
+                        "data_processing/build_property_table.py — provides "
+                        "thermo targets + RDKit descriptors per canonical SMILES.")
     p.add_argument("--cache-dir", required=True,
                    help="Where per-split H caches live (reused across runs).")
     p.add_argument("--out-dir", default=None,
@@ -367,6 +388,12 @@ def main():
     cache_va = cache_dir / f"val_H_n{args.max_val}_s{args.seed}.pt"
     cache_te = cache_dir / f"test_H_n{args.max_test}_s{args.seed}.pt"
 
+    # Build the AttachProperties transform once — expensive dict load (~1 GB)
+    # shared across splits.
+    from megalodon.data.attach_properties import AttachProperties
+    prop_transform = AttachProperties(args.property_table)
+    print(f"AttachProperties: {len(prop_transform):,} SMILES in table")
+
     # --- Shard extraction mode: extract my slice, exit ---
     if args.shard_id is not None:
         assert 0 <= args.shard_id < args.n_shards, "shard-id out of range"
@@ -376,7 +403,10 @@ def main():
         print(f"[shard {args.shard_id}/{args.n_shards}] loading frozen backbone")
         model_back, cfg = load_model(args.ckpt, args.config, args.device)
         if not shard_tr.exists() or args.no_cache:
-            ds_tr, idx_tr = load_labeled_indices(args.train_pt, args.max_train, args.seed)
+            ds_tr, idx_tr = load_labeled_indices(
+                args.train_pt, args.property_table, args.max_train, args.seed,
+                transform=prop_transform,
+            )
             my_idx = idx_tr[args.shard_id::args.n_shards]
             print(f"[shard {args.shard_id}] extracting {len(my_idx):,} molecules")
             extract_and_cache_H(
@@ -388,14 +418,20 @@ def main():
         # Shard 0 also extracts val + test (small, single-GPU is fine)
         if args.shard_id == 0:
             if not cache_va.exists() or args.no_cache:
-                ds_va, idx_va = load_labeled_indices(args.val_pt, args.max_val, args.seed)
+                ds_va, idx_va = load_labeled_indices(
+                    args.val_pt, args.property_table, args.max_val, args.seed,
+                    transform=prop_transform,
+                )
                 extract_and_cache_H(
                     model_back, cfg, ds_va, idx_va,
                     args.extract_batch_size, args.device, cache_va,
                     desc="val-H", cache_dtype=args.cache_dtype,
                 )
             if not cache_te.exists() or args.no_cache:
-                ds_te, idx_te = load_labeled_indices(args.test_pt, args.max_test, args.seed)
+                ds_te, idx_te = load_labeled_indices(
+                    args.test_pt, args.property_table, args.max_test, args.seed,
+                    transform=prop_transform,
+                )
                 extract_and_cache_H(
                     model_back, cfg, ds_te, idx_te,
                     args.extract_batch_size, args.device, cache_te,
@@ -425,7 +461,10 @@ def main():
             (args.test_pt,  cache_te, args.max_test,  "test-H"),
         ]:
             if not cache_path.exists() or args.no_cache:
-                ds, idx = load_labeled_indices(pt, mx, args.seed)
+                ds, idx = load_labeled_indices(
+                    pt, args.property_table, mx, args.seed,
+                    transform=prop_transform,
+                )
                 extract_and_cache_H(model_back, cfg, ds, idx,
                                     args.extract_batch_size, args.device, cache_path,
                                     desc=desc, cache_dtype=args.cache_dtype)
@@ -553,7 +592,6 @@ def main():
         json.dump({"args": vars(args), "rows": rows,
                    "target_mean": target_mean.tolist(),
                    "target_std":  target_std.tolist()}, f, indent=2)
-    # Save heads so continuation_training.py can --head-init from here.
     heads_path = out_dir / "heads_final.pt"
     torch.save(model.state_dict(), heads_path)
     print(f"Heads saved -> {heads_path}")

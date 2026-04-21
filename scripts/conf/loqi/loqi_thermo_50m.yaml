@@ -1,17 +1,16 @@
-# Phase 1/2 foundation-model pre-training config.
+# Phase 1 foundation-model pre-training config.
 #
-# Scales LoQI to ~50M backbone params and enables thermo-aware multi-task
+# Scales LoQI to ~100M backbone params and enables thermo-aware multi-task
 # pre-training: the backbone's H representation is shaped by BOTH the
 # denoising objective AND a thermo prediction head, so the resulting
 # foundation model encodes potential-energy-surface-relevant structure
-# throughout (not just in the top few layers, which is what
-# scripts/continuation_training.py does).
+# throughout.
 #
 # Data requirement:
-#   data/<dataset_root>/<processed_folder>/{train,val,test}_h_thermo.pt
-# produced via:
-#   python data_processing/build_neutralization_index.py ...
-#   python scripts/label_thermo.py ... (for each split)
+#   data/property_table.parquet  produced via
+#   data_processing/build_property_table.py; attached at load time through
+#   the AttachProperties transform. Original geometry files (train_h.pt etc.)
+#   are loaded directly — no pre-labeled variant needed.
 #
 # Launch:
 #   python scripts/train.py --config-name=loqi_thermo_50m \
@@ -31,7 +30,8 @@ wandb_params:
 data:
   dataset_root: "data/chembl3d_stereo"
   processed_folder: "processed"
-  data_suffix: "_h_thermo"          # reads train_h_thermo.pt etc.
+  data_suffix: "_h"                 # original geometry files (no _h_thermo)
+  property_table: "data/property_table.parquet"
   batch_size: &batch_size 96        # smaller than 150 because backbone is 2.5x bigger
   inference_batch_size: 96
   removed_h: False

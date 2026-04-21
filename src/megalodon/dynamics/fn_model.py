@@ -742,9 +742,9 @@ class MegaFNV3Conf(nn.Module):
         self.dist_projection = nn.Linear(n_vector_features, dist_size, bias=False)
         self.return_features = return_features
 
-        # Optional thermo heads for multi-task (Phase 1/2) pre-training.
-        # Reuses the ExtensiveSumHead + AtomMolMP from downstream fine-tuning
-        # so the same head architecture can be warm-started later.
+        # Optional thermo head for multi-task (Phase 1/2) pre-training.
+        # Shares the AtomMolMP architecture used for downstream fine-tuning
+        # so the head can be warm-started / transferred later.
         self.thermo_heads = None
         if thermo_head_args is not None:
             from omegaconf import OmegaConf as _OC

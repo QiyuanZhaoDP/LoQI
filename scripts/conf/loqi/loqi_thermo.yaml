@@ -10,8 +10,8 @@
 # from-scratch for loqi_thermo_50m.yaml.
 #
 # Prereqs:
-#   - scripts/label_thermo.py has produced
-#     data/chembl3d_stereo/processed/{train,val,test}_h_thermo.pt
+#   - data_processing/build_property_table.py has produced
+#     data/property_table.parquet (thermo + RDKit descriptors per canonical SMILES)
 #   - data/loqi.ckpt exists (your Phase 0 backbone)
 
 run_name: 'loqi_thermo_warm_v1'
@@ -27,7 +27,8 @@ wandb_params:
 data:
   dataset_root: "data/chembl3d_stereo"
   processed_folder: "processed"
-  data_suffix: "_h_thermo"          # reads train_h_thermo.pt etc.
+  data_suffix: "_h"                 # original geometry files (no _h_thermo)
+  property_table: "data/property_table.parquet"
   batch_size: &batch_size 150
   inference_batch_size: 150
   removed_h: False

@@ -288,11 +288,16 @@ prediction. Two parallel tracks:
   ChEMBL3D. Produces a checkpoint whose every layer is shaped by thermo data.
 
 Both paths share the same dataset preparation (gas-phase thermochemistry
-labels from the TCIT group-additivity tool) and the same head architecture
-(`ExtensiveSumHead` + multi-head `AtomMolMP`, defined in
-`src/megalodon/models/thermo_heads.py`).
+labels from the TCIT group-additivity tool + cheap RDKit non-additive
+descriptors) and the same head architecture (multi-head `AtomMolMP`,
+defined in `src/megalodon/models/thermo_heads.py`).
 
 ### Data preparation
+
+Geometry is kept in the original `{train,val,test}_h.pt` files untouched.
+Per-molecule properties (5 TCIT thermo labels + 9 RDKit descriptors) live
+in a single parquet table keyed by canonical implicit-H SMILES, joined onto
+each `Data` at load time via the `AttachProperties` transform.
 
 ```bash
 # 1. Parse TCIT log → per-SMILES CSV of (Hf_0, Hf_298, Gf_298, S0, Cv)
@@ -306,14 +311,14 @@ python data_processing/build_neutralization_index.py \
     --inputs data/chembl3d_stereo/processed/{train,val,test}_h.pt \
     --output data_processing/chembl3d_neutralization_index.json
 
-# 3. Join labels onto each split (writes {train,val,test}_h_thermo.pt)
-for split in train val test; do
-  python scripts/label_thermo.py \
-    --input  data/chembl3d_stereo/processed/${split}_h.pt \
-    --output data/chembl3d_stereo/processed/${split}_h_thermo.pt \
-    --labels data_processing/tcit_thermo_labels.csv \
-    --neutralization-index data_processing/chembl3d_neutralization_index.json
-done
+# 3. Build the unified property table (thermo labels + RDKit descriptors).
+#    Mirrors the exact SMILES-matching chain of the retired label_thermo.py
+#    so row coverage matches (~641k labeled molecules).
+python data_processing/build_property_table.py \
+    --inputs data/chembl3d_stereo/processed/{train,val,test}_h.pt \
+    --thermo-csv data_processing/tcit_thermo_labels.csv \
+    --neutralization-index data_processing/chembl3d_neutralization_index.json \
+    --output data/property_table.parquet
 ```
 
 ### Phase 0 — frozen-backbone workflows
@@ -322,18 +327,16 @@ All Phase 0 pipelines keep the backbone frozen and train only small heads on
 the per-atom features `H`. A single orchestrator exposes every stage:
 
 ```bash
-# Extract H across splits on N GPUs, then train heads + (optional)
-# end-to-end continuation with last-N layers unfrozen.
-bash scripts/run_thermo.sh extract    # 4-GPU parallel H extraction
+# Extract H across splits on N GPUs, then train heads.
+bash scripts/run_thermo.sh extract    # N-GPU parallel H extraction
 bash scripts/run_thermo.sh train      # head training on cached H
-bash scripts/run_thermo.sh continue   # DDP continuation (unfreeze last N)
 bash scripts/run_thermo.sh seeds      # ensemble seeds on remaining GPUs
-bash scripts/run_thermo.sh all        # all of the above, sequentially
+bash scripts/run_thermo.sh all        # extract + train
 ```
 
-Knobs live in `scripts/conf/thermo/{finetune,continuation}.yaml`
-(`n_mp_layers`, `mp_n_heads`, `head_hidden`, `lr`, `batch_size`, `lr_min`,
-`unfreeze_layers`, `backbone_lr`, etc.) — edit in place, rerun.
+Knobs live in `scripts/conf/thermo/finetune.yaml`
+(`n_mp_layers`, `mp_n_heads`, `head_hidden`, `lr`, `batch_size`, `lr_min`)
+— edit in place, rerun.
 
 #### Hyperparameter sweep (multi-GPU)
 
@@ -412,17 +415,17 @@ runner prints a cross-dataset summary table at the end.
 |---|---|
 | `data_processing/parse_tcit_log.py` | TCIT log → CSV of per-SMILES thermo labels |
 | `data_processing/build_neutralization_index.py` | canonical → neutral SMILES map |
-| `scripts/label_thermo.py` | attach TCIT labels to a chembl3d `.pt` |
+| `data_processing/build_property_table.py` | builds the unified thermo + RDKit property parquet |
 | `scripts/label_energy.py` | attach AIMNet2 energies to a chembl3d `.pt` (Phase 1 extension) |
 | `scripts/probe_representation.py` | frozen-H Ridge probe (Phase 0 baseline) |
 | `scripts/finetune_thermo_head.py` | cached-H head training |
-| `scripts/continuation_training.py` | unfreeze last-N backbone layers + DDP |
 | `scripts/grid_search_thermo.sh` | parallel hparam sweep with resume |
 | `scripts/eval_loqi_loss.py` | reproduce val/x_loss for any ckpt |
 | `scripts/prepare_downstream_dataset.py` | CSV → PyG `.pt` with 3D conformer |
 | `scripts/downstream_cv.py` | 5-fold CV on a downstream dataset |
 | `scripts/run_thermo.sh` | Phase 0 stage orchestrator |
 | `scripts/run_downstream_all.sh` | batch runner for multiple downstream CSVs |
+| `src/megalodon/data/attach_properties.py` | PyG transform — attaches thermo + RDKit to each Data by SMILES |
 | `src/megalodon/models/thermo_heads.py` | shared head architectures |
 | `src/megalodon/models/loss_fn.py` | `ThermoPropertyLoss`, `EnergyPredictionLoss` |
 | `scripts/conf/thermo/*.yaml` | Phase 0 head/training hyperparameters |

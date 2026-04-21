@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# ThermoGen Phase 0 / continuation pipeline runner.
+# ThermoGen Phase 0 pipeline runner.
 #
 # Usage:
 #   bash scripts/run_thermo.sh extract     # ${N_GPUS}-way parallel H extraction
 #   bash scripts/run_thermo.sh train       # single-GPU head training (auto-merges shards)
-#   bash scripts/run_thermo.sh continue    # continuation training (unfreeze last N layers)
 #   bash scripts/run_thermo.sh seeds       # ensemble seeds 1,2,3 on GPUs 1,2,3 (optional)
-#   bash scripts/run_thermo.sh all         # extract -> train -> continue
+#   bash scripts/run_thermo.sh all         # extract -> train
 #
 # Edit the CONFIG section below before running.
 
@@ -14,29 +13,25 @@ set -euo pipefail
 cd "$(dirname "$0")/.."  # project root
 
 # ============ CONFIG ============
-# Model architecture + training hyperparameters live in YAML (edit there):
+# Model architecture + training hyperparameters live in YAML:
 #   scripts/conf/thermo/finetune.yaml
-#   scripts/conf/thermo/continuation.yaml
 # This shell script only handles paths, GPU orchestration, and wandb naming.
 
 CKPT=data/loqi.ckpt
 LOQI_CONFIG=scripts/conf/loqi/loqi.yaml
 FT_CFG=scripts/conf/thermo/finetune.yaml
-CONT_CFG=scripts/conf/thermo/continuation.yaml
 
-TRAIN_PT=data/chembl3d_stereo/processed/train_h_thermo.pt
-VAL_PT=data/chembl3d_stereo/processed/val_h_thermo.pt
-TEST_PT=data/chembl3d_stereo/processed/test_h_thermo.pt
+TRAIN_PT=data/chembl3d_stereo/processed/train_h.pt
+VAL_PT=data/chembl3d_stereo/processed/val_h.pt
+TEST_PT=data/chembl3d_stereo/processed/test_h.pt
+PROPERTY_TABLE=data/property_table.parquet
 
 CACHE=/tmp/ft_cache_full
-CONT_OUT=/tmp/continuation_u2
 
 # Empty string = "use all labeled samples" (scripts default to None).
 MAX_TRAIN=""
 MAX_VAL=""
 MAX_TEST=""
-# continuation typically uses a smaller subset because backbone is in the loop:
-CONT_MAX_TRAIN="200000"
 
 # GPU orchestration:
 #   Leave N_GPUS empty to auto-detect via nvidia-smi. Set to an integer
@@ -56,7 +51,6 @@ _cap() { [[ -n "${2:-}" ]] && printf ' --%s %s' "$1" "$2" || true; }
 # Auto-detect GPUs if N_GPUS not set.
 _detect_gpus() {
     if [[ -n "${CUDA_VISIBLE_DEVICES:-}" ]]; then
-        # Count commas + 1 in the visible list.
         local n
         n=$(awk -F, '{print NF}' <<<"$CUDA_VISIBLE_DEVICES")
         echo "$n"
@@ -75,10 +69,10 @@ if [[ -z "$N_GPUS" ]]; then
     echo "[config] auto-detected N_GPUS=$N_GPUS"
 fi
 
-mkdir -p "$CACHE" "$CONT_OUT"
+mkdir -p "$CACHE"
 
 _common_data_args() {
-    echo "--train-pt $TRAIN_PT --val-pt $VAL_PT --test-pt $TEST_PT"
+    echo "--train-pt $TRAIN_PT --val-pt $VAL_PT --test-pt $TEST_PT --property-table $PROPERTY_TABLE"
     printf '%s' "$(_cap max-train "$MAX_TRAIN")$(_cap max-val "$MAX_VAL")$(_cap max-test "$MAX_TEST")"
 }
 
@@ -114,40 +108,6 @@ stage_train() {
         --wandb-name "ft_$(basename ${FT_CFG%.yaml})_s${SEED}" \
         --device cuda 2>&1 | tee "$CACHE/train.log"
     echo "==> [$(date +%T)] train DONE"
-}
-
-stage_continue() {
-    echo "==> [$(date +%T)] Continuation training (config: $CONT_CFG, N_GPUS=$N_GPUS)"
-    local head_init="$CACHE/heads_final.pt"
-    if [[ ! -f "$head_init" ]]; then
-        echo "ERROR: $head_init not found — run 'train' stage first"
-        exit 1
-    fi
-    # Args shared between single-GPU and DDP launch paths.
-    local args=(
-        --ckpt "$CKPT" --config "$LOQI_CONFIG" --thermo-config "$CONT_CFG"
-        --train-pt "$TRAIN_PT" --val-pt "$VAL_PT" --test-pt "$TEST_PT"
-    )
-    # _cap produces leading " --max-train N"; split into individual tokens.
-    # shellcheck disable=SC2206
-    args+=($(_cap max-train "$CONT_MAX_TRAIN") $(_cap max-val "$MAX_VAL") $(_cap max-test "$MAX_TEST"))
-    args+=(
-        --head-init "$head_init"
-        --out-dir   "$CONT_OUT"
-        --seed      "$SEED"
-        --wandb --wandb-project "$WANDB_PROJECT"
-        --wandb-name "cont_$(basename ${CONT_CFG%.yaml})_s${SEED}_ws${N_GPUS}"
-        --device cuda
-    )
-    if (( N_GPUS > 1 )); then
-        echo "   launching DDP across $N_GPUS GPUs via torchrun"
-        torchrun --standalone --nnodes=1 --nproc_per_node="$N_GPUS" \
-            scripts/continuation_training.py "${args[@]}" 2>&1 | tee "$CONT_OUT/train.log"
-    else
-        CUDA_VISIBLE_DEVICES=0 python scripts/continuation_training.py \
-            "${args[@]}" 2>&1 | tee "$CONT_OUT/train.log"
-    fi
-    echo "==> [$(date +%T)] continue DONE"
 }
 
 stage_seeds() {
@@ -192,11 +152,10 @@ cmd="${1:-}"
 case "$cmd" in
     extract)  stage_extract  ;;
     train)    stage_train    ;;
-    continue) stage_continue ;;
     seeds)    stage_seeds    ;;
-    all)      stage_extract; stage_train; stage_continue ;;
+    all)      stage_extract; stage_train ;;
     *)
-        echo "usage: bash $0 {extract|train|continue|seeds|all}" >&2
+        echo "usage: bash $0 {extract|train|seeds|all}" >&2
         exit 1
         ;;
 esac

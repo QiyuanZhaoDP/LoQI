@@ -46,8 +46,19 @@ class MoleculeDataModule(LightningDataModule):
             data_loader_type: str = "adaptive",
             inference_batch_size: Optional[int] = None,
             data_suffix: str = "_h",
+            property_table: Optional[str] = None,
+            transform=None,
             **sampler_kwargs,
     ):
+        """
+        Args:
+            property_table: optional path to a parquet file produced by
+                data_processing/build_property_table.py. When set, each
+                Data object has its thermo + RDKit properties attached
+                on-the-fly via megalodon.data.attach_properties.AttachProperties.
+                Takes precedence over `transform` if both are given.
+            transform: custom PyG transform, alternative to `property_table`.
+        """
         super().__init__()
         self.dataset_root = dataset_root
         self.processed_folder = processed_folder
@@ -58,24 +69,33 @@ class MoleculeDataModule(LightningDataModule):
         self.sampler_kwargs = sampler_kwargs
         self.pin_memory = True
 
+        if property_table is not None:
+            from megalodon.data.attach_properties import AttachProperties
+            transform = AttachProperties(property_table)
+            print(f"AttachProperties loaded {len(transform):,} rows "
+                  f"from {property_table}")
+
         try:
             self.train_dataset = MoleculeDataset(
                 split="train",
                 root=self.dataset_root,
                 processed_folder=self.processed_folder,
                 data_suffix=self.data_suffix,
+                transform=transform,
             )
             self.val_dataset = MoleculeDataset(
                 split="val",
                 root=self.dataset_root,
                 processed_folder=self.processed_folder,
                 data_suffix=self.data_suffix,
+                transform=transform,
             )
             self.test_dataset = MoleculeDataset(
                 split="test",
                 root=self.dataset_root,
                 processed_folder=self.processed_folder,
                 data_suffix=self.data_suffix,
+                transform=transform,
             )
         except Exception as e:
             print(f"Error loading dataset: {e}")

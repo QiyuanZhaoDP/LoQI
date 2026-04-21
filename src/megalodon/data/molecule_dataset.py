@@ -38,9 +38,10 @@ class MoleculeDataset(InMemoryDataset):
         """
         Args:
             data_suffix: Filename suffix appended after the split name.
-                         Default "_h" loads `<split>_h.pt`; pass "_h_thermo"
-                         to load the thermo-labeled variant produced by
-                         scripts/label_thermo.py.
+                         Default "_h" loads `<split>_h.pt`.
+            transform:   PyG transform applied on __getitem__. Useful for
+                         attaching per-molecule property records on the fly
+                         (see megalodon.data.attach_properties.AttachProperties).
         """
         super().__init__(root, transform, pre_transform, pre_filter)
         self.root = root

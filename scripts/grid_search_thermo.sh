@@ -19,9 +19,10 @@ cd "$(dirname "$0")/.."
 CKPT=data/loqi.ckpt
 LOQI_CONFIG=scripts/conf/loqi/loqi.yaml
 FT_CFG=scripts/conf/thermo/finetune.yaml
-TRAIN_PT=data/chembl3d_stereo/processed/train_h_thermo.pt
-VAL_PT=data/chembl3d_stereo/processed/val_h_thermo.pt
-TEST_PT=data/chembl3d_stereo/processed/test_h_thermo.pt
+TRAIN_PT=data/chembl3d_stereo/processed/train_h.pt
+VAL_PT=data/chembl3d_stereo/processed/val_h.pt
+TEST_PT=data/chembl3d_stereo/processed/test_h.pt
+PROPERTY_TABLE=data/property_table.parquet
 
 CACHE=/tmp/ft_cache_full                # shared H cache — one copy, reused
 GRID_OUT=/tmp/grid_thermo               # per-run outputs land here
@@ -124,6 +125,7 @@ for ((wave_start=0; wave_start<TOTAL; wave_start+=N_GPUS)); do
         CUDA_VISIBLE_DEVICES="$gpu" python scripts/finetune_thermo_head.py \
             --ckpt "$CKPT" --config "$LOQI_CONFIG" --thermo-config "$FT_CFG" \
             --train-pt "$TRAIN_PT" --val-pt "$VAL_PT" --test-pt "$TEST_PT" \
+            --property-table "$PROPERTY_TABLE" \
             --cache-dir "$CACHE" \
             --out-dir "$outdir" \
             --n-mp-layers "$L" --mp-n-heads "$H" --head-hidden "$D" \
