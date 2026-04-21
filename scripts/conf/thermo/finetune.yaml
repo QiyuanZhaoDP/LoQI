@@ -1,0 +1,24 @@
+# Thermo head training on a FROZEN LoQI backbone.
+# Consumed by scripts/finetune_thermo_head.py via --thermo-config.
+#
+# Values below override the argparse defaults; any explicit CLI flag
+# (e.g. --lr 1e-4) still overrides the value here. That gives us:
+#     argparse defaults  <  this YAML  <  CLI flags
+#
+# Leaf keys must match argparse `dest` names (underscores, no dashes).
+
+heads:
+  n_mp_layers: 2        # atom <-> mol message-passing rounds in AtomMolMP
+  mp_n_heads:  4        # multi-head attention heads; must divide 256
+  head_hidden: 256      # hidden dim inside both heads
+
+train:
+  epochs:       30
+  batch_size:   512
+  lr:           3.0e-4
+  lr_min:       0.0     # cosine eta_min; 0 = decay all the way to zero
+  weight_decay: 1.0e-5
+
+extract:
+  extract_batch_size: 128
+  cache_dtype: bf16     # {fp32, bf16, fp16}

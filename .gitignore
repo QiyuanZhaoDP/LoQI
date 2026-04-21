@@ -16,3 +16,13 @@ scripts/convert_megaflow_checkpoint.py
 __pycache__/
 *.py[cod]
 *$py.class
+.DS_Store
+
+# Build artifacts
+*.egg-info/
+
+# Thermo labeling data artifacts (regenerable via data_processing scripts)
+data_processing/batch*.log
+data_processing/tcit_thermo_labels*
+data_processing/neutralization_mapping.json
+data_processing/chembl3d_neutralization_index.json*
