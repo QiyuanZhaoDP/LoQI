@@ -1,0 +1,185 @@
+# Phase 1/2 foundation-model pre-training config.
+#
+# Scales LoQI to ~50M backbone params and enables thermo-aware multi-task
+# pre-training: the backbone's H representation is shaped by BOTH the
+# denoising objective AND a thermo prediction head, so the resulting
+# foundation model encodes potential-energy-surface-relevant structure
+# throughout (not just in the top few layers, which is what
+# scripts/continuation_training.py does).
+#
+# Data requirement:
+#   data/<dataset_root>/<processed_folder>/{train,val,test}_h_thermo.pt
+# produced via:
+#   python data_processing/build_neutralization_index.py ...
+#   python scripts/label_thermo.py ... (for each split)
+#
+# Launch:
+#   python scripts/train.py --config-name=loqi_thermo_50m \
+#       outdir=./outputs/loqi_thermo_50m \
+#       train.gpus=4
+
+run_name: 'loqi_thermo_50m_v1'
+outdir: null
+resume: null
+ema: True
+
+wandb_params:
+  mode: 'online'
+  group: 'foundation'
+  project: 'thermogen'
+
+data:
+  dataset_root: "data/chembl3d_stereo"
+  processed_folder: "processed"
+  data_suffix: "_h_thermo"          # reads train_h_thermo.pt etc.
+  batch_size: &batch_size 96        # smaller than 150 because backbone is 2.5x bigger
+  inference_batch_size: 96
+  removed_h: False
+  data_loader_type: "midi"
+  aug_rotations: False
+  scale_coords: &scale_coords 1.0
+
+loss:
+  variables:
+    - variable_name: 'x'
+      loss_scale: 3.0
+      aggregate: 'mean'
+      continuous: True
+      use_distance: null
+      distance_scale: null
+
+interpolant:
+  timesteps: &timesteps 25
+  time_type: &time_type "discrete"
+  scheduler_type: &scheduler_type "cosine_adaptive"
+  sample_time_method: "uniform"
+  sample_time_mean: 0
+  sample_time_scale: 0.81
+  global_variable_name: 'x'
+  min_t: &min_t 0
+  variables:
+    - variable_name: 'x'
+      interpolant_type: 'continuous_diffusion'
+      diffusion_type: 'vdm'
+      prior_type: 'gaussian'
+      timesteps: *timesteps
+      num_classes: 3
+      scheduler_type: *scheduler_type
+      scheduler_cut: False
+      time_type: *time_type
+      nu: 2.5
+      com_free: True
+      min_t: *min_t
+    - variable_name: 'h'
+      interpolant_type: "discrete_null"
+      num_classes: &num_atoms 17
+      prior_type: null
+    - variable_name: 'edge_attr'
+      interpolant_type: "discrete_null"
+      num_classes: 9
+      prior_type: null
+    - variable_name: 'charges'
+      interpolant_type: "discrete_null"
+      concat: 'h'
+      num_classes: 6
+      offset: 2
+      prior_type: null
+
+# ==== Scaled backbone (~50M params) ========================================
+dynamics:
+  model_name: "megav3conf"
+  model_args:
+    atom_classes: 23
+    edge_classes: 9
+    invariant_edge_feat_dim: 96     # was 64
+    invariant_node_feat_dim: 384    # was 256  -> dominant cost, ~2.25x scaling
+    n_vector_features: 96           # was 64
+    equivariant_node_feature_dim: 3
+    num_layers: 14                  # was 10
+    num_heads: 8                    # was 4
+    dist_size: 16
+    prune_edges: False
+    # ---- Thermo head (Phase 2) wired into MegaFNV3Conf.forward ----
+    thermo_head_args:
+      n_mp_layers: 3
+      mp_n_heads:  4
+      hidden:      256
+    # ---- Energy head (Phase 1) — disabled until AIMNet2 energies labeled ----
+    # energy_head: True
+  wrapper_args:
+    timesteps: *timesteps
+    time_type: *time_type
+
+self_conditioning:
+  name: "base"
+  variables:
+    - variable_name: x
+      hidden_dims: 48
+      fuse_softmax: False
+      vector: True
+      clamp_min: -100
+      clamp_max: 100
+
+sample:
+  node_distribution: "${data.dataset_root}/processed/train_n_h.pickle"
+
+# ==== Phase 2 auxiliary thermo loss ========================================
+# Target mean/std precomputed from the full labeled train split
+# (scripts/label_thermo.py output; see wandb for stats printout).
+# Order matches TARGET_FIELDS_DEFAULT:
+#   [enthalpy_298, gibbs_298, cv_gas, entropy_gas, enthalpy_0]
+thermo_loss:
+  min_time: 0.8            # only compute loss at last 20% of denoising trajectory
+  weights:
+    ext: 0.05              # extensive head (Hf, Gf, Cv, Hf_0)
+    mp:  0.05              # attention-pool head (all 5)
+  target_mean: [-315.62, 107.69, 386.73, 668.22, -115.50]
+  target_std:  [ 346.07, 342.83,  94.00, 150.17,  364.04]
+
+# Enable later after scripts/label_energy.py runs:
+# energy_loss:
+#   min_time: 0.9
+#   weight: 0.05
+#   normalize: "per_atom"
+
+train:
+  seed: 42
+  gpus: 4
+  n_epochs: 400            # from-scratch pre-training; reduce if resuming
+  enable_progress_bar: True
+  gradient_clip_value: 1.0
+  log_freq: 50
+  val_freq: 2
+  checkpoint_monitor: opt_median_relative_energy
+  checkpoint_monitor_mode: min
+  checkpoint_every_n_train_steps: 1000
+
+evaluation:
+  type: conformers
+  max_molecules: 300
+  timesteps: *timesteps
+  compute_3D_metrics: True
+  compute_energy_metrics: True
+  compute_stereo_metrics: True
+  scale_coords: *scale_coords
+  energy_metrics_args:
+    model_path: src/megalodon/metrics/aimnet2/cpcm_model/wb97m_cpcms_v2_0.jpt
+    batchsize: 100
+    opt_metrics: True
+    opt_params:
+      fmax: 2e-3
+      max_nstep: 3000
+
+optimizer:
+  type: adamw
+  lr: 1.e-4
+  weight_decay: 1.e-12
+  amsgrad: True
+
+lr_scheduler:
+  type: linear_warmup
+  initial_lr: 1.e-5
+  final_lr: 1.e-4
+  num_warmup_steps: 2000
+  interval: step
+  frequency: 1

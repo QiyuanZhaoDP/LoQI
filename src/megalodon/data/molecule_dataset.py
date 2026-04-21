@@ -30,14 +30,23 @@ class MoleculeDataset(InMemoryDataset):
             root,
             processed_folder,
             split,
+            data_suffix="_h",
             transform=None,
             pre_transform=None,
             pre_filter=None,
     ):
+        """
+        Args:
+            data_suffix: Filename suffix appended after the split name.
+                         Default "_h" loads `<split>_h.pt`; pass "_h_thermo"
+                         to load the thermo-labeled variant produced by
+                         scripts/label_thermo.py.
+        """
         super().__init__(root, transform, pre_transform, pre_filter)
         self.root = root
         self.processed_folder = processed_folder
         self.split = split
+        self.data_suffix = data_suffix
 
         # Load with PyTorch 2.6+ security compliance - add safe globals for PyTorch Geometric
         with torch.serialization.safe_globals([DataEdgeAttr, DataTensorAttr, GlobalStorage, Mol]):
@@ -50,7 +59,4 @@ class MoleculeDataset(InMemoryDataset):
 
     @property
     def processed_file_names(self):
-        h = "h"
-        return [
-            f"{self.split}_{h}.pt",
-        ]
+        return [f"{self.split}{self.data_suffix}.pt"]
