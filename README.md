@@ -267,6 +267,171 @@ Outputs:
 - `nextmol.yaml` - Alternative configuration for NextMol-style generation
 - `loqi_flow.yaml` - LoQI flow-matching conformer generation model
 
+**Thermo-aware extensions (Phase 0 / Phase 1):**
+- `loqi_thermo.yaml` — Phase 1, warm-started from `loqi.ckpt` (matches the
+  256/10/4 backbone, adds a thermo head + auxiliary thermo loss)
+- `loqi_thermo_50m.yaml` — Phase 1, from-scratch scaled backbone
+  (384-d, 14 layers, 8 heads; ~100M params)
+
+---
+
+## ThermoGen: thermo-aware foundation model
+
+Beyond pure conformer generation, this repo includes infrastructure for turning
+LoQI into a thermodynamics-aware foundation model for downstream property
+prediction. Two parallel tracks:
+
+- **Phase 0** — *frozen backbone*: use `loqi.ckpt` as a feature extractor.
+  Cheap, iterable, good for screening head architectures and benchmarking.
+- **Phase 1** — *thermo-aware pre-training*: bake thermo prediction heads into
+  `MegaFNV3Conf` and train them jointly with the denoising objective on
+  ChEMBL3D. Produces a checkpoint whose every layer is shaped by thermo data.
+
+Both paths share the same dataset preparation (gas-phase thermochemistry
+labels from the TCIT group-additivity tool) and the same head architecture
+(`ExtensiveSumHead` + multi-head `AtomMolMP`, defined in
+`src/megalodon/models/thermo_heads.py`).
+
+### Data preparation
+
+```bash
+# 1. Parse TCIT log → per-SMILES CSV of (Hf_0, Hf_298, Gf_298, S0, Cv)
+python data_processing/parse_tcit_log.py \
+    --input  data_processing/batch9.log \
+    --output data_processing/tcit_thermo_labels.csv
+
+# 2. Build a canonical → neutral SMILES index (handles ChEMBL3D's
+#    ionic species via RDKit Uncharger)
+python data_processing/build_neutralization_index.py \
+    --inputs data/chembl3d_stereo/processed/{train,val,test}_h.pt \
+    --output data_processing/chembl3d_neutralization_index.json
+
+# 3. Join labels onto each split (writes {train,val,test}_h_thermo.pt)
+for split in train val test; do
+  python scripts/label_thermo.py \
+    --input  data/chembl3d_stereo/processed/${split}_h.pt \
+    --output data/chembl3d_stereo/processed/${split}_h_thermo.pt \
+    --labels data_processing/tcit_thermo_labels.csv \
+    --neutralization-index data_processing/chembl3d_neutralization_index.json
+done
+```
+
+### Phase 0 — frozen-backbone workflows
+
+All Phase 0 pipelines keep the backbone frozen and train only small heads on
+the per-atom features `H`. A single orchestrator exposes every stage:
+
+```bash
+# Extract H across splits on N GPUs, then train heads + (optional)
+# end-to-end continuation with last-N layers unfrozen.
+bash scripts/run_thermo.sh extract    # 4-GPU parallel H extraction
+bash scripts/run_thermo.sh train      # head training on cached H
+bash scripts/run_thermo.sh continue   # DDP continuation (unfreeze last N)
+bash scripts/run_thermo.sh seeds      # ensemble seeds on remaining GPUs
+bash scripts/run_thermo.sh all        # all of the above, sequentially
+```
+
+Knobs live in `scripts/conf/thermo/{finetune,continuation}.yaml`
+(`n_mp_layers`, `mp_n_heads`, `head_hidden`, `lr`, `batch_size`, `lr_min`,
+`unfreeze_layers`, `backbone_lr`, etc.) — edit in place, rerun.
+
+#### Hyperparameter sweep (multi-GPU)
+
+```bash
+# Cartesian product over layers × heads × hidden × lr × batch_size;
+# dispatches N-GPU-parallel waves, skips already-complete cells on re-run.
+bash scripts/grid_search_thermo.sh
+```
+
+#### Reproduce val/x_loss of a checkpoint
+
+```bash
+python scripts/eval_loqi_loss.py \
+    --ckpt data/loqi.ckpt \
+    --config scripts/conf/loqi/loqi.yaml \
+    --device cuda
+# → prints the same val/x_loss that would appear in wandb during training
+```
+
+### Phase 1 — thermo-aware pre-training
+
+Thermo heads are wired directly into `MegaFNV3Conf` (enable with
+`dynamics.model_args.thermo_head_args` in the YAML). The denoising objective
+and an auxiliary `ThermoPropertyLoss` — semi-supervised, NaN-masked, gated
+to late timesteps via `min_time` — are optimized jointly:
+
+```bash
+# Warm-start from an existing LoQI checkpoint (same 256/10/4 architecture,
+# adds heads + thermo loss, ~1 day on 4 GPUs).
+python scripts/train.py --config-name=loqi_thermo \
+    outdir=./outputs/loqi_thermo \
+    train.gpus=4
+
+# From-scratch scaled backbone (384/14/8 ≈ 100M params, ~3-5 days on 4 GPUs).
+python scripts/train.py --config-name=loqi_thermo_50m \
+    outdir=./outputs/loqi_thermo_50m \
+    train.gpus=4
+```
+
+wandb traces to watch:
+
+- `train/x_loss` — denoising, should stay flat (preserve LoQI quality)
+- `train/additional_loss_term` — thermo aux, should decrease
+- `train/thermo_last_labeled_active` — per-step labeled-molecule count
+- `val/opt_median_relative_energy` — canary for conformer-generation quality
+
+### Downstream property prediction (5-fold CV)
+
+Given CSV files with `(SMILES, target)` columns, run a full pipeline that
+3D-embeds each molecule, extracts H once, and performs 5-fold CV with the
+thermo heads:
+
+```bash
+# Single dataset
+python scripts/prepare_downstream_dataset.py \
+    --csv data/downstream/delaney.csv \
+    --smiles-col smiles --target-col "measured log solubility in mols per litre" \
+    --output data/downstream_pt/delaney.pt
+
+python scripts/downstream_cv.py \
+    --ckpt data/loqi.ckpt --config scripts/conf/loqi/loqi.yaml \
+    --dataset-pt data/downstream_pt/delaney.pt \
+    --out-dir /tmp/downstream_cv/delaney \
+    --n-folds 5 --epochs 50 --lr 3e-4 --device cuda
+
+# Batch over all CSVs listed in TASKS[]
+bash scripts/run_downstream_all.sh
+```
+
+Per-dataset reports land in `$OUT_ROOT/<name>/cv_report.json`; the batch
+runner prints a cross-dataset summary table at the end.
+
+### Key scripts
+
+| path | role |
+|---|---|
+| `data_processing/parse_tcit_log.py` | TCIT log → CSV of per-SMILES thermo labels |
+| `data_processing/build_neutralization_index.py` | canonical → neutral SMILES map |
+| `scripts/label_thermo.py` | attach TCIT labels to a chembl3d `.pt` |
+| `scripts/label_energy.py` | attach AIMNet2 energies to a chembl3d `.pt` (Phase 1 extension) |
+| `scripts/probe_representation.py` | frozen-H Ridge probe (Phase 0 baseline) |
+| `scripts/finetune_thermo_head.py` | cached-H head training |
+| `scripts/continuation_training.py` | unfreeze last-N backbone layers + DDP |
+| `scripts/grid_search_thermo.sh` | parallel hparam sweep with resume |
+| `scripts/eval_loqi_loss.py` | reproduce val/x_loss for any ckpt |
+| `scripts/prepare_downstream_dataset.py` | CSV → PyG `.pt` with 3D conformer |
+| `scripts/downstream_cv.py` | 5-fold CV on a downstream dataset |
+| `scripts/run_thermo.sh` | Phase 0 stage orchestrator |
+| `scripts/run_downstream_all.sh` | batch runner for multiple downstream CSVs |
+| `src/megalodon/models/thermo_heads.py` | shared head architectures |
+| `src/megalodon/models/loss_fn.py` | `ThermoPropertyLoss`, `EnergyPredictionLoss` |
+| `scripts/conf/thermo/*.yaml` | Phase 0 head/training hyperparameters |
+| `scripts/conf/loqi/loqi_thermo*.yaml` | Phase 1 pre-training configs |
+
+For a detailed walkthrough of the design choices, target normalization,
+semi-supervised masking, and expected benchmark numbers, see
+`docs/ThermoGen_Implementation_Plan.md`.
+
 ---
 
 ## Citation
