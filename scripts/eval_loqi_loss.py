@@ -40,8 +40,6 @@ def main():
     p.add_argument("--max-batches", type=int, default=None,
                    help="Cap batches to iterate. Default None = whole split.")
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
-    p.add_argument("--data-suffix", default=None,
-                   help="Override cfg.data.data_suffix (e.g. '_h' or '_h_thermo').")
     args = p.parse_args()
 
     cfg = OmegaConf.load(args.config)
@@ -63,14 +61,12 @@ def main():
         p_.requires_grad = False
 
     # --- Data ---
-    suffix = args.data_suffix or OmegaConf.select(cfg, "data.data_suffix", default="_h")
     dm = MoleculeDataModule(
         cfg.data.dataset_root,
         cfg.data.processed_folder,
         cfg.data.batch_size,
         cfg.data.data_loader_type,
         cfg.data.inference_batch_size,
-        data_suffix=suffix,
     )
     loader = {
         "train": dm.train_dataloader,
