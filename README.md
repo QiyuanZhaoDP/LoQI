@@ -341,9 +341,23 @@ Knobs live in `scripts/conf/thermo/finetune.yaml`
 #### Hyperparameter sweep (multi-GPU)
 
 ```bash
-# Cartesian product over layers × heads × hidden × lr × batch_size;
-# dispatches N-GPU-parallel waves, skips already-complete cells on re-run.
+# Cartesian product over layers × heads × hidden × lr × batch_size.
+# Worker-pool scheduler (one job per GPU; next cell kicks off the moment any
+# GPU frees). Re-runs skip already-complete cells; set FORCE=1 to override.
 bash scripts/grid_search_thermo.sh
+```
+
+#### Pre-sample K=5 conformers for every labeled molecule
+
+Insurance dataset: K alternative 3D geometries per TCIT-labeled molecule,
+drawn with the flow-matching LoQI checkpoint at 10 integration steps.
+Useful for later experiments that want to use generated conformers
+(Boltzmann averaging, ensemble features, etc.) instead of the one
+AIMNet2-optimized conformer shipped in `{split}_h.pt`.
+
+```bash
+bash scripts/run_thermo.sh sample_k5
+# → data/labeled_conformers/{train,val,test}_K5_shard{i}.pkl
 ```
 
 #### Reproduce val/x_loss of a checkpoint
@@ -419,7 +433,8 @@ runner prints a cross-dataset summary table at the end.
 | `scripts/label_energy.py` | attach AIMNet2 energies to a chembl3d `.pt` (Phase 1 extension) |
 | `scripts/probe_representation.py` | frozen-H Ridge probe (Phase 0 baseline) |
 | `scripts/finetune_thermo_head.py` | cached-H head training |
-| `scripts/grid_search_thermo.sh` | parallel hparam sweep with resume |
+| `scripts/grid_search_thermo.sh` | worker-pool hparam sweep with resume |
+| `scripts/sample_conformers_for_labeled.py` | K=5 flow-matching conformer sampler for TCIT-labeled mols |
 | `scripts/eval_loqi_loss.py` | reproduce val/x_loss for any ckpt |
 | `scripts/prepare_downstream_dataset.py` | CSV → PyG `.pt` with 3D conformer |
 | `scripts/downstream_cv.py` | 5-fold CV on a downstream dataset |

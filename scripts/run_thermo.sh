@@ -5,6 +5,9 @@
 #   bash scripts/run_thermo.sh extract     # ${N_GPUS}-way parallel H extraction
 #   bash scripts/run_thermo.sh train       # single-GPU head training (auto-merges shards)
 #   bash scripts/run_thermo.sh seeds       # ensemble seeds 1,2,3 on GPUs 1,2,3 (optional)
+#   bash scripts/run_thermo.sh sample_k5   # flow-matching K=5 conformer sampling
+#                                          # for all TCIT-labeled molecules,
+#                                          # sharded across ${N_GPUS} GPUs
 #   bash scripts/run_thermo.sh all         # extract -> train
 #
 # Edit the CONFIG section below before running.
@@ -21,10 +24,20 @@ CKPT=data/loqi.ckpt
 LOQI_CONFIG=scripts/conf/loqi/loqi.yaml
 FT_CFG=scripts/conf/thermo/finetune.yaml
 
+# Flow-matching checkpoint — used only by the `sample_k5` stage.
+FLOW_CKPT=data/loqi_flow.ckpt
+FLOW_CONFIG=scripts/conf/loqi/loqi_flow.yaml
+
 TRAIN_PT=data/chembl3d_stereo/processed/train_h.pt
 VAL_PT=data/chembl3d_stereo/processed/val_h.pt
 TEST_PT=data/chembl3d_stereo/processed/test_h.pt
 PROPERTY_TABLE=data/property_table.parquet
+
+# Output directory for pre-sampled K=5 conformers (stage `sample_k5`).
+K5_OUT=data/labeled_conformers
+K5_N=5
+K5_STEPS=10
+K5_BATCH=256
 
 CACHE=/tmp/ft_cache_full
 
@@ -148,14 +161,52 @@ stage_seeds() {
     echo "==> [$(date +%T)] seeds DONE"
 }
 
+stage_sample_k5() {
+    # Pre-sample K=${K5_N} conformers for every TCIT-labeled molecule using
+    # the flow-matching LoQI checkpoint. Each split is processed in parallel
+    # with ${N_GPUS}-way sharding on the molecule list.
+    echo "==> [$(date +%T)] K=${K5_N} conformer sampling on ${N_GPUS} GPU(s)"
+    mkdir -p "$K5_OUT"
+    if [[ ! -f "$FLOW_CKPT" ]]; then
+        echo "ERROR: flow checkpoint not found at $FLOW_CKPT" >&2
+        exit 1
+    fi
+    local splits=(train val test)
+    local split_paths=("$TRAIN_PT" "$VAL_PT" "$TEST_PT")
+    for idx in "${!splits[@]}"; do
+        local split="${splits[$idx]}"
+        local in_pt="${split_paths[$idx]}"
+        echo "--> split=$split  input=$in_pt"
+        local pids=()
+        for ((i=0; i<N_GPUS; i++)); do
+            local out_pkl="$K5_OUT/${split}_K${K5_N}_shard${i}.pkl"
+            CUDA_VISIBLE_DEVICES=$i python scripts/sample_conformers_for_labeled.py \
+                --ckpt "$FLOW_CKPT" --config "$FLOW_CONFIG" \
+                --input-pt "$in_pt" \
+                --property-table "$PROPERTY_TABLE" \
+                --output-pkl "$out_pkl" \
+                --n-confs "$K5_N" --n-steps "$K5_STEPS" \
+                --batch-size "$K5_BATCH" \
+                --shard-id "$i" --n-shards "$N_GPUS" \
+                --device cuda \
+                > "$K5_OUT/${split}_shard${i}.log" 2>&1 &
+            pids+=("$!")
+            echo "    shard $i -> pid ${pids[-1]}, GPU $i, out $out_pkl"
+        done
+        wait "${pids[@]}"
+    done
+    echo "==> [$(date +%T)] sample_k5 DONE  (shards in $K5_OUT)"
+}
+
 cmd="${1:-}"
 case "$cmd" in
-    extract)  stage_extract  ;;
-    train)    stage_train    ;;
-    seeds)    stage_seeds    ;;
-    all)      stage_extract; stage_train ;;
+    extract)    stage_extract    ;;
+    train)      stage_train      ;;
+    seeds)      stage_seeds      ;;
+    sample_k5)  stage_sample_k5  ;;
+    all)        stage_extract; stage_train ;;
     *)
-        echo "usage: bash $0 {extract|train|seeds|all}" >&2
+        echo "usage: bash $0 {extract|train|seeds|sample_k5|all}" >&2
         exit 1
         ;;
 esac
