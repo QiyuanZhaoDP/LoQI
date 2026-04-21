@@ -311,6 +311,19 @@ def main():
     cols = (["smiles", "has_thermo_label"] + THERMO_FIELDS + RDKIT_FIELDS)
     df = df[cols]
 
+    # Drop rows where RDKit failed on every descriptor. Keeping them means
+    # AttachProperties would attach all-NaN rdkit fields at training time,
+    # which becomes a silent trap the moment an RDKit-supervised head is
+    # added. Rare (single-digit on chembl3d); geometry for these mols still
+    # trains via the denoising objective since _h.pt is untouched.
+    all_nan_rdkit = df[RDKIT_FIELDS].isna().all(axis=1)
+    n_dropped = int(all_nan_rdkit.sum())
+    if n_dropped:
+        print(f"\nDropping {n_dropped} row(s) with all-NaN RDKit descriptors:")
+        for s in df.loc[all_nan_rdkit, "smiles"].head(20):
+            print(f"    {s}")
+        df = df[~all_nan_rdkit].reset_index(drop=True)
+
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(out, index=False)
