@@ -186,29 +186,32 @@ def check_rdkit(df, r):
             r.ok(f"'{f}' in [{col.min():.3f}, {col.max():.3f}] ⊂ [{lo}, {hi}]")
 
 
-def _iter_pt_smiles(pt_path, limit=None):
+class _D(InMemoryDataset):
+    """Thin wrapper so we can hand (data, slices) back to a PyG-style dataset
+    that supports __getitem__ — gives us O(1) random indexing instead of an
+    O(N) iteration."""
+    def __init__(self, data, slices):
+        super().__init__(".")
+        self.data, self.slices = data, slices
+        self._indices = None
+
+
+def _load_dataset(pt_path):
     with torch.serialization.safe_globals(
         [DataEdgeAttr, DataTensorAttr, GlobalStorage, Mol]
     ):
         data, slices = torch.load(pt_path)
+    return _D(data, slices)
 
-    class _D(InMemoryDataset):
-        def __init__(self, data, slices):
-            super().__init__(".")
-            self.data, self.slices = data, slices
-            self._indices = None
 
-    ds = _D(data, slices)
-    n = len(ds) if limit is None else min(len(ds), limit)
-    for i in range(n):
-        mol = getattr(ds[i], "mol", None)
-        if mol is None:
-            yield None
-            continue
-        try:
-            yield Chem.MolToSmiles(Chem.RemoveHs(mol), isomericSmiles=True)
-        except Exception:
-            yield None
+def _canonical_at(ds, i):
+    mol = getattr(ds[i], "mol", None)
+    if mol is None:
+        return None
+    try:
+        return Chem.MolToSmiles(Chem.RemoveHs(mol), isomericSmiles=True)
+    except Exception:
+        return None
 
 
 def check_pt_crossref(df, pt_paths, r, n_sample=500, seed=0):
@@ -219,15 +222,22 @@ def check_pt_crossref(df, pt_paths, r, n_sample=500, seed=0):
     table = set(df["smiles"].tolist())
     rng = random.Random(seed)
     for p in pt_paths:
-        # Pre-iterate once to pick random indices without loading twice.
-        all_smis = [s for s in _iter_pt_smiles(p) if s is not None]
-        idx = rng.sample(range(len(all_smis)), min(n_sample, len(all_smis)))
-        miss = sum(1 for i in idx if all_smis[i] not in table)
+        ds = _load_dataset(p)
+        n = len(ds)
+        # Pick indices first, only canonicalize that handful — avoids
+        # walking ~600k mols per split just to sample 500.
+        k = min(n_sample, n)
+        sampled_idx = rng.sample(range(n), k)
+        smis = [_canonical_at(ds, i) for i in sampled_idx]
+        none_count = sum(s is None for s in smis)
+        miss = sum(1 for s in smis if s is not None and s not in table)
         label = Path(p).name
         if miss:
-            r.fail(f"{label}: {miss}/{len(idx)} sampled SMILES missing from table")
+            r.fail(f"{label}: {miss}/{k - none_count} sampled SMILES missing from table"
+                   + (f" (+{none_count} canonicalization failures)" if none_count else ""))
         else:
-            r.ok(f"{label}: all {len(idx)} sampled SMILES resolved")
+            r.ok(f"{label}: all {k - none_count} sampled SMILES resolved"
+                 + (f" ({none_count} canonicalization failures skipped)" if none_count else ""))
 
 
 def print_sample(df, n=3):
