@@ -67,21 +67,45 @@ if ! ls "$CACHE"/train_H_*.pt >/dev/null 2>&1; then
 fi
 
 # --- Build cartesian product ---
-CONFIGS=()
+ALL_CONFIGS=()
 for L in "${LAYERS[@]}"; do
   for H in "${HEADS[@]}"; do
     for D in "${HIDDEN[@]}"; do
       for LR in "${LRS[@]}"; do
         for BS in "${BATCH_SIZES[@]}"; do
-          CONFIGS+=("$L $H $D $LR $BS")
+          ALL_CONFIGS+=("$L $H $D $LR $BS")
         done
       done
     done
   done
 done
+
+# --- Skip already-complete cells (those with a valid finetune_report.json).
+#     Re-run everything regardless by setting FORCE=1.
+FORCE="${FORCE:-0}"
+CONFIGS=()
+SKIPPED=0
+for cfg in "${ALL_CONFIGS[@]}"; do
+    read -r L H D LR BS <<<"$cfg"
+    name="L${L}_H${H}_D${D}_LR${LR}_BS${BS}_ep${EPOCHS}_s${SEED}"
+    report="$GRID_OUT/$name/finetune_report.json"
+    if [[ "$FORCE" != "1" ]] \
+        && [[ -f "$report" ]] \
+        && python3 -c "import json,sys; json.load(open('$report'))" >/dev/null 2>&1; then
+        SKIPPED=$((SKIPPED + 1))
+        continue
+    fi
+    CONFIGS+=("$cfg")
+done
 TOTAL=${#CONFIGS[@]}
-echo "[grid] $TOTAL combinations, $N_GPUS GPUs -> "\
-"$(( (TOTAL + N_GPUS - 1) / N_GPUS )) waves"
+TOTAL_ALL=${#ALL_CONFIGS[@]}
+echo "[grid] $TOTAL_ALL total combinations: $SKIPPED complete (skipped), "\
+"$TOTAL pending"
+if (( TOTAL == 0 )); then
+    echo "[grid] nothing to run — jumping to summary"
+else
+    echo "[grid] $N_GPUS GPUs -> $(( (TOTAL + N_GPUS - 1) / N_GPUS )) waves"
+fi
 
 # --- Dispatch in waves of N_GPUS ---
 start_time=$(date +%s)
