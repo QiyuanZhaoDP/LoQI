@@ -24,6 +24,7 @@ dependencies = [
     'einops==0.8.1',
     'wandb==0.19.11',
     'pandas==2.2.3',
+    'pyarrow==18.1.0',
 ]
 
 [tool.setuptools.packages.find]
