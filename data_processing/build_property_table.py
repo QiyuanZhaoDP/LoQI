@@ -31,6 +31,8 @@ Usage:
 import argparse
 import csv
 import json
+import multiprocessing as mp
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -119,6 +121,22 @@ def compute_rdkit_descriptors(mol_impl):
         return {k: float("nan") for k in RDKIT_FIELDS}
 
 
+def _descriptor_worker_init():
+    """Run once in each pool worker. Silence RDKit's logger so stderr
+    doesn't flood during parallel descriptor calculation."""
+    RDLogger.DisableLog("rdApp.*")
+
+
+def _descriptors_from_canonical(canon):
+    """Pool worker: reparse canonical SMILES + compute descriptors.
+    MolFromSmiles on the isomeric canonical SMILES is equivalent to
+    Chem.RemoveHs(source_mol) for descriptor purposes."""
+    mol = Chem.MolFromSmiles(canon)
+    if mol is None:
+        return canon, {k: float("nan") for k in RDKIT_FIELDS}
+    return canon, compute_rdkit_descriptors(mol)
+
+
 def load_thermo_labels(csv_path):
     """Return dict canonical(smi) -> {enthalpy_0, ..., entropy_gas}."""
     labels = {}
@@ -172,6 +190,11 @@ def main():
                    help="JSON from build_neutralization_index.py (recommended).")
     p.add_argument("--output", required=True,
                    help="Output parquet path.")
+    p.add_argument("--workers", type=int, default=None,
+                   help="CPU processes for RDKit descriptor calculation "
+                        "(default: os.cpu_count(); set 1 to force serial).")
+    p.add_argument("--chunk-size", type=int, default=500,
+                   help="Pool imap chunksize (default 500).")
     args = p.parse_args()
 
     print(f"Loading TCIT labels from {args.thermo_csv}")
@@ -182,12 +205,15 @@ def main():
         expand_via_neutralization_index(labels, args.neutralization_index)
     print(f"Label lookup dict: {len(labels):,} keys")
 
-    # Iterate all splits, building a per-canonical row + verifying counts.
-    table = {}                   # canonical -> full record
-    n_total_rows = 0             # Data objects processed across all splits
-    n_rows_matched = 0           # Data objects where thermo lookup succeeded
+    # ---- Phase 1: serial pass over all Data objects ------------------------
+    # Builds the per-canonical thermo-match record. Must stay serial because
+    # `labels` is mutated mid-loop (the fallback path registers aliases so
+    # later lookups hit directly), and this mutation is what makes the
+    # matched count match label_thermo.py's retired behaviour.
+    canon_to_thermo: dict[str, dict | None] = {}
+    n_total_rows = 0
+    n_rows_matched = 0
     n_canon_fail = 0
-    n_rdkit_fail = 0
 
     for pt_path in args.inputs:
         print(f"\nIterating {pt_path}")
@@ -222,55 +248,67 @@ def main():
                     if fb is not None and fb != canon:
                         thermo_rec = labels.get(fb)
                         if thermo_rec is not None:
-                            # Also register the primary canonical so future
-                            # lookups at load time pick up the record directly.
+                            # Register the primary canonical so future
+                            # lookups at load time pick up the record.
                             labels[canon] = thermo_rec
 
             if thermo_rec is not None:
                 n_rows_matched += 1
 
-            # Only build the table row the first time we see this canonical.
-            if canon in table:
-                continue
+            # First time we see this canonical → record thermo payload.
+            if canon not in canon_to_thermo:
+                canon_to_thermo[canon] = thermo_rec
 
-            if mol is not None:
-                try:
-                    mol_impl = Chem.RemoveHs(mol)
-                except Exception:
-                    mol_impl = Chem.MolFromSmiles(canon)
-            else:
-                mol_impl = Chem.MolFromSmiles(canon)
-
-            if mol_impl is None:
-                n_rdkit_fail += 1
-                rdkit_vals = {k: float("nan") for k in RDKIT_FIELDS}
-            else:
-                rdkit_vals = compute_rdkit_descriptors(mol_impl)
-                if any(isinstance(v, float) and v != v for v in rdkit_vals.values()):
-                    # every descriptor NaN means CalcDescriptors raised
-                    n_rdkit_fail += 1 if all(
-                        isinstance(v, float) and v != v for v in rdkit_vals.values()
-                    ) else 0
-
-            row = {"smiles": canon, "has_thermo_label": thermo_rec is not None}
-            row.update(thermo_rec or {k: float("nan") for k in THERMO_FIELDS})
-            row.update(rdkit_vals)
-            table[canon] = row
-
+    unique_canons = list(canon_to_thermo.keys())
     print("\n" + "=" * 64)
-    print(f"Rows processed (Data objects): {n_total_rows:,}")
-    print(f"  → canonicalization failed:   {n_canon_fail:,}")
-    print(f"  → thermo matched:            {n_rows_matched:,}   "
-          f"(this is the count AttachProperties will reproduce at load time)")
-    print(f"Unique canonical SMILES:       {len(table):,}")
-    print(f"RDKit descriptor failures:     {n_rdkit_fail:,}")
+    print(f"Phase 1: {n_total_rows:,} Data objects  →  "
+          f"{len(unique_canons):,} unique canonical SMILES")
+    print(f"  canonicalization failed: {n_canon_fail:,}")
+    print(f"  thermo matched:          {n_rows_matched:,}  "
+          f"(count AttachProperties will reproduce at load time)")
     print("=" * 64)
 
-    df = pd.DataFrame(list(table.values()))
-    # Stable column order.
-    cols = (["smiles", "has_thermo_label"]
-            + THERMO_FIELDS
-            + RDKIT_FIELDS)
+    # ---- Phase 2: parallel RDKit descriptor calculation --------------------
+    n_workers = args.workers or max(1, (os.cpu_count() or 1))
+    n_workers = min(n_workers, len(unique_canons))
+    n_rdkit_fail = 0
+    descriptors: dict[str, dict] = {}
+    print(f"\nPhase 2: computing 9 RDKit descriptors on {n_workers} worker(s)")
+
+    if n_workers <= 1:
+        for canon in tqdm(unique_canons, desc="descriptors"):
+            _, rdkit_vals = _descriptors_from_canonical(canon)
+            descriptors[canon] = rdkit_vals
+            if all(isinstance(v, float) and v != v for v in rdkit_vals.values()):
+                n_rdkit_fail += 1
+    else:
+        # Use spawn context so workers don't inherit the (large) `labels`
+        # dict + `ds` tensors via fork — cleaner memory, faster startup.
+        ctx = mp.get_context("spawn")
+        with ctx.Pool(n_workers, initializer=_descriptor_worker_init) as pool:
+            for canon, rdkit_vals in tqdm(
+                pool.imap_unordered(_descriptors_from_canonical,
+                                    unique_canons,
+                                    chunksize=args.chunk_size),
+                total=len(unique_canons),
+                desc="descriptors",
+            ):
+                descriptors[canon] = rdkit_vals
+                if all(isinstance(v, float) and v != v for v in rdkit_vals.values()):
+                    n_rdkit_fail += 1
+    print(f"  RDKit descriptor failures: {n_rdkit_fail:,}")
+
+    # ---- Phase 3: join + write parquet -------------------------------------
+    rows = []
+    for canon in unique_canons:
+        thermo_rec = canon_to_thermo[canon]
+        row = {"smiles": canon, "has_thermo_label": thermo_rec is not None}
+        row.update(thermo_rec or {k: float("nan") for k in THERMO_FIELDS})
+        row.update(descriptors.get(canon, {k: float("nan") for k in RDKIT_FIELDS}))
+        rows.append(row)
+
+    df = pd.DataFrame(rows)
+    cols = (["smiles", "has_thermo_label"] + THERMO_FIELDS + RDKIT_FIELDS)
     df = df[cols]
 
     out = Path(args.output)
