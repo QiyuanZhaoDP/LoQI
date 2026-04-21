@@ -16,6 +16,7 @@ data:
   data_loader_type: "midi"
   aug_rotations: True
   scale_coords: &scale_coords 4.0072
+  num_workers: 8                    # per-rank DataLoader workers
 
 loss:
   variables:

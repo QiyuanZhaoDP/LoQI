@@ -48,6 +48,7 @@ class MoleculeDataModule(LightningDataModule):
             data_suffix: str = "_h",
             property_table: Optional[str] = None,
             transform=None,
+            num_workers: int = 8,
             **sampler_kwargs,
     ):
         """
@@ -58,6 +59,9 @@ class MoleculeDataModule(LightningDataModule):
                 on-the-fly via megalodon.data.attach_properties.AttachProperties.
                 Takes precedence over `transform` if both are given.
             transform: custom PyG transform, alternative to `property_table`.
+            num_workers: DataLoader workers per split (default 8). Under
+                DDP each rank gets this many, so keep it modest on boxes
+                with many GPUs / few CPUs.
         """
         super().__init__()
         self.dataset_root = dataset_root
@@ -68,6 +72,7 @@ class MoleculeDataModule(LightningDataModule):
         self.data_suffix = data_suffix
         self.sampler_kwargs = sampler_kwargs
         self.pin_memory = True
+        self.num_workers = int(num_workers)
 
         if property_table is not None:
             from megalodon.data.attach_properties import AttachProperties
@@ -134,17 +139,24 @@ class MoleculeDataModule(LightningDataModule):
             sampler = DynamicBatchSampler(dataset, **self.sampler_kwargs)
         elif self.data_loader_type == "midi":
             return MiDiDataloader(dataset, batch_size=batch_size, shuffle=shuffle,
+                                  num_workers=self.num_workers,
+                                  pin_memory=self.pin_memory,
+                                  persistent_workers=self.num_workers > 0,
                                   **self.sampler_kwargs)
         else:
             sampler = None
 
         if sampler is not None:
-            return DataLoader(dataset, batch_sampler=sampler, num_workers=4,
-                              pin_memory=self.pin_memory)
+            return DataLoader(dataset, batch_sampler=sampler,
+                              num_workers=self.num_workers,
+                              pin_memory=self.pin_memory,
+                              persistent_workers=self.num_workers > 0)
         else:
             return DataLoader(
-                dataset, batch_size=batch_size, shuffle=shuffle, num_workers=4,
-                pin_memory=self.pin_memory
+                dataset, batch_size=batch_size, shuffle=shuffle,
+                num_workers=self.num_workers,
+                pin_memory=self.pin_memory,
+                persistent_workers=self.num_workers > 0,
             )
 
 

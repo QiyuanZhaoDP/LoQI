@@ -224,6 +224,7 @@ def main(cfg: DictConfig) -> None:
         cfg.data.inference_batch_size,
         data_suffix=OmegaConf.select(cfg, "data.data_suffix", default="_h"),
         property_table=OmegaConf.select(cfg, "data.property_table", default=None),
+        num_workers=int(OmegaConf.select(cfg, "data.num_workers", default=8)),
     )
 
     lr_monitor = LearningRateMonitor(logging_interval="step")
