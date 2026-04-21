@@ -48,7 +48,7 @@ import numpy as np
 import torch
 from omegaconf import OmegaConf
 from rdkit import Chem, RDLogger
-from torch_geometric.data import DataEdgeAttr, DataTensorAttr
+from torch_geometric.data.data import DataEdgeAttr, DataTensorAttr
 from torch_geometric.data.storage import GlobalStorage
 from tqdm import tqdm
 
