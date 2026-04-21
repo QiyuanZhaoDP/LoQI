@@ -43,6 +43,21 @@ from torch_geometric.data.data import DataEdgeAttr, DataTensorAttr
 from torch_geometric.data.storage import GlobalStorage
 from tqdm import tqdm
 
+# Fail fast on missing parquet engine — the processing loop takes tens of
+# minutes, so we want to know upfront that the final write will succeed.
+try:
+    import pyarrow  # noqa: F401
+except ImportError:
+    try:
+        import fastparquet  # noqa: F401
+    except ImportError as e:
+        raise ImportError(
+            "No parquet engine found — install one before running this "
+            "script so the ~30-min processing loop isn't wasted:\n"
+            "    pip install pyarrow\n"
+            "(AttachProperties at training time also needs pyarrow.)"
+        ) from e
+
 RDLogger.DisableLog("rdApp.*")
 
 
