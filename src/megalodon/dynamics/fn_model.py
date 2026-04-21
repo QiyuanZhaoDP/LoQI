@@ -800,8 +800,7 @@ class MegaFNV3Conf(nn.Module):
         }
         if self.thermo_heads is not None:
             th = self.thermo_heads(H, batch)
-            out["thermo_ext"] = th["ext"]   # [N_mols, 4]
-            out["thermo_mp"]  = th["mp"]    # [N_mols, 5]
+            out["thermo_mp"] = th["mp"]     # [N_mols, 5]
         if self.energy_head is not None:
             mol_repr = scatter_mean(H, batch, dim=0)
             out["energy_pred"] = self.energy_head(mol_repr).squeeze(-1)

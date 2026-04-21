@@ -129,10 +129,9 @@ sample:
 # Order matches TARGET_FIELDS_DEFAULT:
 #   [enthalpy_298, gibbs_298, cv_gas, entropy_gas, enthalpy_0]
 thermo_loss:
-  min_time: 0.8            # only compute loss at last 20% of denoising trajectory
-  weights:
-    ext: 0.05              # extensive head (Hf, Gf, Cv, Hf_0)
-    mp:  0.05              # attention-pool head (all 5)
+  min_time: 0.9            # 50M-from-scratch: backbone needs to warm up first;
+                           # use the cleaner-only timesteps for thermo signal
+  weight:   0.05           # scalar weight for the (single) MP head
   target_mean: [-315.62, 107.69, 386.73, 668.22, -115.50]
   target_std:  [ 346.07, 342.83,  94.00, 150.17,  364.04]
 

@@ -157,17 +157,16 @@ for path in sorted(glob.glob(os.path.join(os.environ.get("GRID_OUT","/tmp/grid_t
     name = os.path.basename(os.path.dirname(path))
     if "enthalpy_298" not in rep:
         continue
-    best_hf = min(rep["enthalpy_298"].get("mae_ext", 1e9),
-                   rep["enthalpy_298"]["mae_mp"])
-    rows.append((best_hf, name, rep, cfg))
+    rows.append((rep["enthalpy_298"]["mae_mp"], name, rep, cfg))
 
 rows.sort(key=lambda r: r[0])
-print("\nGrid results (sorted by min(Hf_298 MAE over ext/mp heads)):")
-print(f"{'name':<28s} {'Hf (kJ/mol)':>12s} {'Gf':>8s} {'Cv':>6s} {'S0':>6s}")
-print("-" * 64)
-for best_hf, name, rep, cfg in rows:
-    print(f"{name:<28s} {best_hf:>12.2f} "
-          f"{min(rep['gibbs_298'].get('mae_ext',1e9), rep['gibbs_298']['mae_mp']):>8.2f} "
-          f"{min(rep['cv_gas'].get('mae_ext',1e9),    rep['cv_gas']['mae_mp']):>6.2f} "
-          f"{rep['entropy_gas']['mae_mp']:>6.2f}")
+print("\nGrid results (sorted by Hf_298 MAE):")
+print(f"{'name':<32s} {'Hf (kJ/mol)':>12s} {'Gf':>8s} {'Cv':>6s} {'S0':>6s} {'Hf_0':>8s}")
+print("-" * 80)
+for hf, name, rep, cfg in rows:
+    print(f"{name:<32s} {hf:>12.2f} "
+          f"{rep['gibbs_298']['mae_mp']:>8.2f} "
+          f"{rep['cv_gas']['mae_mp']:>6.2f} "
+          f"{rep['entropy_gas']['mae_mp']:>6.2f} "
+          f"{rep['enthalpy_0']['mae_mp']:>8.2f}")
 PY

@@ -57,7 +57,6 @@ from tqdm import tqdm
 from megalodon.data.batch_preprocessor import BatchPreProcessor
 from megalodon.models.module import Graph3DInterpolantModel
 from megalodon.models.thermo_heads import (
-    EXTENSIVE_IDX,
     TARGET_FIELDS,
     TARGET_UNITS,
     ThermoHeadModel,
@@ -243,7 +242,6 @@ def batch_iter(H, offsets, targets, indices, batch_size, device, shuffle=True):
 def evaluate(model, H_te, off_te, tgt_te_norm, indices, batch_size, device,
              target_mean, target_std):
     model.eval()
-    preds_ext = np.full((len(indices), len(EXTENSIVE_IDX)), np.nan)
     preds_mp  = np.full((len(indices), len(TARGET_FIELDS)), np.nan)
     tgts_raw  = tgt_te_norm[indices].cpu().numpy() * target_std + target_mean
     pos = 0
@@ -252,14 +250,10 @@ def evaluate(model, H_te, off_te, tgt_te_norm, indices, batch_size, device,
             H_te, off_te, tgt_te_norm, indices, batch_size, device, shuffle=False
         ):
             out = model(H_b, b_b)
-            preds_ext[pos:pos + out["ext"].shape[0]] = (
-                out["ext"].cpu().numpy() * target_std[EXTENSIVE_IDX]
-                + target_mean[EXTENSIVE_IDX]
-            )
             preds_mp[pos:pos + out["mp"].shape[0]] = (
                 out["mp"].cpu().numpy() * target_std + target_mean
             )
-            pos += out["ext"].shape[0]
+            pos += out["mp"].shape[0]
 
     rows = []
     for i, name in enumerate(TARGET_FIELDS):
@@ -268,42 +262,28 @@ def evaluate(model, H_te, off_te, tgt_te_norm, indices, batch_size, device,
             rows.append({"target": name, "note": "too few"})
             continue
         y_true = tgts_raw[mask, i]
-        row = {
+        rows.append({
             "target": name, "unit": TARGET_UNITS[name],
             "n_test": int(mask.sum()),
-        }
-        # MP head always predicts all 5
-        yp_mp = preds_mp[mask, i]
-        row["mae_mp"] = float(mean_absolute_error(y_true, yp_mp))
-        row["r2_mp"]  = float(r2_score(y_true, yp_mp))
-        # Ext head only for additive properties
-        if i in EXTENSIVE_IDX:
-            j = EXTENSIVE_IDX.index(i)
-            yp_ext = preds_ext[mask, j]
-            row["mae_ext"] = float(mean_absolute_error(y_true, yp_ext))
-            row["r2_ext"]  = float(r2_score(y_true, yp_ext))
-        rows.append(row)
+            "mae_mp": float(mean_absolute_error(y_true, preds_mp[mask, i])),
+            "r2_mp":  float(r2_score(y_true, preds_mp[mask, i])),
+        })
     return rows
 
 
 def print_report(rows):
-    print("\n" + "=" * 92)
-    print(f"{'target':<14s} {'unit':<11s} "
-          f"{'MAE_ext':>10s} {'R2_ext':>8s} "
-          f"{'MAE_mp':>10s} {'R2_mp':>8s} "
+    print("\n" + "=" * 70)
+    print(f"{'target':<14s} {'unit':<11s} {'MAE_mp':>10s} {'R2_mp':>8s} "
           f"{'n_test':>8s}")
-    print("-" * 92)
+    print("-" * 70)
     for r in rows:
         if "note" in r:
             print(f"{r['target']:<14s} {r['note']}")
             continue
-        mae_ext = f"{r['mae_ext']:>10.3f}" if "mae_ext" in r else f"{'-':>10s}"
-        r2_ext  = f"{r['r2_ext']:>8.3f}"  if "r2_ext"  in r else f"{'-':>8s}"
         print(f"{r['target']:<14s} {r['unit']:<11s} "
-              f"{mae_ext} {r2_ext} "
               f"{r['mae_mp']:>10.3f} {r['r2_mp']:>8.3f} "
               f"{r['n_test']:>8d}")
-    print("=" * 92)
+    print("=" * 70)
 
 
 def main():
@@ -525,9 +505,7 @@ def main():
             H_tr, off_tr, tgt_tr_norm, idx_train, args.batch_size, device, shuffle=True
         ):
             out = model(H_b, b_b)
-            loss_ext = masked_mse(out["ext"], t_b[:, EXTENSIVE_IDX])
-            loss_mp  = masked_mse(out["mp"],  t_b)
-            loss = loss_ext + loss_mp
+            loss = masked_mse(out["mp"], t_b)
             opt.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
@@ -536,8 +514,6 @@ def main():
             losses.append(loss.item())
             if wb is not None:
                 wb.log({"train/loss": float(loss.item()),
-                         "train/loss_ext": float(loss_ext.item()),
-                         "train/loss_mp":  float(loss_mp.item()),
                          "train/lr": sched.get_last_lr()[0]}, step=global_step)
             global_step += 1
 
@@ -560,9 +536,6 @@ def main():
                     if "mae_mp" in r:
                         eval_log[f"val/mae_mp_{r['target']}"] = r["mae_mp"]
                         eval_log[f"val/r2_mp_{r['target']}"]  = r["r2_mp"]
-                    if "mae_ext" in r:
-                        eval_log[f"val/mae_ext_{r['target']}"] = r["mae_ext"]
-                        eval_log[f"val/r2_ext_{r['target']}"]  = r["r2_ext"]
                 wb.log(eval_log, step=global_step)
 
     print(f"\nTotal training time: {time.time()-t0:.1f}s")
@@ -587,7 +560,7 @@ def main():
     if wb is not None:
         final_log = {}
         for r in rows:
-            for k in ("mae_ext", "r2_ext", "mae_mp", "r2_mp"):
+            for k in ("mae_mp", "r2_mp"):
                 if k in r:
                     final_log[f"final_test/{k}_{r['target']}"] = r[k]
         wb.log(final_log, step=global_step)

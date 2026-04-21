@@ -121,9 +121,7 @@ sample:
 # Target stats precomputed from the full labeled train split.
 thermo_loss:
   min_time: 0.8
-  weights:
-    ext: 0.05
-    mp:  0.05
+  weight:   0.05                 # scalar weight for the (single) MP head
   target_mean: [-315.62, 107.69, 386.73, 668.22, -115.50]
   target_std:  [ 346.07, 342.83,  94.00, 150.17,  364.04]
 

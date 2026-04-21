@@ -49,14 +49,14 @@ from megalodon.models.module import Graph3DInterpolantModel
 
 
 # ---------------------------------------------------------------------------
-# Single-target head — sum over atoms (extensive-friendly) PLUS attention-
-# pooled MP for intensive-like properties. Ensemble both; pick per dataset
-# at eval time.
+# Single-target head — attention-pooled message passing only.
+# Mirrors megalodon.models.thermo_heads.AtomMolMP but with n_targets=1.
 # ---------------------------------------------------------------------------
 
 class SingleTargetHead(nn.Module):
-    """Per-atom MLP + scatter_sum AND attention-pooled MP, concat, MLP head.
-    Reusing the pattern from megalodon.models.thermo_heads but for one scalar."""
+    """Attention-pooled MP between atoms and a per-molecule virtual node,
+    final scalar prediction per molecule. Reuses the same architecture as
+    megalodon.models.thermo_heads.AtomMolMP, just with n_targets=1."""
 
     def __init__(self, dim=256, hidden=128, n_mp_layers=2, n_heads=4):
         super().__init__()
@@ -66,17 +66,6 @@ class SingleTargetHead(nn.Module):
         self.n_heads = n_heads
         self.n_mp_layers = n_mp_layers
 
-        # Extensive branch
-        self.ext_mlp = nn.Sequential(
-            nn.LayerNorm(dim),
-            nn.Linear(dim, hidden),
-            nn.SiLU(),
-            nn.Linear(hidden, hidden),
-            nn.SiLU(),
-            nn.Linear(hidden, 1),
-        )
-
-        # MP branch
         self.q = nn.ModuleList(nn.Linear(dim, dim) for _ in range(n_mp_layers))
         self.k = nn.ModuleList(nn.Linear(dim, dim) for _ in range(n_mp_layers))
         self.v = nn.ModuleList(nn.Linear(dim, dim) for _ in range(n_mp_layers))
@@ -91,7 +80,7 @@ class SingleTargetHead(nn.Module):
                           nn.SiLU(), nn.Linear(dim, dim))
             for _ in range(n_mp_layers)
         )
-        self.mp_final = nn.Sequential(
+        self.final = nn.Sequential(
             nn.LayerNorm(dim),
             nn.Linear(dim, hidden),
             nn.SiLU(),
@@ -99,11 +88,6 @@ class SingleTargetHead(nn.Module):
         )
 
     def forward(self, H, batch_idx):
-        # Ext
-        per_atom = self.ext_mlp(H)
-        ext_pred = scatter_sum(per_atom, batch_idx, dim=0).squeeze(-1)
-
-        # MP
         N_mols = int(batch_idx.max().item()) + 1
         mol_H = scatter_mean(H, batch_idx, dim=0)
         scale = self.head_dim ** -0.5
@@ -119,8 +103,7 @@ class SingleTargetHead(nn.Module):
             agg = self.o[l](agg)
             mol_H = mol_H + self.mol_upd[l](agg)
             H = H + self.atm_upd[l](torch.cat([H, mol_H[batch_idx]], dim=-1))
-        mp_pred = self.mp_final(mol_H).squeeze(-1)
-        return {"ext": ext_pred, "mp": mp_pred}
+        return self.final(mol_H).squeeze(-1)
 
 
 # ---------------------------------------------------------------------------
@@ -255,19 +238,11 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
         for H_b, b_b, t_b in batch_iter(H, offsets, tgt_norm,
                                           train_idx.tolist(),
                                           args.batch_size, device, shuffle=True):
-            has = has_target[train_idx[
-                np.searchsorted(train_idx,
-                                 np.arange(len(train_idx)))  # no-op slice
-            ]]
-            pred = model(H_b, b_b)
+            pred = model(H_b, b_b)             # [B] scalar
             valid = ~torch.isnan(t_b)
             if not valid.any():
                 continue
-            # Average of ext + mp as the loss target (symmetric)
-            pe = pred["ext"][valid]
-            pm = pred["mp"][valid]
-            tv = t_b[valid]
-            loss = 0.5 * ((pe - tv) ** 2).mean() + 0.5 * ((pm - tv) ** 2).mean()
+            loss = ((pred[valid] - t_b[valid]) ** 2).mean()
             opt.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
@@ -276,32 +251,25 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
 
     # Evaluate
     model.eval()
-    preds_ext, preds_mp, tgts_raw = [], [], []
+    preds, tgts_raw = [], []
     with torch.no_grad():
         for H_b, b_b, _ in batch_iter(H, offsets, tgt_norm,
                                        val_idx.tolist(),
                                        args.batch_size, device, shuffle=False):
             pred = model(H_b, b_b)
-            preds_ext.append(pred["ext"].cpu().numpy())
-            preds_mp.append(pred["mp"].cpu().numpy())
-    preds_ext = np.concatenate(preds_ext) * std + mean
-    preds_mp  = np.concatenate(preds_mp ) * std + mean
+            preds.append(pred.cpu().numpy())
+    preds = np.concatenate(preds) * std + mean
     val_has = has_target[val_idx].bool().numpy()
     y_true = targets[val_idx].float().numpy()
     mask = val_has & ~np.isnan(y_true)
 
-    def _metrics(y_pred):
-        return {
-            "mae":  float(mean_absolute_error(y_true[mask], y_pred[mask])),
-            "rmse": float(mean_squared_error(y_true[mask], y_pred[mask],
-                                              squared=False)),
-            "r2":   float(r2_score(y_true[mask], y_pred[mask])),
-        }
-
-    return {"n_train": int(tr_has.sum()), "n_val": int(mask.sum()),
-            "target_mean": mean, "target_std": std,
-            "ext": _metrics(preds_ext),
-            "mp":  _metrics(preds_mp)}
+    return {
+        "n_train": int(tr_has.sum()), "n_val": int(mask.sum()),
+        "target_mean": mean, "target_std": std,
+        "mae":  float(mean_absolute_error(y_true[mask], preds[mask])),
+        "rmse": float(mean_squared_error(y_true[mask], preds[mask], squared=False)),
+        "r2":   float(r2_score(y_true[mask], preds[mask])),
+    }
 
 
 def main():
@@ -361,22 +329,20 @@ def main():
                               train_idx, val_idx, args, device)
         rep["fold"] = fold_i
         fold_reports.append(rep)
-        print(f"  ext  MAE={rep['ext']['mae']:.4f}  R2={rep['ext']['r2']:.3f}")
-        print(f"  mp   MAE={rep['mp']['mae']:.4f}  R2={rep['mp']['r2']:.3f}")
+        print(f"  MAE={rep['mae']:.4f}  RMSE={rep['rmse']:.4f}  R2={rep['r2']:.3f}")
 
     # Aggregate
-    def _agg(key):
-        vals = [r[key]["mae"] for r in fold_reports]
-        return {"mae_mean": float(np.mean(vals)),
-                 "mae_std":  float(np.std(vals)),
-                 "r2_mean":  float(np.mean([r[key]["r2"] for r in fold_reports])),
-                 "rmse_mean": float(np.mean([r[key]["rmse"] for r in fold_reports]))}
-    summary = {"ext": _agg("ext"), "mp": _agg("mp"),
-                "folds": fold_reports,
-                "args": vars(args),
-                "n_molecules": n,
-                "n_labeled": int(has_target.sum().item()),
-                "wall_seconds": round(time.time()-t0, 1)}
+    summary = {
+        "mae_mean":  float(np.mean([r["mae"]  for r in fold_reports])),
+        "mae_std":   float(np.std ([r["mae"]  for r in fold_reports])),
+        "rmse_mean": float(np.mean([r["rmse"] for r in fold_reports])),
+        "r2_mean":   float(np.mean([r["r2"]   for r in fold_reports])),
+        "folds":     fold_reports,
+        "args":      vars(args),
+        "n_molecules": n,
+        "n_labeled":   int(has_target.sum().item()),
+        "wall_seconds": round(time.time()-t0, 1),
+    }
     report_path = out_dir / "cv_report.json"
     with open(report_path, "w") as f:
         json.dump(summary, f, indent=2)
@@ -385,10 +351,9 @@ def main():
     print("\n" + "=" * 70)
     print(f"{args.n_folds}-fold CV summary  |  {args.dataset_pt}")
     print("-" * 70)
-    for head in ("ext", "mp"):
-        a = summary[head]
-        print(f"  {head:<4s}  MAE = {a['mae_mean']:.4f} ± {a['mae_std']:.4f}"
-              f"  R² = {a['r2_mean']:.3f}  RMSE = {a['rmse_mean']:.4f}")
+    print(f"  MAE  = {summary['mae_mean']:.4f} ± {summary['mae_std']:.4f}")
+    print(f"  RMSE = {summary['rmse_mean']:.4f}")
+    print(f"  R²   = {summary['r2_mean']:.3f}")
     print("=" * 70)
     print(f"Report -> {report_path}")
 

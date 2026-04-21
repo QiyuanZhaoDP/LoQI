@@ -53,7 +53,6 @@ from tqdm import tqdm
 from megalodon.data.batch_preprocessor import BatchPreProcessor
 from megalodon.models.module import Graph3DInterpolantModel
 from megalodon.models.thermo_heads import (
-    EXTENSIVE_IDX,
     TARGET_FIELDS,
     TARGET_UNITS,
     ThermoHeadModel,
@@ -236,17 +235,14 @@ class ContinuationModel(nn.Module):
 @torch.no_grad()
 def eval_loop(inner_model, loader, device, target_mean, target_std):
     inner_model.eval()
-    preds_ext = []
     preds_mp  = []
     tgts_raw  = []
     for batch in loader:
         batch = batch.to(device)
         tgt = torch.stack([batch[f].view(-1).float() for f in TARGET_FIELDS], dim=1).cpu()
         preds = inner_model(batch)
-        preds_ext.append(preds["ext"].cpu())
         preds_mp.append(preds["mp"].cpu())
         tgts_raw.append(tgt)
-    preds_ext = torch.cat(preds_ext).numpy() * target_std[EXTENSIVE_IDX] + target_mean[EXTENSIVE_IDX]
     preds_mp  = torch.cat(preds_mp ).numpy() * target_std + target_mean
     tgts_raw  = torch.cat(tgts_raw ).numpy()
 
@@ -257,33 +253,26 @@ def eval_loop(inner_model, loader, device, target_mean, target_std):
             rows.append({"target": name, "note": "too few"})
             continue
         y_true = tgts_raw[mask, i]
-        row = {"target": name, "unit": TARGET_UNITS[name], "n_test": int(mask.sum()),
-               "mae_mp": float(mean_absolute_error(y_true, preds_mp[mask, i])),
-               "r2_mp":  float(r2_score(y_true, preds_mp[mask, i]))}
-        if i in EXTENSIVE_IDX:
-            j = EXTENSIVE_IDX.index(i)
-            row["mae_ext"] = float(mean_absolute_error(y_true, preds_ext[mask, j]))
-            row["r2_ext"]  = float(r2_score(y_true, preds_ext[mask, j]))
-        rows.append(row)
+        rows.append({"target": name, "unit": TARGET_UNITS[name],
+                     "n_test": int(mask.sum()),
+                     "mae_mp": float(mean_absolute_error(y_true, preds_mp[mask, i])),
+                     "r2_mp":  float(r2_score(y_true, preds_mp[mask, i]))})
     return rows
 
 
 def print_report(rows):
-    print("\n" + "=" * 92)
-    print(f"{'target':<14s} {'unit':<11s} {'MAE_ext':>10s} {'R2_ext':>8s} "
-          f"{'MAE_mp':>10s} {'R2_mp':>8s} {'n_test':>8s}")
-    print("-" * 92)
+    print("\n" + "=" * 70)
+    print(f"{'target':<14s} {'unit':<11s} {'MAE_mp':>10s} {'R2_mp':>8s} "
+          f"{'n_test':>8s}")
+    print("-" * 70)
     for r in rows:
         if "note" in r:
             print(f"{r['target']:<14s} {r['note']}")
             continue
-        mae_ext = f"{r['mae_ext']:>10.3f}" if "mae_ext" in r else f"{'-':>10s}"
-        r2_ext  = f"{r['r2_ext']:>8.3f}"  if "r2_ext"  in r else f"{'-':>8s}"
         print(f"{r['target']:<14s} {r['unit']:<11s} "
-              f"{mae_ext} {r2_ext} "
               f"{r['mae_mp']:>10.3f} {r['r2_mp']:>8.3f} "
               f"{r['n_test']:>8d}")
-    print("=" * 92)
+    print("=" * 70)
 
 
 # ---------------------------------------------------------------------------
@@ -513,9 +502,7 @@ def main():
                 [batch[f + "_norm"].view(-1) for f in TARGET_FIELDS], dim=1
             )
             preds = cont_model(batch)
-            loss_ext = masked_mse(preds["ext"], tgt_norm[:, EXTENSIVE_IDX])
-            loss_mp  = masked_mse(preds["mp"],  tgt_norm)
-            loss = loss_ext + loss_mp
+            loss = masked_mse(preds["mp"], tgt_norm)
             opt.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(
@@ -527,8 +514,6 @@ def main():
             if wb is not None:
                 lrs = {g["name"]: g["lr"] for g in opt.param_groups}
                 wb.log({"train/loss": float(loss.item()),
-                         "train/loss_ext": float(loss_ext.item()),
-                         "train/loss_mp":  float(loss_mp.item()),
                          **{f"lr/{k}": v for k, v in lrs.items()}},
                        step=global_step)
             global_step += 1
@@ -549,7 +534,7 @@ def main():
                            "train/loss_epoch": float(np.mean(losses)),
                            "val/mae_avg_norm_mp": avg_mae_mp_norm}
                     for r in rows:
-                        for k in ("mae_ext", "r2_ext", "mae_mp", "r2_mp"):
+                        for k in ("mae_mp", "r2_mp"):
                             if k in r:
                                 log[f"val/{k}_{r['target']}"] = r[k]
                     wb.log(log, step=global_step)
@@ -564,7 +549,7 @@ def main():
         if wb is not None:
             final_log = {}
             for r in rows:
-                for k in ("mae_ext", "r2_ext", "mae_mp", "r2_mp"):
+                for k in ("mae_mp", "r2_mp"):
                     if k in r:
                         final_log[f"final_test/{k}_{r['target']}"] = r[k]
             wb.log(final_log, step=global_step)

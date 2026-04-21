@@ -124,13 +124,13 @@ def main(cfg: DictConfig) -> None:
     if tl_cfg is not None:
         thermo_loss = ThermoPropertyLoss(
             min_time=tl_cfg.min_time,
-            weights=OmegaConf.to_container(tl_cfg.weights, resolve=True),
+            weight=float(OmegaConf.select(tl_cfg, "weight", default=0.05)),
             target_mean=list(tl_cfg.target_mean),
             target_std=list(tl_cfg.target_std),
             timesteps=cfg.interpolant.timesteps,
         )
         logging.info(f"Enabled ThermoPropertyLoss (min_time={tl_cfg.min_time}, "
-                     f"weights={thermo_loss.weights})")
+                     f"weight={thermo_loss.weight})")
     if el_cfg is not None:
         energy_loss = EnergyPredictionLoss(
             min_time=el_cfg.min_time,

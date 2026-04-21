@@ -1,18 +1,14 @@
-"""Thermodynamic prediction heads on top of the LoQI per-atom representation H.
+"""Thermodynamic prediction head on top of the LoQI per-atom representation H.
 
-Two heads, designed for different physics:
+AtomMolMP — bidirectional message passing between atoms and a per-molecule
+virtual node with multi-head attention-based pooling. Handles both additive
+and non-additive targets through learned aggregation.
 
-  ExtensiveSumHead  — per-atom MLP(H) + scatter_sum. Matches the physical
-                      additivity of Hf, Gf, Cv, Hf_0 (each scales with the
-                      molecule's atomic composition).
-
-  AtomMolMP         — bidirectional message passing between atoms and a
-                      per-molecule virtual node with attention-based pooling.
-                      Learns arbitrary (non-additive) aggregation, needed for
-                      intensive / shape-dependent properties (S0).
-
-Both run on the same frozen (or partially-unfrozen) H. They are trained
-jointly; at eval time you pick the head that wins per target.
+We previously paired this with an `ExtensiveSumHead` (per-atom MLP +
+scatter_sum) that was physically principled for additive quantities (Hf,
+Gf, Cv, Hf_0). In extensive benchmarking MP alone matches or beats Ext on
+every target, so the Ext branch has been removed. The single-head design
+simplifies loss computation, YAML configuration, and downstream reporting.
 """
 import math
 
@@ -22,32 +18,11 @@ from torch_scatter import scatter_mean, scatter_softmax, scatter_sum
 
 
 TARGET_FIELDS = ["enthalpy_298", "gibbs_298", "cv_gas", "entropy_gas", "enthalpy_0"]
-# Indices into TARGET_FIELDS whose physics is extensive (additive over atoms):
-EXTENSIVE_IDX = [0, 1, 2, 4]
 TARGET_UNITS = {
     "enthalpy_298": "kJ/mol", "gibbs_298": "kJ/mol",
     "cv_gas": "J/(mol*K)",    "entropy_gas": "J/(mol*K)",
     "enthalpy_0": "kJ/mol",
 }
-
-
-class ExtensiveSumHead(nn.Module):
-    """per-atom MLP → scatter_sum → extensive property."""
-
-    def __init__(self, dim=256, hidden=128, n_targets=4):
-        super().__init__()
-        self.mlp = nn.Sequential(
-            nn.LayerNorm(dim),
-            nn.Linear(dim, hidden),
-            nn.SiLU(),
-            nn.Linear(hidden, hidden),
-            nn.SiLU(),
-            nn.Linear(hidden, n_targets),
-        )
-
-    def forward(self, H, batch):
-        per_atom = self.mlp(H)
-        return scatter_sum(per_atom, batch, dim=0)
 
 
 class AtomMolMP(nn.Module):
@@ -103,13 +78,13 @@ class AtomMolMP(nn.Module):
             q = self.q_proj[l](mol_H).view(N_mols,  self.n_heads, self.head_dim)
             k = self.k_proj[l](H    ).view(N_atoms, self.n_heads, self.head_dim)
             v = self.v_proj[l](H    ).view(N_atoms, self.n_heads, self.head_dim)
-            q_at = q[batch]                                 # [N_atoms, H, d_h]
-            scores = (q_at * k).sum(-1) * self.scale        # [N_atoms, H]
-            alpha = scatter_softmax(scores, batch, dim=0)   # softmax per mol per head
-            weighted = alpha.unsqueeze(-1) * v              # [N_atoms, H, d_h]
-            agg = scatter_sum(weighted, batch, dim=0)       # [N_mols, H, d_h]
-            agg = agg.reshape(N_mols, self.dim)             # concat heads
-            agg = self.o_proj[l](agg)                       # learnable head-mix
+            q_at = q[batch]
+            scores = (q_at * k).sum(-1) * self.scale
+            alpha = scatter_softmax(scores, batch, dim=0)
+            weighted = alpha.unsqueeze(-1) * v
+            agg = scatter_sum(weighted, batch, dim=0)
+            agg = agg.reshape(N_mols, self.dim)
+            agg = self.o_proj[l](agg)
             mol_H = mol_H + self.mol_update[l](agg)
 
             mol_at = mol_H[batch]
@@ -118,17 +93,17 @@ class AtomMolMP(nn.Module):
 
 
 class ThermoHeadModel(nn.Module):
-    """Container for both heads. Output is a dict with 'ext' and 'mp' keys."""
+    """Thin wrapper around AtomMolMP. Returns a dict {'mp': [N_mols, K]} so
+    callers can extend with additional heads in the future without changing
+    the interface (e.g., per-atom charge, intensive-only head, etc.)."""
 
     def __init__(self, dim=256, n_mp_layers=2, n_mp_heads=4, hidden=128):
         super().__init__()
-        self.ext = ExtensiveSumHead(dim=dim, hidden=hidden,
-                                     n_targets=len(EXTENSIVE_IDX))
         self.mp = AtomMolMP(dim=dim, n_layers=n_mp_layers, n_heads=n_mp_heads,
                              hidden=hidden, n_targets=len(TARGET_FIELDS))
 
     def forward(self, H, batch):
-        return {"ext": self.ext(H, batch), "mp": self.mp(H, batch)}
+        return {"mp": self.mp(H, batch)}
 
 
 def masked_mse(pred, target):

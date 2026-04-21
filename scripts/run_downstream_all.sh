@@ -82,17 +82,15 @@ done
 # --- Final cross-dataset summary ---
 python3 - <<'PY'
 import json, glob, os
-print("\n" + "=" * 78)
-print(f"{'dataset':<24s} {'n':>7s} {'ext MAE':>12s} {'mp MAE':>12s} {'best R²':>10s}")
-print("-" * 78)
+print("\n" + "=" * 70)
+print(f"{'dataset':<24s} {'n':>7s} {'MAE (mean ± std)':>20s} {'R²':>8s}")
+print("-" * 70)
 for path in sorted(glob.glob(os.path.join(os.environ.get("OUT_ROOT", "/tmp/downstream_cv"),
                                             "*/cv_report.json"))):
     name = os.path.basename(os.path.dirname(path))
     d = json.load(open(path))
-    best_r2 = max(d["ext"]["r2_mean"], d["mp"]["r2_mean"])
     print(f"{name:<24s} {d['n_labeled']:>7d} "
-          f"{d['ext']['mae_mean']:>6.3f}±{d['ext']['mae_std']:<4.3f} "
-          f"{d['mp']['mae_mean']:>6.3f}±{d['mp']['mae_std']:<4.3f} "
-          f"{best_r2:>10.3f}")
-print("=" * 78)
+          f"{d['mae_mean']:>10.4f} ± {d['mae_std']:<6.4f} "
+          f"{d['r2_mean']:>8.3f}")
+print("=" * 70)
 PY
