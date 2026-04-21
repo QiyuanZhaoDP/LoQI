@@ -85,6 +85,13 @@ def _print_param_breakdown(pl_module):
     return "\n".join(lines)
 
 import torch
+import torch.multiprocessing as _torch_mp
+# Use the file_system sharing strategy instead of file_descriptor so that
+# DataLoader workers don't exhaust FDs under heavy num_workers × DDP setups
+# (symptom: "RuntimeError: received 0 items of ancdata" from the pin-memory
+# thread). Costs a small IPC overhead but is required for >8 workers/rank.
+_torch_mp.set_sharing_strategy("file_system")
+
 import hydra
 from lightning import pytorch as pl
 from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
