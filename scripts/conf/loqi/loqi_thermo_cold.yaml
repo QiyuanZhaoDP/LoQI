@@ -13,11 +13,11 @@
 #   are loaded directly — no pre-labeled variant needed.
 #
 # Launch:
-#   python scripts/train.py --config-name=loqi_thermo_50m \
-#       outdir=./outputs/loqi_thermo_50m \
+#   python scripts/train.py --config-name=loqi_thermo_cold \
+#       outdir=./outputs/loqi_thermo_cold \
 #       train.gpus=4
 
-run_name: 'loqi_thermo_50m_v1'
+run_name: 'loqi_thermo_cold'
 outdir: null
 resume: null
 ema: True
@@ -105,6 +105,11 @@ dynamics:
       n_mp_layers: 3
       mp_n_heads:  4
       hidden:      256
+    # ---- RDKit 9-descriptor head — 100% coverage regularizer ----
+    rdkit_head_args:
+      n_mp_layers: 2
+      mp_n_heads:  4
+      hidden:      128
     # ---- Energy head (Phase 1) — disabled until AIMNet2 energies labeled ----
     # energy_head: True
   wrapper_args:
@@ -125,16 +130,25 @@ sample:
   node_distribution: "${data.dataset_root}/processed/train_n_h.pickle"
 
 # ==== Phase 2 auxiliary thermo loss ========================================
-# Target mean/std precomputed from the full labeled train split
-# (scripts/label_thermo.py output; see wandb for stats printout).
-# Order matches TARGET_FIELDS_DEFAULT:
-#   [enthalpy_298, gibbs_298, cv_gas, entropy_gas, enthalpy_0]
+# Stats from data/property_table.parquet after screen_thermo_outliers.py
+# (n=652,567 labeled). Rerun compute_rdkit_stats.py if the parquet changes.
+# Order: [H298, G298, Cv, S°, H0].
 thermo_loss:
-  min_time: 0.9            # 50M-from-scratch: backbone needs to warm up first;
-                           # use the cleaner-only timesteps for thermo signal
-  weight:   0.05           # scalar weight for the (single) MP head
-  target_mean: [-315.62, 107.69, 386.73, 668.22, -115.50]
-  target_std:  [ 346.07, 342.83,  94.00, 150.17,  364.04]
+  min_time: 0.9            # from-scratch: backbone needs to warm up first;
+                           # use the cleanest timesteps for thermo signal
+  weight:   0.05           # scalar weight for the thermo MP head
+  target_mean: [-317.36, 111.66, 390.86, 676.34, -119.10]
+  target_std:  [ 346.40, 344.07,  98.00, 160.56,  364.45]
+
+# ==== RDKit descriptor auxiliary loss =======================================
+# Stats from full property_table.parquet (n=1,849,214, 100% coverage).
+# Order: [logp, tpsa, n_h_donors, n_h_acceptors, n_rot_bonds,
+#         frac_csp3, n_aliph_rings, qed, labute_asa]
+rdkit_loss:
+  min_time: 0.9
+  weight:   0.02
+  target_mean: [3.0455, 77.0193, 1.4421, 4.9728, 5.2942, 0.3220, 0.9307, 0.5899, 161.6316]
+  target_std:  [1.7329, 31.3564, 1.1131, 2.0423, 2.5879, 0.1930, 0.9768, 0.2033,  41.1187]
 
 # Enable later after scripts/label_energy.py runs:
 # energy_loss:

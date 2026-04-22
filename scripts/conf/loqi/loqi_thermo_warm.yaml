@@ -7,14 +7,14 @@
 # denoising checkpoint.
 #
 # This is the fast path: ~1 day of fine-tuning on 4 GPUs vs 3-5 days
-# from-scratch for loqi_thermo_50m.yaml.
+# from-scratch for loqi_thermo_cold.yaml.
 #
 # Prereqs:
 #   - data_processing/build_property_table.py has produced
 #     data/property_table.parquet (thermo + RDKit descriptors per canonical SMILES)
 #   - data/loqi.ckpt exists (your Phase 0 backbone)
 
-run_name: 'loqi_thermo_warm_v1'
+run_name: 'loqi_thermo_warm'
 outdir: null
 resume: data/loqi.ckpt        # warm-start here — train.py loads with strict=False
 ema: True
@@ -102,6 +102,13 @@ dynamics:
       n_mp_layers: 2
       mp_n_heads:  4
       hidden:      256
+    # RDKit 9-descriptor head (100% label coverage). Lighter than thermo
+    # since the targets are cheap to hit. Acts as a regularizer on the
+    # global mol representation.
+    rdkit_head_args:
+      n_mp_layers: 1
+      mp_n_heads:  4
+      hidden:      128
   wrapper_args:
     timesteps: *timesteps
     time_type: *time_type
@@ -120,12 +127,25 @@ sample:
   node_distribution: "${data.dataset_root}/processed/train_n_h.pickle"
 
 # ==== Phase 2 auxiliary thermo loss =========================================
-# Target stats precomputed from the full labeled train split.
+# Stats from data/property_table.parquet after screen_thermo_outliers.py
+# (n=652,567 labeled). Rerun compute_rdkit_stats.py if the parquet changes.
+# Order: [H298, G298, Cv, S°, H0].
 thermo_loss:
   min_time: 0.8
-  weight:   0.05                 # scalar weight for the (single) MP head
-  target_mean: [-315.62, 107.69, 386.73, 668.22, -115.50]
-  target_std:  [ 346.07, 342.83,  94.00, 150.17,  364.04]
+  weight:   0.05
+  target_mean: [-317.36, 111.66, 390.86, 676.34, -119.10]
+  target_std:  [ 346.40, 344.07,  98.00, 160.56,  364.45]
+
+# ==== RDKit descriptor auxiliary loss =======================================
+# Stats from full property_table.parquet (n=1,849,214, 100% coverage).
+# Smaller weight than thermo — regularizer, not primary objective.
+# Order: [logp, tpsa, n_h_donors, n_h_acceptors, n_rot_bonds,
+#         frac_csp3, n_aliph_rings, qed, labute_asa]
+rdkit_loss:
+  min_time: 0.8
+  weight:   0.02
+  target_mean: [3.0455, 77.0193, 1.4421, 4.9728, 5.2942, 0.3220, 0.9307, 0.5899, 161.6316]
+  target_std:  [1.7329, 31.3564, 1.1131, 2.0423, 2.5879, 0.1930, 0.9768, 0.2033,  41.1187]
 
 train:
   seed: 42

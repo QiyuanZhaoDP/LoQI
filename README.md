@@ -267,11 +267,16 @@ Outputs:
 - `nextmol.yaml` - Alternative configuration for NextMol-style generation
 - `loqi_flow.yaml` - LoQI flow-matching conformer generation model
 
-**Thermo-aware extensions (Phase 0 / Phase 1):**
-- `loqi_thermo.yaml` — Phase 1, warm-started from `loqi.ckpt` (matches the
-  256/10/4 backbone, adds a thermo head + auxiliary thermo loss)
-- `loqi_thermo_50m.yaml` — Phase 1, from-scratch scaled backbone
-  (384-d, 14 layers, 8 heads; ~100M params)
+**Thermo-aware extensions (Phase 1, 4 combinations):**
+- `loqi_thermo_warm.yaml`      — diffusion, warm-started from `loqi.ckpt`
+- `loqi_thermo_cold.yaml`      — diffusion, from-scratch scaled backbone
+- `loqi_thermo_flow_warm.yaml` — flow-matching, warm-started from `loqi_flow.ckpt`
+- `loqi_thermo_flow_cold.yaml` — flow-matching, from-scratch scaled backbone
+
+Warm variants use the 256/10/4 base backbone; cold variants scale to
+384/14/8 (~100M params). All four carry both the thermo prediction head
+(5 targets) and the RDKit descriptor head (9 targets) with auxiliary
+losses gated to late timesteps.
 
 ---
 
@@ -378,16 +383,21 @@ and an auxiliary `ThermoPropertyLoss` — semi-supervised, NaN-masked, gated
 to late timesteps via `min_time` — are optimized jointly:
 
 ```bash
-# Warm-start from an existing LoQI checkpoint (same 256/10/4 architecture,
-# adds heads + thermo loss, ~1 day on 4 GPUs).
-python scripts/train.py --config-name=loqi_thermo \
-    outdir=./outputs/loqi_thermo \
-    train.gpus=4
+# Diffusion, warm-start from loqi.ckpt (fastest, ~1 day on 4 GPUs):
+python scripts/train.py --config-name=loqi_thermo_warm \
+    outdir=./outputs/loqi_thermo_warm train.gpus=4
 
-# From-scratch scaled backbone (384/14/8 ≈ 100M params, ~3-5 days on 4 GPUs).
-python scripts/train.py --config-name=loqi_thermo_50m \
-    outdir=./outputs/loqi_thermo_50m \
-    train.gpus=4
+# Flow-matching, warm-start from loqi_flow.ckpt (~1 day on 4 GPUs):
+python scripts/train.py --config-name=loqi_thermo_flow_warm \
+    outdir=./outputs/loqi_thermo_flow_warm train.gpus=4
+
+# Diffusion, from-scratch scaled backbone (384/14/8 ≈ 100M params, ~3-5 days):
+python scripts/train.py --config-name=loqi_thermo_cold \
+    outdir=./outputs/loqi_thermo_cold train.gpus=4
+
+# Flow-matching, from-scratch scaled backbone (~3-5 days):
+python scripts/train.py --config-name=loqi_thermo_flow_cold \
+    outdir=./outputs/loqi_thermo_flow_cold train.gpus=4
 ```
 
 wandb traces to watch:
