@@ -404,8 +404,22 @@ wandb traces to watch:
 
 - `train/x_loss` — denoising, should stay flat (preserve LoQI quality)
 - `train/additional_loss_term` — thermo aux, should decrease
-- `train/thermo_last_labeled_active` — per-step labeled-molecule count
+- `train/thermo/mae_*` and `train/rdkit/mae_*` — per-target MAE per epoch
+  (physical units: kJ/mol for H/G, J/mol/K for Cv/S°, natural units for RDKit)
+- `train/thermo/labeled_active` — per-step labeled-molecule count
 - `val/opt_median_relative_energy` — canary for conformer-generation quality
+
+#### A note on "epoch" semantics under DDP
+
+This codebase uses `MiDiDataloader`, whose custom collate path bypasses
+Lightning's automatic `DistributedSampler` injection. As a result, under
+multi-GPU DDP **every rank independently iterates the full dataset**, so
+one `n_epochs` unit in the YAML corresponds to `n_gpus × full-dataset
+passes` of actual data exposure. Concretely: `n_epochs: 50` on 4 GPUs
+≈ 200 single-GPU-epoch equivalents. This is why convergence under DDP
+looks faster than a naive "same epochs, n_gpus GPUs" interpretation would
+suggest. Gradient averaging still works via all-reduce; only the data
+sharding is absent.
 
 ### Downstream property prediction (5-fold CV)
 

@@ -97,6 +97,9 @@ sample:
 train:
   seed: 42
   gpus: 1
+  # Note: with n_gpus > 1, each rank iterates the FULL dataset independently
+  # (MiDiDataloader bypasses Lightning's DistributedSampler auto-inject) — so
+  # 1 epoch here is effectively n_gpus × full-dataset passes.
   n_epochs: 800
   enable_progress_bar: True
   gradient_clip_value: 1.0

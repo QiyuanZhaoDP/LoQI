@@ -150,6 +150,10 @@ rdkit_loss:
 train:
   seed: 42
   gpus: 4
+  # Note: with n_gpus > 1, each rank iterates the FULL dataset independently
+  # (MiDiDataloader bypasses Lightning's DistributedSampler auto-inject) — so
+  # one "epoch" here is effectively n_gpus × full-dataset passes. 50 epochs
+  # on 4 GPUs ≈ 200 single-GPU-epoch equivalent data exposure.
   n_epochs: 50              # fine-tune from a converged ckpt — fewer epochs
   enable_progress_bar: True
   gradient_clip_value: 1.0
