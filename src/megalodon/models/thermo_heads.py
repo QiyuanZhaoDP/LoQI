@@ -24,6 +24,12 @@ TARGET_UNITS = {
     "enthalpy_0": "kJ/mol",
 }
 
+# 9 RDKit 2D descriptors — 100% coverage on the property table.
+RDKIT_TARGET_FIELDS = [
+    "logp", "tpsa", "n_h_donors", "n_h_acceptors", "n_rot_bonds",
+    "frac_csp3", "n_aliph_rings", "qed", "labute_asa",
+]
+
 
 class AtomMolMP(nn.Module):
     """Bidirectional message passing between atoms and a per-molecule virtual
@@ -101,6 +107,23 @@ class ThermoHeadModel(nn.Module):
         super().__init__()
         self.mp = AtomMolMP(dim=dim, n_layers=n_mp_layers, n_heads=n_mp_heads,
                              hidden=hidden, n_targets=len(TARGET_FIELDS))
+
+    def forward(self, H, batch):
+        return {"mp": self.mp(H, batch)}
+
+
+class RDKitHeadModel(nn.Module):
+    """Parallel head for predicting the 9 RDKit 2D descriptors.
+
+    Structurally identical to ThermoHeadModel but with 9 outputs and
+    typically smaller capacity — RDKit descriptors are cheaper targets
+    so a lighter head is usually enough.
+    """
+
+    def __init__(self, dim=256, n_mp_layers=1, n_mp_heads=4, hidden=128):
+        super().__init__()
+        self.mp = AtomMolMP(dim=dim, n_layers=n_mp_layers, n_heads=n_mp_heads,
+                             hidden=hidden, n_targets=len(RDKIT_TARGET_FIELDS))
 
     def forward(self, H, batch):
         return {"mp": self.mp(H, batch)}

@@ -144,6 +144,10 @@ class AIMNet2ForcesLoss:
 TARGET_FIELDS_DEFAULT = ["enthalpy_298", "gibbs_298", "cv_gas",
                           "entropy_gas", "enthalpy_0"]
 
+RDKIT_FIELDS_DEFAULT = ["logp", "tpsa", "n_h_donors", "n_h_acceptors",
+                         "n_rot_bonds", "frac_csp3", "n_aliph_rings",
+                         "qed", "labute_asa"]
+
 
 def _t_frac(time, timesteps):
     """Normalize time to [0, 1] fraction regardless of discrete/continuous."""
@@ -198,6 +202,10 @@ class ThermoPropertyLoss:
         self.last_batch_size = 0
         self.last_gated_in = 0           # molecules with t >= min_time
         self.last_labeled_active = 0     # molecules contributing to loss
+        # Per-target MAE / RMSE in physical units, over the active subset
+        # (labeled + past min_time). Lightning logs these as epoch means.
+        self.last_per_target_mae = {f: 0.0 for f in self.target_fields}
+        self.last_per_target_rmse = {f: 0.0 for f in self.target_fields}
 
     def _ensure_stats(self, device, dtype):
         if self._mean_t is None or self._mean_t.device != device:
@@ -243,7 +251,129 @@ class ThermoPropertyLoss:
         if not valid.any():
             return torch.tensor(0.0, device=device)
         diff = (pred - torch.nan_to_num(targets_norm)) * valid
+
+        # Per-target MAE / RMSE in physical units — for wandb telemetry.
+        # De-normalize BOTH sides, mask, and average per target.
+        with torch.no_grad():
+            pred_phys   = pred * self._std_t + self._mean_t
+            target_phys = torch.nan_to_num(targets)
+            err_phys    = (pred_phys - target_phys) * valid            # [B, 5]
+            cnt         = valid.sum(dim=0).clamp(min=1).float()        # [5]
+            mae         = err_phys.abs().sum(dim=0) / cnt              # [5]
+            rmse        = (err_phys ** 2).sum(dim=0).sqrt() / cnt.sqrt()
+            for i, f in enumerate(self.target_fields):
+                self.last_per_target_mae[f]  = float(mae[i].item())
+                self.last_per_target_rmse[f] = float(rmse[i].item())
+
         return self.weight * (diff ** 2).sum() / valid.sum()
+
+    def get_metrics_dict(self):
+        """Flat name → scalar dict for the Lightning module to log. Keys
+        are namespaced with `thermo/` so multiple aux heads can coexist."""
+        d = {
+            "thermo/batch_size":     float(self.last_batch_size),
+            "thermo/gated_in":       float(self.last_gated_in),
+            "thermo/labeled_active": float(self.last_labeled_active),
+        }
+        for f in self.target_fields:
+            d[f"thermo/mae_{f}"]  = self.last_per_target_mae[f]
+            d[f"thermo/rmse_{f}"] = self.last_per_target_rmse[f]
+        return d
+
+
+class RDKitDescriptorLoss:
+    """Auxiliary RDKit-descriptor prediction loss.
+
+    Mirrors ThermoPropertyLoss but for the 9 RDKit 2D descriptors
+    (LogP, TPSA, Lipinski counts, FracCSP3, NumAliphaticRings, QED,
+    LabuteASA). Labels are 100% covered after build_property_table.py
+    drops all-NaN rows, so there's no `has_*` flag to check — only the
+    time gate and per-target NaN mask (vestigial; should never fire).
+
+    Typical usage: small weight (~0.02) and same min_time as thermo,
+    so the RDKit signal acts as a cheap regularizer on the global
+    representation without dominating the thermo head's gradient.
+
+    Requires the backbone to expose `out["rdkit_mp"]` — obtained by
+    building MegaFNV3Conf with `rdkit_head_args` set.
+    """
+
+    def __init__(self, min_time=0.8,
+                 weight=0.02,
+                 target_fields=None,
+                 target_mean=None,
+                 target_std=None,
+                 timesteps=25):
+        self.min_time = min_time
+        self.weight = float(weight)
+        self.target_fields = list(target_fields) if target_fields else list(RDKIT_FIELDS_DEFAULT)
+        if target_mean is None or target_std is None:
+            raise ValueError(
+                "RDKitDescriptorLoss requires target_mean and target_std. "
+                "Compute via data_processing/compute_rdkit_stats.py."
+            )
+        self.target_mean = list(target_mean)
+        self.target_std = list(target_std)
+        self.timesteps = timesteps
+        self._mean_t = None
+        self._std_t = None
+        self.last_batch_size = 0
+        self.last_gated_in = 0
+        self.last_per_target_mae = {f: 0.0 for f in self.target_fields}
+        self.last_per_target_rmse = {f: 0.0 for f in self.target_fields}
+
+    def _ensure_stats(self, device, dtype):
+        if self._mean_t is None or self._mean_t.device != device:
+            self._mean_t = torch.tensor(self.target_mean, device=device, dtype=dtype)
+            self._std_t  = torch.tensor(self.target_std,  device=device, dtype=dtype)
+
+    def __call__(self, batch, out, time, ws_t, stage="train"):
+        if "rdkit_mp" not in out or self.weight <= 0:
+            return torch.tensor(0.0, device=time.device)
+
+        device = time.device
+        self._ensure_stats(device, torch.float32)
+
+        t_frac = _t_frac(time, self.timesteps)
+        time_mask = t_frac >= self.min_time                            # [B]
+        self.last_batch_size = int(time_mask.numel())
+        self.last_gated_in = int(time_mask.sum().item())
+        if not time_mask.any():
+            return torch.tensor(0.0, device=device)
+
+        targets = torch.stack(
+            [batch[f].view(-1).float() for f in self.target_fields], dim=1
+        )  # [B, 9]
+        targets_norm = (targets - self._mean_t) / self._std_t
+
+        pred = out["rdkit_mp"]
+        valid = time_mask.unsqueeze(-1) & ~torch.isnan(targets_norm)
+        if not valid.any():
+            return torch.tensor(0.0, device=device)
+        diff = (pred - torch.nan_to_num(targets_norm)) * valid
+
+        with torch.no_grad():
+            pred_phys   = pred * self._std_t + self._mean_t
+            target_phys = torch.nan_to_num(targets)
+            err_phys    = (pred_phys - target_phys) * valid
+            cnt         = valid.sum(dim=0).clamp(min=1).float()
+            mae         = err_phys.abs().sum(dim=0) / cnt
+            rmse        = (err_phys ** 2).sum(dim=0).sqrt() / cnt.sqrt()
+            for i, f in enumerate(self.target_fields):
+                self.last_per_target_mae[f]  = float(mae[i].item())
+                self.last_per_target_rmse[f] = float(rmse[i].item())
+
+        return self.weight * (diff ** 2).sum() / valid.sum()
+
+    def get_metrics_dict(self):
+        d = {
+            "rdkit/batch_size": float(self.last_batch_size),
+            "rdkit/gated_in":   float(self.last_gated_in),
+        }
+        for f in self.target_fields:
+            d[f"rdkit/mae_{f}"]  = self.last_per_target_mae[f]
+            d[f"rdkit/rmse_{f}"] = self.last_per_target_rmse[f]
+        return d
 
 
 class EnergyPredictionLoss:
@@ -307,16 +437,31 @@ class EnergyPredictionLoss:
 
 
 class CombinedAuxiliaryLoss:
-    """Optional wrapper to run ThermoPropertyLoss + EnergyPredictionLoss together."""
+    """Wrap several auxiliary losses and route metric aggregation.
 
-    def __init__(self, thermo_loss=None, energy_loss=None):
+    Each sub-loss can expose a get_metrics_dict(); this class prefixes
+    their keys (thermo/ · rdkit/ · energy/) and unions them so the
+    Lightning module can log per-target MAE/RMSE for every head it runs.
+    """
+
+    def __init__(self, thermo_loss=None, rdkit_loss=None, energy_loss=None):
         self.thermo_loss = thermo_loss
+        self.rdkit_loss = rdkit_loss
         self.energy_loss = energy_loss
 
     def __call__(self, batch, out, time, ws_t, stage="train"):
         loss = torch.tensor(0.0, device=time.device)
         if self.thermo_loss is not None:
             loss = loss + self.thermo_loss(batch, out, time, ws_t, stage)
+        if self.rdkit_loss is not None:
+            loss = loss + self.rdkit_loss(batch, out, time, ws_t, stage)
         if self.energy_loss is not None:
             loss = loss + self.energy_loss(batch, out, time, ws_t, stage)
         return loss
+
+    def get_metrics_dict(self):
+        out = {}
+        for loss in (self.thermo_loss, self.rdkit_loss, self.energy_loss):
+            if loss is not None and hasattr(loss, "get_metrics_dict"):
+                out.update(loss.get_metrics_dict())
+        return out

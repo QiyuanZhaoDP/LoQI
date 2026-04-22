@@ -703,6 +703,7 @@ class MegaFNV3Conf(nn.Module):
             prune_edges=False,
             return_features=False,
             thermo_head_args=None,
+            rdkit_head_args=None,
             energy_head=False,
     ):
         super(MegaFNV3Conf, self).__init__()
@@ -758,6 +759,22 @@ class MegaFNV3Conf(nn.Module):
                 hidden=thermo_head_args.get("hidden", 256),
             )
 
+        # Optional RDKit descriptor head (9 targets, 100% label coverage).
+        # Typically a smaller head than the thermo one — cheaper targets, just
+        # a regularizer on the global molecule representation.
+        self.rdkit_heads = None
+        if rdkit_head_args is not None:
+            from omegaconf import OmegaConf as _OC
+            if not isinstance(rdkit_head_args, dict):
+                rdkit_head_args = _OC.to_container(rdkit_head_args, resolve=True)
+            from megalodon.models.thermo_heads import RDKitHeadModel
+            self.rdkit_heads = RDKitHeadModel(
+                dim=invariant_node_feat_dim,
+                n_mp_layers=rdkit_head_args.get("n_mp_layers", 1),
+                n_mp_heads=rdkit_head_args.get("mp_n_heads", 4),
+                hidden=rdkit_head_args.get("hidden", 128),
+            )
+
         # Optional scalar energy head (Phase 1). Predicts a per-molecule energy
         # from scatter_mean(H). Forces can be obtained via autograd of energy
         # wrt input coords — no separate force head needed.
@@ -801,6 +818,9 @@ class MegaFNV3Conf(nn.Module):
         if self.thermo_heads is not None:
             th = self.thermo_heads(H, batch)
             out["thermo_mp"] = th["mp"]     # [N_mols, 5]
+        if self.rdkit_heads is not None:
+            rh = self.rdkit_heads(H, batch)
+            out["rdkit_mp"] = rh["mp"]      # [N_mols, 9]
         if self.energy_head is not None:
             mol_repr = scatter_mean(H, batch, dim=0)
             out["energy_pred"] = self.energy_head(mol_repr).squeeze(-1)

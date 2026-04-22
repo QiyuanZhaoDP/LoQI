@@ -109,6 +109,13 @@ dynamics:
       n_mp_layers: 2
       mp_n_heads:  4
       hidden:      256
+    # RDKit 9-descriptor head (100% label coverage). Lighter than thermo
+    # since the targets are cheap to hit. Acts as a regularizer on the
+    # global mol representation.
+    rdkit_head_args:
+      n_mp_layers: 1
+      mp_n_heads:  4
+      hidden:      128
   wrapper_args:
     timesteps: *timesteps
     time_type: *time_type
@@ -125,9 +132,23 @@ sample:
 # Order matches TARGET_FIELDS_DEFAULT: [H298, G298, Cv, S°, H0].
 thermo_loss:
   min_time: 0.8
-  weight:   0.05                 # scalar weight for the (single) MP head
+  weight:   0.05                 # scalar weight for the thermo MP head
   target_mean: [-315.62, 107.69, 386.73, 668.22, -115.50]
   target_std:  [ 346.07, 342.83,  94.00, 150.17,  364.04]
+
+# ==== RDKit descriptor auxiliary loss =======================================
+# Smaller weight than thermo — cheap signal, more of a regularizer than a
+# primary objective. Compute target_mean / target_std via:
+#   python data_processing/compute_rdkit_stats.py --parquet data/property_table.parquet
+# Fields order (fixed): [logp, tpsa, n_h_donors, n_h_acceptors, n_rot_bonds,
+#                        frac_csp3, n_aliph_rings, qed, labute_asa]
+# Default values below are rough ChEMBL3D ballpark — replace with the
+# computed values on your actual parquet before serious runs.
+rdkit_loss:
+  min_time: 0.8
+  weight:   0.02
+  target_mean: [2.8, 60.0, 1.0, 4.5, 4.5, 0.45, 1.5, 0.55, 170.0]
+  target_std:  [1.5, 35.0, 1.0, 2.0, 3.0, 0.20, 1.2, 0.20,  45.0]
 
 train:
   seed: 42

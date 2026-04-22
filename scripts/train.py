@@ -122,11 +122,14 @@ def main(cfg: DictConfig) -> None:
     from megalodon.models.loss_fn import (
         CombinedAuxiliaryLoss,
         EnergyPredictionLoss,
+        RDKitDescriptorLoss,
         ThermoPropertyLoss,
     )
     tl_cfg = OmegaConf.select(cfg, "thermo_loss", default=None)
+    rl_cfg = OmegaConf.select(cfg, "rdkit_loss",  default=None)
     el_cfg = OmegaConf.select(cfg, "energy_loss", default=None)
     thermo_loss = None
+    rdkit_loss = None
     energy_loss = None
     if tl_cfg is not None:
         thermo_loss = ThermoPropertyLoss(
@@ -138,6 +141,16 @@ def main(cfg: DictConfig) -> None:
         )
         logging.info(f"Enabled ThermoPropertyLoss (min_time={tl_cfg.min_time}, "
                      f"weight={thermo_loss.weight})")
+    if rl_cfg is not None:
+        rdkit_loss = RDKitDescriptorLoss(
+            min_time=rl_cfg.min_time,
+            weight=float(OmegaConf.select(rl_cfg, "weight", default=0.02)),
+            target_mean=list(rl_cfg.target_mean),
+            target_std=list(rl_cfg.target_std),
+            timesteps=cfg.interpolant.timesteps,
+        )
+        logging.info(f"Enabled RDKitDescriptorLoss (min_time={rl_cfg.min_time}, "
+                     f"weight={rdkit_loss.weight})")
     if el_cfg is not None:
         energy_loss = EnergyPredictionLoss(
             min_time=el_cfg.min_time,
@@ -149,10 +162,13 @@ def main(cfg: DictConfig) -> None:
         )
         logging.info(f"Enabled EnergyPredictionLoss (min_time={el_cfg.min_time}, "
                      f"weight={el_cfg.weight})")
-    if thermo_loss is not None and energy_loss is not None:
-        loss_fn = CombinedAuxiliaryLoss(thermo_loss=thermo_loss, energy_loss=energy_loss)
+    _active = [x for x in (thermo_loss, rdkit_loss, energy_loss) if x is not None]
+    if len(_active) > 1:
+        loss_fn = CombinedAuxiliaryLoss(thermo_loss=thermo_loss,
+                                         rdkit_loss=rdkit_loss,
+                                         energy_loss=energy_loss)
     else:
-        loss_fn = thermo_loss or energy_loss
+        loss_fn = _active[0] if _active else None
 
     batch_preprocessor = BatchPreProcessor(aug_rotations=cfg.data.aug_rotations,
                                         scale_coords=cfg.data.scale_coords)
