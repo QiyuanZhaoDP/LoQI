@@ -128,27 +128,26 @@ sample:
   return_step_output: True
 
 # ==== Phase 2 auxiliary thermo loss =========================================
-# Target stats precomputed from the full labeled train split.
+# Stats computed from data/property_table.parquet (n=652,782 labeled mols)
+# via data_processing/compute_rdkit_stats.py — rerun if the parquet changes.
 # Order matches TARGET_FIELDS_DEFAULT: [H298, G298, Cv, S°, H0].
 thermo_loss:
   min_time: 0.8
   weight:   0.05                 # scalar weight for the thermo MP head
-  target_mean: [-315.62, 107.69, 386.73, 668.22, -115.50]
-  target_std:  [ 346.07, 342.83,  94.00, 150.17,  364.04]
+  target_mean: [-317.86, 111.21, 390.90, 676.36, -119.61]
+  target_std:  [ 348.03, 345.38,  98.06, 160.84,  366.04]
 
 # ==== RDKit descriptor auxiliary loss =======================================
+# Stats computed from property_table.parquet (n=1,849,214, 100% coverage).
 # Smaller weight than thermo — cheap signal, more of a regularizer than a
-# primary objective. Compute target_mean / target_std via:
-#   python data_processing/compute_rdkit_stats.py --parquet data/property_table.parquet
-# Fields order (fixed): [logp, tpsa, n_h_donors, n_h_acceptors, n_rot_bonds,
-#                        frac_csp3, n_aliph_rings, qed, labute_asa]
-# Default values below are rough ChEMBL3D ballpark — replace with the
-# computed values on your actual parquet before serious runs.
+# primary objective. Rerun compute_rdkit_stats.py if the parquet changes.
+# Order: [logp, tpsa, n_h_donors, n_h_acceptors, n_rot_bonds,
+#         frac_csp3, n_aliph_rings, qed, labute_asa]
 rdkit_loss:
   min_time: 0.8
   weight:   0.02
-  target_mean: [2.8, 60.0, 1.0, 4.5, 4.5, 0.45, 1.5, 0.55, 170.0]
-  target_std:  [1.5, 35.0, 1.0, 2.0, 3.0, 0.20, 1.2, 0.20,  45.0]
+  target_mean: [3.0455, 77.0193, 1.4421, 4.9728, 5.2942, 0.3220, 0.9307, 0.5899, 161.6316]
+  target_std:  [1.7329, 31.3564, 1.1131, 2.0423, 2.5879, 0.1930, 0.9768, 0.2033,  41.1187]
 
 train:
   seed: 42
