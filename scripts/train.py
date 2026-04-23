@@ -189,6 +189,14 @@ def main(cfg: DictConfig) -> None:
             cfg.resume,
             loss_fn=loss_fn,
             loss_params=cfg.loss,
+            # Without these overrides, Lightning's load_from_checkpoint silently
+            # falls back to hparams saved in the ckpt — which for warm-start
+            # ckpts means the BASE training's lr (e.g. 1e-4 from loqi_flow.yaml),
+            # not the fine-tune lr the user wrote in the new YAML. Always pass.
+            optimizer_params=cfg.optimizer,
+            lr_scheduler_params=cfg.lr_scheduler,
+            self_cond_params=OmegaConf.select(cfg, "self_conditioning",
+                                               default=None),
             dynamics_params=cfg.dynamics,
             interpolant_params=cfg.interpolant,
             sampling_params=cfg.sample,
