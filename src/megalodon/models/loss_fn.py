@@ -156,7 +156,69 @@ def _t_frac(time, timesteps):
     return time.float() / max(timesteps - 1, 1)
 
 
-class ThermoPropertyLoss:
+import torch.nn as _nn
+from torchmetrics import (
+    MeanAbsoluteError as _TM_MAE,
+    MeanSquaredError as _TM_MSE,
+    R2Score as _TM_R2,
+    MeanMetric as _TM_Mean,
+)
+
+
+def _build_per_target_metric_set(target_fields):
+    """Per-target torchmetrics bundle: MAE, RMSE, R², plus running first/second
+    moments of pred and target (for std diagnostics). Each batch .update()s the
+    active subset; epoch-end .compute() gives proper cross-batch aggregation,
+    then .reset() clears for the next epoch."""
+    return _nn.ModuleDict({
+        f: _nn.ModuleDict({
+            "mae":         _TM_MAE(),
+            "rmse":        _TM_MSE(squared=False),  # returns sqrt(mean(err²))
+            "r2":          _TM_R2(),
+            "pred_mean":   _TM_Mean(),
+            "pred_msq":    _TM_Mean(),              # E[pred²] for std
+            "target_mean": _TM_Mean(),
+            "target_msq":  _TM_Mean(),
+        }) for f in target_fields
+    })
+
+
+def _compute_and_reset_metric_set(metric_set, prefix):
+    """Epoch-end: .compute() every metric, build a flat name → scalar dict,
+    then .reset(). `prefix` is the namespace (e.g. 'thermo' / 'rdkit')."""
+    def _safe(m):
+        try:
+            v = m.compute()
+            return float(v.item()) if hasattr(v, "item") else float(v)
+        except Exception:
+            return float("nan")
+
+    out = {}
+    for f, mset in metric_set.items():
+        mae  = _safe(mset["mae"])
+        rmse = _safe(mset["rmse"])
+        r2   = _safe(mset["r2"])
+        pm   = _safe(mset["pred_mean"])
+        pms  = _safe(mset["pred_msq"])
+        tm   = _safe(mset["target_mean"])
+        tms  = _safe(mset["target_msq"])
+        # std from first + second moments; clamp at 0 to guard against
+        # floating-point slop producing a tiny negative under-radical.
+        pred_std   = max(pms - pm * pm,  0.0) ** 0.5
+        target_std = max(tms - tm * tm,  0.0) ** 0.5
+
+        out[f"{prefix}/mae_{f}"]        = mae
+        out[f"{prefix}/rmse_{f}"]       = rmse
+        out[f"{prefix}/r2_{f}"]         = r2
+        out[f"{prefix}/pred_std_{f}"]   = pred_std
+        out[f"{prefix}/target_std_{f}"] = target_std
+
+        for m in mset.values():
+            m.reset()
+    return out
+
+
+class ThermoPropertyLoss(_nn.Module):
     """Auxiliary thermo-prediction loss applied at late denoising timesteps.
 
     Reads per-molecule thermo targets (enthalpy_298, gibbs_298, cv_gas,
@@ -168,15 +230,19 @@ class ThermoPropertyLoss:
     Requires the backbone to expose `out["thermo_mp"]` — obtained by
     building MegaFNV3Conf with `thermo_head_args` set.
 
+    Per-target diagnostics exposed via compute_and_reset(stage):
+        mae, rmse (physical units), r2, pred_std, target_std.
+    torchmetrics accumulate sufficient statistics across every batch in
+    the epoch and reduce correctly across DDP ranks on compute().
+
     Args:
         min_time: only apply loss when t >= min_time (as fraction in [0,1]).
-                  Rationale: at early t, H encodes "direction of denoising"
-                  rather than molecule identity — thermo loss would be noise.
         weight:   scalar weight for the MP head relative to main denoising loss.
-        target_mean / target_std: per-target z-score stats (list of len 5);
-                  typically precomputed from the training split.
+        target_mean / target_std: per-target z-score stats (list of len 5).
         timesteps: needed to normalize discrete-time to fraction [0, 1].
     """
+
+    _PREFIX = "thermo"
 
     def __init__(self, min_time=0.8,
                  weight=0.05,
@@ -184,45 +250,49 @@ class ThermoPropertyLoss:
                  target_mean=None,
                  target_std=None,
                  timesteps=25):
+        super().__init__()
         self.min_time = min_time
         self.weight = float(weight)
         self.target_fields = list(target_fields) if target_fields else list(TARGET_FIELDS_DEFAULT)
         if target_mean is None or target_std is None:
             raise ValueError(
                 "ThermoPropertyLoss requires target_mean and target_std "
-                "(per-target z-score stats; use the values printed by "
-                "scripts/finetune_thermo_head.py or build_property_table.py)."
+                "(per-target z-score stats; compute via "
+                "data_processing/compute_rdkit_stats.py)."
             )
         self.target_mean = list(target_mean)
         self.target_std = list(target_std)
         self.timesteps = timesteps
-        self._mean_t = None
-        self._std_t = None
-        # Counters for label-density telemetry.
+        # Z-score stats as registered buffers so .to(device) moves them
+        # and they ride along in state_dict. Kept non-persistent to skip
+        # checkpointing (they're reconstructed from the constructor args).
+        self.register_buffer(
+            "_mean_t",
+            torch.tensor(self.target_mean, dtype=torch.float32),
+            persistent=False,
+        )
+        self.register_buffer(
+            "_std_t",
+            torch.tensor(self.target_std, dtype=torch.float32),
+            persistent=False,
+        )
+        # Per-step label-density telemetry.
         self.last_batch_size = 0
-        self.last_gated_in = 0           # molecules with t >= min_time
-        self.last_labeled_active = 0     # molecules contributing to loss
-        # Per-target MAE / RMSE in physical units, over the active subset
-        # (labeled + past min_time). Lightning logs these as epoch means.
-        self.last_per_target_mae = {f: 0.0 for f in self.target_fields}
-        self.last_per_target_rmse = {f: 0.0 for f in self.target_fields}
+        self.last_gated_in = 0
+        self.last_labeled_active = 0
+        # Per-target torchmetrics for proper epoch-wise MAE/RMSE/R² etc.
+        # Two independent sets so train and val accumulators don't collide.
+        self.train_metrics = _build_per_target_metric_set(self.target_fields)
+        self.val_metrics   = _build_per_target_metric_set(self.target_fields)
 
-    def _ensure_stats(self, device, dtype):
-        if self._mean_t is None or self._mean_t.device != device:
-            self._mean_t = torch.tensor(self.target_mean, device=device, dtype=dtype)
-            self._std_t  = torch.tensor(self.target_std,  device=device, dtype=dtype)
-
-    def __call__(self, batch, out, time, ws_t, stage="train"):
+    def forward(self, batch, out, time, ws_t, stage="train"):
         if "thermo_mp" not in out or self.weight <= 0:
             return torch.tensor(0.0, device=time.device)
 
         device = time.device
-        self._ensure_stats(device, torch.float32)
 
-        # Time gate — only compute loss when coords are nearly clean.
         t_frac = _t_frac(time, self.timesteps)
-        time_mask = t_frac >= self.min_time                          # [B]
-
+        time_mask = t_frac >= self.min_time
         if not time_mask.any():
             return torch.tensor(0.0, device=device)
 
@@ -242,61 +312,66 @@ class ThermoPropertyLoss:
         if not mol_mask.any():
             return torch.tensor(0.0, device=device)
 
-        targets_norm = (targets - self._mean_t) / self._std_t        # [B, 5]
+        targets_norm = (targets - self._mean_t) / self._std_t
 
-        # Masked MSE: ignore rows that are out-of-time and any target entry
-        # that is NaN (e.g., partial TCIT coverage).
         pred = out["thermo_mp"]
         valid = mol_mask.unsqueeze(-1) & ~torch.isnan(targets_norm)
         if not valid.any():
             return torch.tensor(0.0, device=device)
         diff = (pred - torch.nan_to_num(targets_norm)) * valid
 
-        # Per-target MAE / RMSE in physical units — for wandb telemetry.
-        # De-normalize BOTH sides, mask, and average per target.
+        # Update torchmetrics on the physical-unit predictions/targets.
         with torch.no_grad():
             pred_phys   = pred * self._std_t + self._mean_t
             target_phys = torch.nan_to_num(targets)
-            err_phys    = (pred_phys - target_phys) * valid            # [B, 5]
-            cnt         = valid.sum(dim=0).clamp(min=1).float()        # [5]
-            mae         = err_phys.abs().sum(dim=0) / cnt              # [5]
-            rmse        = (err_phys ** 2).sum(dim=0).sqrt() / cnt.sqrt()
+            metrics = self.train_metrics if stage == "train" else self.val_metrics
             for i, f in enumerate(self.target_fields):
-                self.last_per_target_mae[f]  = float(mae[i].item())
-                self.last_per_target_rmse[f] = float(rmse[i].item())
+                col_valid = valid[:, i]
+                n_v = int(col_valid.sum().item())
+                if n_v == 0:
+                    continue
+                p = pred_phys[col_valid, i]
+                t = target_phys[col_valid, i]
+                metrics[f]["mae"].update(p, t)
+                metrics[f]["rmse"].update(p, t)
+                if n_v >= 2:
+                    metrics[f]["r2"].update(p, t)
+                metrics[f]["pred_mean"].update(p)
+                metrics[f]["pred_msq"].update(p ** 2)
+                metrics[f]["target_mean"].update(t)
+                metrics[f]["target_msq"].update(t ** 2)
 
         return self.weight * (diff ** 2).sum() / valid.sum()
 
+    def compute_and_reset(self, stage):
+        """Called from the Lightning module at on_{train,validation}_epoch_end.
+        Returns all per-target metrics as a flat {name: scalar} dict and
+        resets the accumulators for the next epoch."""
+        metrics = self.train_metrics if stage == "train" else self.val_metrics
+        return _compute_and_reset_metric_set(metrics, self._PREFIX)
+
     def get_metrics_dict(self):
-        """Flat name → scalar dict for the Lightning module to log. Keys
-        are namespaced with `thermo/` so multiple aux heads can coexist."""
-        d = {
-            "thermo/batch_size":     float(self.last_batch_size),
-            "thermo/gated_in":       float(self.last_gated_in),
-            "thermo/labeled_active": float(self.last_labeled_active),
+        """Per-step telemetry (label density). Per-target MAE/RMSE etc. are
+        NOT returned here — they're computed properly at epoch end."""
+        return {
+            f"{self._PREFIX}/batch_size":     float(self.last_batch_size),
+            f"{self._PREFIX}/gated_in":       float(self.last_gated_in),
+            f"{self._PREFIX}/labeled_active": float(self.last_labeled_active),
         }
-        for f in self.target_fields:
-            d[f"thermo/mae_{f}"]  = self.last_per_target_mae[f]
-            d[f"thermo/rmse_{f}"] = self.last_per_target_rmse[f]
-        return d
 
 
-class RDKitDescriptorLoss:
-    """Auxiliary RDKit-descriptor prediction loss.
+class RDKitDescriptorLoss(_nn.Module):
+    """Auxiliary RDKit-descriptor prediction loss (9 targets, 100% coverage).
 
-    Mirrors ThermoPropertyLoss but for the 9 RDKit 2D descriptors
-    (LogP, TPSA, Lipinski counts, FracCSP3, NumAliphaticRings, QED,
-    LabuteASA). Labels are 100% covered after build_property_table.py
-    drops all-NaN rows, so there's no `has_*` flag to check — only the
-    time gate and per-target NaN mask (vestigial; should never fire).
+    Mirrors ThermoPropertyLoss but without the has_thermo_label gate —
+    build_property_table.py drops all-NaN RDKit rows, so every mol in the
+    parquet has valid descriptors.
 
-    Typical usage: small weight (~0.02) and same min_time as thermo,
-    so the RDKit signal acts as a cheap regularizer on the global
-    representation without dominating the thermo head's gradient.
-
-    Requires the backbone to expose `out["rdkit_mp"]` — obtained by
-    building MegaFNV3Conf with `rdkit_head_args` set.
+    Default weight 0.02 (smaller than thermo 0.05) — regularizer, not
+    primary objective. Same min_time gate + z-score normalization as thermo.
     """
+
+    _PREFIX = "rdkit"
 
     def __init__(self, min_time=0.8,
                  weight=0.02,
@@ -304,6 +379,7 @@ class RDKitDescriptorLoss:
                  target_mean=None,
                  target_std=None,
                  timesteps=25):
+        super().__init__()
         self.min_time = min_time
         self.weight = float(weight)
         self.target_fields = list(target_fields) if target_fields else list(RDKIT_FIELDS_DEFAULT)
@@ -315,27 +391,29 @@ class RDKitDescriptorLoss:
         self.target_mean = list(target_mean)
         self.target_std = list(target_std)
         self.timesteps = timesteps
-        self._mean_t = None
-        self._std_t = None
+        self.register_buffer(
+            "_mean_t",
+            torch.tensor(self.target_mean, dtype=torch.float32),
+            persistent=False,
+        )
+        self.register_buffer(
+            "_std_t",
+            torch.tensor(self.target_std, dtype=torch.float32),
+            persistent=False,
+        )
         self.last_batch_size = 0
         self.last_gated_in = 0
-        self.last_per_target_mae = {f: 0.0 for f in self.target_fields}
-        self.last_per_target_rmse = {f: 0.0 for f in self.target_fields}
+        self.train_metrics = _build_per_target_metric_set(self.target_fields)
+        self.val_metrics   = _build_per_target_metric_set(self.target_fields)
 
-    def _ensure_stats(self, device, dtype):
-        if self._mean_t is None or self._mean_t.device != device:
-            self._mean_t = torch.tensor(self.target_mean, device=device, dtype=dtype)
-            self._std_t  = torch.tensor(self.target_std,  device=device, dtype=dtype)
-
-    def __call__(self, batch, out, time, ws_t, stage="train"):
+    def forward(self, batch, out, time, ws_t, stage="train"):
         if "rdkit_mp" not in out or self.weight <= 0:
             return torch.tensor(0.0, device=time.device)
 
         device = time.device
-        self._ensure_stats(device, torch.float32)
 
         t_frac = _t_frac(time, self.timesteps)
-        time_mask = t_frac >= self.min_time                            # [B]
+        time_mask = t_frac >= self.min_time
         self.last_batch_size = int(time_mask.numel())
         self.last_gated_in = int(time_mask.sum().item())
         if not time_mask.any():
@@ -355,28 +433,37 @@ class RDKitDescriptorLoss:
         with torch.no_grad():
             pred_phys   = pred * self._std_t + self._mean_t
             target_phys = torch.nan_to_num(targets)
-            err_phys    = (pred_phys - target_phys) * valid
-            cnt         = valid.sum(dim=0).clamp(min=1).float()
-            mae         = err_phys.abs().sum(dim=0) / cnt
-            rmse        = (err_phys ** 2).sum(dim=0).sqrt() / cnt.sqrt()
+            metrics = self.train_metrics if stage == "train" else self.val_metrics
             for i, f in enumerate(self.target_fields):
-                self.last_per_target_mae[f]  = float(mae[i].item())
-                self.last_per_target_rmse[f] = float(rmse[i].item())
+                col_valid = valid[:, i]
+                n_v = int(col_valid.sum().item())
+                if n_v == 0:
+                    continue
+                p = pred_phys[col_valid, i]
+                t = target_phys[col_valid, i]
+                metrics[f]["mae"].update(p, t)
+                metrics[f]["rmse"].update(p, t)
+                if n_v >= 2:
+                    metrics[f]["r2"].update(p, t)
+                metrics[f]["pred_mean"].update(p)
+                metrics[f]["pred_msq"].update(p ** 2)
+                metrics[f]["target_mean"].update(t)
+                metrics[f]["target_msq"].update(t ** 2)
 
         return self.weight * (diff ** 2).sum() / valid.sum()
 
+    def compute_and_reset(self, stage):
+        metrics = self.train_metrics if stage == "train" else self.val_metrics
+        return _compute_and_reset_metric_set(metrics, self._PREFIX)
+
     def get_metrics_dict(self):
-        d = {
-            "rdkit/batch_size": float(self.last_batch_size),
-            "rdkit/gated_in":   float(self.last_gated_in),
+        return {
+            f"{self._PREFIX}/batch_size": float(self.last_batch_size),
+            f"{self._PREFIX}/gated_in":   float(self.last_gated_in),
         }
-        for f in self.target_fields:
-            d[f"rdkit/mae_{f}"]  = self.last_per_target_mae[f]
-            d[f"rdkit/rmse_{f}"] = self.last_per_target_rmse[f]
-        return d
 
 
-class EnergyPredictionLoss:
+class EnergyPredictionLoss(_nn.Module):
     """Auxiliary per-molecule energy loss (Phase 1).
 
     Expects `out["energy_pred"]` (build MegaFNV3Conf with energy_head=True)
@@ -393,6 +480,7 @@ class EnergyPredictionLoss:
 
     def __init__(self, min_time=0.8, weight=0.1, normalize="per_atom",
                  timesteps=25, target_mean=None, target_std=None):
+        super().__init__()
         assert normalize in ("per_atom", "zscore", "none")
         self.min_time = min_time
         self.weight = weight
@@ -403,7 +491,7 @@ class EnergyPredictionLoss:
         self.target_mean = target_mean
         self.target_std = target_std
 
-    def __call__(self, batch, out, time, ws_t, stage="train"):
+    def forward(self, batch, out, time, ws_t, stage="train"):
         if "energy_pred" not in out:
             return torch.tensor(0.0, device=time.device)
         if not hasattr(batch, "energy"):
@@ -436,32 +524,36 @@ class EnergyPredictionLoss:
         return self.weight * torch.nn.functional.mse_loss(pred, target)
 
 
-class CombinedAuxiliaryLoss:
-    """Wrap several auxiliary losses and route metric aggregation.
-
-    Each sub-loss can expose a get_metrics_dict(); this class prefixes
-    their keys (thermo/ · rdkit/ · energy/) and unions them so the
-    Lightning module can log per-target MAE/RMSE for every head it runs.
-    """
+class CombinedAuxiliaryLoss(_nn.Module):
+    """Wrap several auxiliary losses; delegate per-step telemetry and
+    epoch-end metric computation to each sub-loss. Prefixes are baked
+    into the sub-losses themselves (thermo/, rdkit/, energy/)."""
 
     def __init__(self, thermo_loss=None, rdkit_loss=None, energy_loss=None):
+        super().__init__()
+        # nn.Module.__setattr__ auto-registers nn.Module children, so
+        # .to(device), state_dict(), and DDP all just work.
         self.thermo_loss = thermo_loss
         self.rdkit_loss = rdkit_loss
         self.energy_loss = energy_loss
 
-    def __call__(self, batch, out, time, ws_t, stage="train"):
+    def forward(self, batch, out, time, ws_t, stage="train"):
         loss = torch.tensor(0.0, device=time.device)
-        if self.thermo_loss is not None:
-            loss = loss + self.thermo_loss(batch, out, time, ws_t, stage)
-        if self.rdkit_loss is not None:
-            loss = loss + self.rdkit_loss(batch, out, time, ws_t, stage)
-        if self.energy_loss is not None:
-            loss = loss + self.energy_loss(batch, out, time, ws_t, stage)
+        for sub in (self.thermo_loss, self.rdkit_loss, self.energy_loss):
+            if sub is not None:
+                loss = loss + sub(batch, out, time, ws_t, stage)
         return loss
 
     def get_metrics_dict(self):
         out = {}
-        for loss in (self.thermo_loss, self.rdkit_loss, self.energy_loss):
-            if loss is not None and hasattr(loss, "get_metrics_dict"):
-                out.update(loss.get_metrics_dict())
+        for sub in (self.thermo_loss, self.rdkit_loss, self.energy_loss):
+            if sub is not None and hasattr(sub, "get_metrics_dict"):
+                out.update(sub.get_metrics_dict())
+        return out
+
+    def compute_and_reset(self, stage):
+        out = {}
+        for sub in (self.thermo_loss, self.rdkit_loss, self.energy_loss):
+            if sub is not None and hasattr(sub, "compute_and_reset"):
+                out.update(sub.compute_and_reset(stage))
         return out

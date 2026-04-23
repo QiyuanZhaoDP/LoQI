@@ -348,6 +348,19 @@ class Graph3DInterpolantModel(pl.LightningModule):
         if self.self_conditioning_module is not None:
             self.self_conditioning_module.update_ema_parameters()
 
+    def on_train_epoch_end(self):
+        """Compute properly-aggregated aux-loss metrics (MAE / RMSE / R² /
+        pred_std / target_std, per target, across all train batches) and
+        log once per epoch. Resets the accumulators for the next epoch."""
+        if self.loss_fn is not None and hasattr(self.loss_fn, "compute_and_reset"):
+            for k, v in self.loss_fn.compute_and_reset("train").items():
+                self.log(f"train/{k}", float(v), on_epoch=True, sync_dist=True)
+
+    def on_validation_epoch_end(self):
+        if self.loss_fn is not None and hasattr(self.loss_fn, "compute_and_reset"):
+            for k, v in self.loss_fn.compute_and_reset("val").items():
+                self.log(f"val/{k}", float(v), on_epoch=True, sync_dist=True)
+
     def calculate_loss(self, batch, out, time, stage="train"):
         batch_geo = batch.batch
         batch_size = int(batch.batch.max()) + 1
@@ -409,25 +422,21 @@ class Graph3DInterpolantModel(pl.LightningModule):
                 self.log(f"{stage}/distance_loss_pz", distance_loss_pz, batch_size=batch_size)
                 loss = loss + loss_fn.distance_scale * distance_loss
         if self.loss_fn is not None:
-            add_loss = self.loss_fn(batch, out, time, ws_t, stage="train")
+            # stage propagates correctly to the aux loss so train/val metric
+            # accumulators stay separate — fixed from the previous hardcoded
+            # "train" that caused val metrics to land in the train bucket.
+            add_loss = self.loss_fn(batch, out, time, ws_t, stage=stage)
             loss += add_loss
             self.log(f"{stage}/additional_loss_term", add_loss, batch_size=batch_size,
                      prog_bar=True)
-            # Surface per-target MAE/RMSE + label-density telemetry.
-            # Aux loss exposes metrics via get_metrics_dict(); we log them
-            # as epoch means so wandb shows one value per epoch per target.
+            # Per-step telemetry (label density etc.) from get_metrics_dict().
+            # Proper per-target MAE/RMSE/R²/pred_std/target_std are computed
+            # at epoch end via on_{train,validation}_epoch_end below.
             if hasattr(self.loss_fn, "get_metrics_dict"):
                 for k, v in self.loss_fn.get_metrics_dict().items():
                     self.log(f"{stage}/{k}", float(v),
                              batch_size=batch_size,
                              on_step=False, on_epoch=True)
-            else:
-                # Backwards-compat: older aux-loss objects expose flat attrs.
-                for _attr in ("last_batch_size", "last_gated_in", "last_labeled_active"):
-                    if hasattr(self.loss_fn, _attr):
-                        self.log(f"{stage}/thermo_{_attr}",
-                                  float(getattr(self.loss_fn, _attr)),
-                                  batch_size=batch_size)
         self.log(f"{stage}/loss", loss, batch_size=batch_size)
         self.log(f"{stage}/loss_epoch", loss, batch_size=batch_size, on_step=False, on_epoch=True)
         return loss, predictions
