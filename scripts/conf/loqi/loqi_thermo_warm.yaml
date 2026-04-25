@@ -186,10 +186,17 @@ optimizer:
   weight_decay: 1.e-12
   amsgrad: True
 
+# Linear warmup → linear decay. Constant LR was producing a noisy
+# plateau (last-10-epoch x_loss σ ~0.013 around 0.25): optimizer kept
+# stepping out of the minimum. Decay to 1% of peak over the run length.
+# Step counts assume ~10k grad-steps/epoch (4-GPU DDP, no DistributedSampler).
 lr_scheduler:
-  type: linear_warmup
-  initial_lr: 1.e-6
-  final_lr: 5.e-5
-  num_warmup_steps: 500     # shorter warmup — backbone already trained
+  type: linear_warmup_decay
+  initial_lr: 1.e-7
+  final_lr: 5.e-5             # peak LR after warmup
+  num_warmup_steps: 2000      # gentle ramp protects pretrained weights
+  milestone_steps: 2000       # decay starts here
+  num_decay_steps: 498000     # ~50 epoch × 10k step − warmup
+  min_lr_decay: 5.e-7         # 1% of peak — floor
   interval: step
   frequency: 1

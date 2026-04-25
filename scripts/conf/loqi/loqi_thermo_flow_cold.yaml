@@ -181,10 +181,17 @@ optimizer:
   weight_decay: 1.e-12
   amsgrad: True
 
+# Linear warmup → linear decay. Constant LR plateaus with significant
+# step-to-step noise; observed cold gibbs MAE σ ~1.3 kJ/mol on the
+# flat tail. Decay to 1% of peak protects the final convergence phase.
+# Step counts: ~12k grad-steps/epoch on 4-GPU DDP without DistributedSampler.
 lr_scheduler:
-  type: linear_warmup
-  initial_lr: 1.e-5
-  final_lr: 1.e-4
-  num_warmup_steps: 2000
+  type: linear_warmup_decay
+  initial_lr: 1.e-6
+  final_lr: 1.e-4             # peak LR after warmup
+  num_warmup_steps: 5000
+  milestone_steps: 5000       # decay starts here
+  num_decay_steps: 4700000    # ~400 epoch × 12k step − warmup
+  min_lr_decay: 1.e-6         # 1% of peak — floor
   interval: step
   frequency: 1
