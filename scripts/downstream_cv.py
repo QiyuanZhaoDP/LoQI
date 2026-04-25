@@ -213,7 +213,15 @@ def batch_iter(H, offsets, targets, indices, batch_size, device, shuffle):
 
 
 def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
-                    args, device):
+                    args, device, ensemble_groups=None):
+    """Train head on train_idx Data points, evaluate on val_idx.
+
+    If `ensemble_groups` is provided (numpy array length n, one int per Data
+    pointing to a group id), val predictions are aggregated by group (mean)
+    before computing metrics. This is what makes K-conformer ensembling
+    work: K Data of the same input share a group_id, so we get one
+    prediction per input molecule even with K-augmented training data.
+    """
     # z-score normalize on train only
     tr_has = has_target[train_idx].bool().numpy()
     tr_targets = targets[train_idx][tr_has].float().numpy()
@@ -249,9 +257,9 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
             opt.step()
             sched.step()
 
-    # Evaluate
+    # Evaluate (preds in val_idx ORDER, then de-normalize to physical units).
     model.eval()
-    preds, tgts_raw = [], []
+    preds = []
     with torch.no_grad():
         for H_b, b_b, _ in batch_iter(H, offsets, tgt_norm,
                                        val_idx.tolist(),
@@ -259,16 +267,47 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
             pred = model(H_b, b_b)
             preds.append(pred.cpu().numpy())
     preds = np.concatenate(preds) * std + mean
-    val_has = has_target[val_idx].bool().numpy()
-    y_true = targets[val_idx].float().numpy()
+    val_idx_arr = np.asarray(val_idx)
+    val_has = has_target[val_idx_arr].bool().numpy()
+    y_true = targets[val_idx_arr].float().numpy()
     mask = val_has & ~np.isnan(y_true)
+    n_train_total = int(tr_has.sum())
+
+    if ensemble_groups is None:
+        # Standard path: one prediction per Data.
+        return {
+            "n_train": n_train_total, "n_val": int(mask.sum()),
+            "target_mean": mean, "target_std": std,
+            "mae":  float(mean_absolute_error(y_true[mask], preds[mask])),
+            "rmse": float(mean_squared_error(y_true[mask], preds[mask], squared=False)),
+            "r2":   float(r2_score(y_true[mask], preds[mask])),
+        }
+
+    # Ensemble path: aggregate K conformer preds per group_id, then metrics.
+    val_groups = ensemble_groups[val_idx_arr]
+    val_groups_masked = val_groups[mask]
+    preds_masked = preds[mask]
+    y_true_masked = y_true[mask]
+
+    # group_id -> mean of preds, first y_true (all should be equal)
+    unique_groups, inv = np.unique(val_groups_masked, return_inverse=True)
+    sums = np.bincount(inv, weights=preds_masked, minlength=len(unique_groups))
+    counts = np.bincount(inv, minlength=len(unique_groups))
+    pred_per_group = sums / counts.clip(min=1)
+    # y_true: take per-group mean too (should be constant within group; mean
+    # is robust to small float noise).
+    y_sums = np.bincount(inv, weights=y_true_masked, minlength=len(unique_groups))
+    y_per_group = y_sums / counts.clip(min=1)
 
     return {
-        "n_train": int(tr_has.sum()), "n_val": int(mask.sum()),
-        "target_mean": mean, "target_std": std,
-        "mae":  float(mean_absolute_error(y_true[mask], preds[mask])),
-        "rmse": float(mean_squared_error(y_true[mask], preds[mask], squared=False)),
-        "r2":   float(r2_score(y_true[mask], preds[mask])),
+        "n_train":       n_train_total,
+        "n_val":         int(mask.sum()),
+        "n_val_groups":  int(len(unique_groups)),
+        "ensemble_K":    int(np.median(counts)),
+        "target_mean":   mean, "target_std": std,
+        "mae":  float(mean_absolute_error(y_per_group, pred_per_group)),
+        "rmse": float(mean_squared_error(y_per_group, pred_per_group, squared=False)),
+        "r2":   float(r2_score(y_per_group, pred_per_group)),
     }
 
 
@@ -291,6 +330,13 @@ def main():
     p.add_argument("--head-hidden", type=int, default=256)
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--ensemble-by", default=None,
+                   help="Data attribute that groups multiple Data into one "
+                        "input molecule (e.g. 'input_id' for K-conformer "
+                        "ensemble). When set: 5-fold splits by group, train "
+                        "uses all K Data per group as augmentation, val "
+                        "averages preds across the K conformers per group "
+                        "before computing metrics.")
     args = p.parse_args()
     torch.manual_seed(args.seed); np.random.seed(args.seed)
 
@@ -312,21 +358,71 @@ def main():
     )
     del model  # free GPU memory
 
-    # K-fold split on indices where has_target==True
+    # K-fold split on indices where has_target==True.
+    # In ensemble mode we split by GROUP (e.g. input_id), so all K conformers
+    # of one input molecule stay in the same fold — no leakage.
     all_idx = np.arange(n)
-    labeled = all_idx[has_target.bool().numpy()]
-    print(f"Labeled molecules: {len(labeled):,} / {n:,}")
+    labeled_mask = has_target.bool().numpy()
+    labeled = all_idx[labeled_mask]
+    print(f"Labeled Data points: {len(labeled):,} / {n:,}")
+
+    ensemble_groups = None  # numpy[int] of length n; only set in ensemble mode
+    if args.ensemble_by is not None:
+        # Pull the group key from each Data; tolerate missing keys.
+        keys = []
+        for i in range(n):
+            d = ds[i]
+            keys.append(getattr(d, args.ensemble_by, str(i)))
+        unique_keys = list(dict.fromkeys(keys))   # preserves first-seen order
+        key_to_idx = {k: idx for idx, k in enumerate(unique_keys)}
+        ensemble_groups = np.array([key_to_idx[k] for k in keys], dtype=np.int64)
+        # Per-group "labeled" = ANY Data in the group has has_target.
+        groups_labeled = np.zeros(len(unique_keys), dtype=bool)
+        for di, gi in enumerate(ensemble_groups):
+            if labeled_mask[di]:
+                groups_labeled[gi] = True
+        labeled_groups = np.where(groups_labeled)[0]
+        print(f"Ensemble mode: grouping by '{args.ensemble_by}' — "
+              f"{len(unique_keys):,} unique groups, "
+              f"{len(labeled_groups):,} labeled.")
+    else:
+        labeled_groups = None
 
     kf = KFold(n_splits=args.n_folds, shuffle=True, random_state=args.seed)
     fold_reports = []
     t0 = time.time()
-    for fold_i, (tr, vl) in enumerate(kf.split(labeled)):
-        train_idx = labeled[tr]
-        val_idx   = labeled[vl]
-        print(f"\n=== Fold {fold_i+1}/{args.n_folds} | "
-              f"train={len(train_idx)}  val={len(val_idx)} ===")
+
+    if args.ensemble_by is not None:
+        split_iter = kf.split(labeled_groups)
+    else:
+        split_iter = kf.split(labeled)
+
+    for fold_i, (tr, vl) in enumerate(split_iter):
+        if args.ensemble_by is not None:
+            # Expand group indices → all Data indices in those groups.
+            train_groups = labeled_groups[tr]
+            val_groups   = labeled_groups[vl]
+            train_set = set(train_groups.tolist())
+            val_set   = set(val_groups.tolist())
+            train_idx = np.array(
+                [i for i in labeled if int(ensemble_groups[i]) in train_set],
+                dtype=np.int64,
+            )
+            val_idx = np.array(
+                [i for i in labeled if int(ensemble_groups[i]) in val_set],
+                dtype=np.int64,
+            )
+            print(f"\n=== Fold {fold_i+1}/{args.n_folds} | "
+                  f"train={len(train_idx)} ({len(train_groups)} grp)  "
+                  f"val={len(val_idx)} ({len(val_groups)} grp) ===")
+        else:
+            train_idx = labeled[tr]
+            val_idx   = labeled[vl]
+            print(f"\n=== Fold {fold_i+1}/{args.n_folds} | "
+                  f"train={len(train_idx)}  val={len(val_idx)} ===")
         rep = train_one_fold(H, offsets, targets, has_target,
-                              train_idx, val_idx, args, device)
+                              train_idx, val_idx, args, device,
+                              ensemble_groups=ensemble_groups)
         rep["fold"] = fold_i
         fold_reports.append(rep)
         print(f"  MAE={rep['mae']:.4f}  RMSE={rep['rmse']:.4f}  R2={rep['r2']:.3f}")
