@@ -4,21 +4,27 @@
 # (case-insensitive: SMILES, smiles, ...) so heterogeneous CSVs from
 # different sources work without per-file editing.
 #
-# Output layout:
+# Multi-GPU worker pool: dispatches one CSV per GPU; the next CSV in the
+# queue is launched the moment any GPU frees. N_GPUS=1 (default) gives
+# the original sequential behaviour. Auto-detects via nvidia-smi when
+# N_GPUS is unset.
+#
+# Output layout (mirrors INPUT_DIR's subdir structure):
 #   data/downstream_k5/<csv_basename>.pkl      — sample_conformers.py pickle
 #   data/downstream_k5/<csv_basename>.smi      — extracted SMILES (intermediate)
 #   data/downstream_k5/<csv_basename>.log      — per-dataset log
 #
 # Usage:
-#   bash scripts/sample_downstream_K5.sh
+#   bash scripts/sample_downstream_K5.sh                # uses default N_GPUS
+#   N_GPUS=4 bash scripts/sample_downstream_K5.sh       # 4-GPU worker pool
 #
-# Edit the CONFIG block below for paths / K / GPU.
+# Requires bash >= 5.1 for `wait -n -p` only when N_GPUS > 1.
 
-set -euo pipefail
+set -uo pipefail        # NOTE: no -e — one CSV's failure shouldn't abort the rest
 cd "$(dirname "$0")/.."
 
 # ============ CONFIG ============
-INPUT_DIR=${INPUT_DIR:-downstream_ft}              # CSVs to process
+INPUT_DIR=${INPUT_DIR:-downstream_ft}              # CSVs to process (recursive)
 OUTPUT_DIR=${OUTPUT_DIR:-data/downstream_k5}       # where pkls / smi / logs go
 
 FLOW_CKPT=${FLOW_CKPT:-data/thermo_flow_warm.ckpt}
@@ -32,12 +38,38 @@ POSTPROCESS=${POSTPROCESS:-optimization}    # "none" | "optimization" | "optimiz
                                             #  the prepare_downstream_K_pt position-based join —
                                             #  use plain "optimization" unless you handle that.)
 OPT_MAX_NSTEP=${OPT_MAX_NSTEP:-100}
-GPU_ID=${GPU_ID:-0}
+
+# GPU pool. Empty → auto-detect via nvidia-smi. Leave at 1 to keep the
+# original sequential behaviour. Single-GPU runs still respect GPU_ID
+# (default 0) for which card to use.
+N_GPUS=${N_GPUS:-}
+GPU_ID=${GPU_ID:-0}             # only used when N_GPUS == 1
 
 FORCE=${FORCE:-0}               # set FORCE=1 to re-run already-finished CSVs
 # ================================
 
 mkdir -p "$OUTPUT_DIR"
+
+# Auto-detect N_GPUS if not set.
+if [[ -z "$N_GPUS" ]]; then
+    if [[ -n "${CUDA_VISIBLE_DEVICES:-}" ]]; then
+        N_GPUS=$(awk -F, '{print NF}' <<<"$CUDA_VISIBLE_DEVICES")
+    elif command -v nvidia-smi >/dev/null 2>&1; then
+        N_GPUS=$(nvidia-smi -L 2>/dev/null | wc -l | tr -d ' ')
+    else
+        N_GPUS=1
+    fi
+    [[ "$N_GPUS" -lt 1 ]] && N_GPUS=1
+fi
+echo "[config] N_GPUS=$N_GPUS  ckpt=$FLOW_CKPT"
+
+# bash version guard (only required for parallel mode)
+if (( N_GPUS > 1 )); then
+    if (( BASH_VERSINFO[0] < 5 )) || { (( BASH_VERSINFO[0] == 5 )) && (( BASH_VERSINFO[1] < 1 )); }; then
+        echo "ERROR: N_GPUS>1 needs bash >= 5.1 (wait -n -p). You have $BASH_VERSION" >&2
+        exit 1
+    fi
+fi
 
 # Pre-flight
 if [[ ! -f "$FLOW_CKPT" ]]; then
@@ -82,12 +114,13 @@ if [[ ${#csvs[@]} -eq 0 ]]; then
 fi
 echo "Found ${#csvs[@]} CSVs under $INPUT_DIR"
 
-start=$(date +%s)
-n_done=0; n_skipped=0; n_failed=0
-
-for csv in "${csvs[@]}"; do
-    # Preserve subdir structure: e.g. delaney_s/train.csv -> delaney_s/train.{smi,pkl,log}
-    rel_path="${csv#$INPUT_DIR/}"            # strip "$INPUT_DIR/" prefix
+# Process one CSV end-to-end on the given GPU (extract SMILES, sample,
+# write pkl). Echoes a one-line status to stdout when done so the dispatch
+# loop has something to grep. Returns 0 on success, non-zero on failure.
+_process_one() {
+    local csv="$1" gpu="$2"
+    local rel_path="${csv#$INPUT_DIR/}"
+    local rel_dir name out_dir smi pkl log
     rel_dir=$(dirname "$rel_path")
     name=$(basename "$rel_path" .csv)
     out_dir="$OUTPUT_DIR"
@@ -97,46 +130,119 @@ for csv in "${csvs[@]}"; do
     pkl="$out_dir/$name.pkl"
     log="$out_dir/$name.log"
 
-    echo
-    echo "============================================================"
-    echo "  $rel_path"
-    echo "============================================================"
+    if [[ ! -f "$smi" || "$FORCE" == "1" ]]; then
+        extract_smiles "$csv" "$smi" >> "$log" 2>&1 \
+            || { echo "[FAIL extract] $rel_path  log=$log"; return 1; }
+    fi
 
+    CUDA_VISIBLE_DEVICES=$gpu python scripts/sample_conformers.py \
+        --ckpt   "$FLOW_CKPT" \
+        --config "$FLOW_CONFIG" \
+        --input  "$smi" \
+        --output "$pkl" \
+        --n_confs "$K" \
+        --n_steps "$N_STEPS" \
+        --batch_size "$BATCH_SIZE" \
+        --postprocess "$POSTPROCESS" \
+        --opt_max_nstep "$OPT_MAX_NSTEP" \
+        >> "$log" 2>&1 \
+        || { echo "[FAIL sample] $rel_path  log=$log"; return 1; }
+
+    echo "[OK] $rel_path  pkl=$pkl"
+    return 0
+}
+
+# Filter out already-completed CSVs so the worker-pool only schedules real work.
+pending=()
+n_skipped=0
+for csv in "${csvs[@]}"; do
+    rel_path="${csv#$INPUT_DIR/}"
+    rel_dir=$(dirname "$rel_path")
+    name=$(basename "$rel_path" .csv)
+    out_dir="$OUTPUT_DIR"
+    [[ "$rel_dir" != "." ]] && out_dir="$OUTPUT_DIR/$rel_dir"
+    pkl="$out_dir/$name.pkl"
     if [[ -f "$pkl" && "$FORCE" != "1" ]]; then
-        echo "  [skip] $pkl already exists. Set FORCE=1 to re-run."
+        echo "  [skip] $rel_path  ($pkl exists)"
         n_skipped=$((n_skipped + 1))
         continue
     fi
-
-    # Step 1: extract SMILES
-    if [[ ! -f "$smi" || "$FORCE" == "1" ]]; then
-        extract_smiles "$csv" "$smi"
-    else
-        echo "  [reuse] $smi"
-    fi
-
-    n_smi=$(wc -l < "$smi" | tr -d ' ')
-    echo "  → sampling K=$K, n_steps=$N_STEPS, postprocess=$POSTPROCESS  ($n_smi mols)"
-
-    # Step 2: sample
-    if CUDA_VISIBLE_DEVICES=$GPU_ID python scripts/sample_conformers.py \
-            --ckpt   "$FLOW_CKPT" \
-            --config "$FLOW_CONFIG" \
-            --input  "$smi" \
-            --output "$pkl" \
-            --n_confs "$K" \
-            --n_steps "$N_STEPS" \
-            --batch_size "$BATCH_SIZE" \
-            --postprocess "$POSTPROCESS" \
-            --opt_max_nstep "$OPT_MAX_NSTEP" \
-            > "$log" 2>&1; then
-        echo "  [done] $pkl  (log: $log)"
-        n_done=$((n_done + 1))
-    else
-        echo "  [FAIL] see $log" >&2
-        n_failed=$((n_failed + 1))
-    fi
+    pending+=("$csv")
 done
+echo "[plan] pending=${#pending[@]}  skipped=$n_skipped"
+if [[ ${#pending[@]} -eq 0 ]]; then
+    echo "Nothing to do."
+    exit 0
+fi
+
+start=$(date +%s)
+n_done=0
+n_failed=0
+
+# --- Sequential single-GPU mode ---------------------------------------
+if (( N_GPUS == 1 )); then
+    for csv in "${pending[@]}"; do
+        echo
+        echo "============================================================"
+        echo "  ${csv#$INPUT_DIR/}"
+        echo "============================================================"
+        if _process_one "$csv" "$GPU_ID"; then
+            n_done=$((n_done + 1))
+        else
+            n_failed=$((n_failed + 1))
+        fi
+    done
+else
+# --- Multi-GPU worker pool --------------------------------------------
+    declare -A GPU_OF_PID
+    declare -A NAME_OF_PID
+    idx=0
+    n_started=0
+    n_total=${#pending[@]}
+
+    # Seed the pool: one CSV per GPU, up to whichever's smaller.
+    for ((gpu=0; gpu<N_GPUS && idx<n_total; gpu++)); do
+        csv="${pending[$idx]}"
+        ( _process_one "$csv" "$gpu" ) &
+        pid=$!
+        GPU_OF_PID[$pid]=$gpu
+        NAME_OF_PID[$pid]="${csv#$INPUT_DIR/}"
+        n_started=$((n_started + 1))
+        idx=$((idx + 1))
+        echo "[$(date +%T)] [${n_started}/${n_total}] launch ${NAME_OF_PID[$pid]} on GPU $gpu  (pid=$pid)"
+    done
+
+    # Drain. As each child exits, dispatch the next pending CSV onto its GPU.
+    finished_pid=0
+    while (( ${#GPU_OF_PID[@]} > 0 )); do
+        wait -n -p finished_pid
+        status=$?
+        if [[ -z "${GPU_OF_PID[$finished_pid]:-}" ]]; then
+            continue
+        fi
+        gpu="${GPU_OF_PID[$finished_pid]}"
+        name="${NAME_OF_PID[$finished_pid]}"
+        unset 'GPU_OF_PID[$finished_pid]'
+        unset 'NAME_OF_PID[$finished_pid]'
+        if (( status == 0 )); then
+            n_done=$((n_done + 1))
+            echo "[$(date +%T)] done  $name  (gpu=$gpu)"
+        else
+            n_failed=$((n_failed + 1))
+            echo "[$(date +%T)] FAIL  $name  (gpu=$gpu status=$status)"
+        fi
+        if (( idx < n_total )); then
+            csv="${pending[$idx]}"
+            ( _process_one "$csv" "$gpu" ) &
+            pid=$!
+            GPU_OF_PID[$pid]=$gpu
+            NAME_OF_PID[$pid]="${csv#$INPUT_DIR/}"
+            n_started=$((n_started + 1))
+            idx=$((idx + 1))
+            echo "[$(date +%T)] [${n_started}/${n_total}] launch ${NAME_OF_PID[$pid]} on GPU $gpu  (pid=$pid)"
+        fi
+    done
+fi
 
 echo
 echo "============================================================"
