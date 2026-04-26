@@ -204,7 +204,10 @@ done
 # Drain
 finished_pid=0
 while (( ${#GPU_OF_PID[@]} > 0 )); do
-    wait -n -p finished_pid || true
+    # Capture child exit status — note: NO `|| true`, that would mask
+    # non-zero status (the original bug that reported "0 failed" when
+    # all 9 datasets failed because the K=5 pickles were missing).
+    wait -n -p finished_pid
     status=$?
     if [[ -z "${GPU_OF_PID[$finished_pid]:-}" ]]; then
         continue

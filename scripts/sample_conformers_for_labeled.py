@@ -205,14 +205,25 @@ def main():
         return
 
     # 2. Load model.
+    # Force loss_fn=None on load. Sampling doesn't need any auxiliary loss,
+    # and explicitly nulling it sidesteps a nasty backward-compat pitfall:
+    # ckpts saved before the torchmetrics rewrite (when CombinedAuxiliaryLoss
+    # was a plain Python class) pickle a loss_fn whose __dict__ lacks the
+    # nn.Module internals. With the new nn.Module-flavored class definition,
+    # unpickling produces a half-initialized object and load_state_dict
+    # crashes with `AttributeError: '...' object has no attribute '_buffers'`.
+    # Passing loss_fn=None + strict=False ignores both the saved hparam and
+    # any loss_fn.* keys in the state_dict that don't apply.
     cfg = OmegaConf.load(args.config)
     print(f"[model] loading flow checkpoint {args.ckpt}")
     model = Graph3DInterpolantModel.load_from_checkpoint(
         args.ckpt,
+        loss_fn=None,
         loss_params=cfg.loss,
         interpolant_params=cfg.interpolant,
         sampling_params=cfg.sample,
         batch_preporcessor=BatchPreProcessor(cfg.data.aug_rotations, cfg.data.scale_coords),
+        strict=False,
     ).to(args.device).eval()
     total_params = sum(p.numel() for p in model.parameters())
     print(f"[model] params={total_params/1e6:.2f}M")

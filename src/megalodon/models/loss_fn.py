@@ -165,6 +165,32 @@ from torchmetrics import (
 )
 
 
+class _NNModuleSetstateMixin:
+    """Workaround for a pickle backward-compat trap: the auxiliary-loss
+    classes used to be plain Python classes; now they're nn.Module.
+    Default pickle restores `__dict__` directly without calling __init__,
+    so unpickling an OLD ckpt's hparams produces an instance whose
+    nn.Module internals (`_buffers`, `_parameters`, `_modules`, ...) were
+    never initialized — load_state_dict then crashes with
+    `AttributeError: '...' object has no attribute '_buffers'`.
+
+    Fix: run nn.Module.__init__ first to set up the internal dicts, then
+    layer the saved __dict__ on top.
+    """
+
+    def __setstate__(self, state):
+        _nn.Module.__init__(self)
+        if isinstance(state, tuple) and len(state) == 2 and isinstance(state[1], dict):
+            # PyTorch's serialization can hand a (slot_state, dict_state) tuple.
+            slot_state, dict_state = state
+            if slot_state:
+                for k, v in slot_state.items():
+                    setattr(self, k, v)
+            self.__dict__.update(dict_state)
+        else:
+            self.__dict__.update(state)
+
+
 def _build_per_target_metric_set(target_fields):
     """Per-target torchmetrics bundle: MAE, RMSE, R², plus running first/second
     moments of pred and target (for std diagnostics). Each batch .update()s the
@@ -218,7 +244,7 @@ def _compute_and_reset_metric_set(metric_set, prefix):
     return out
 
 
-class ThermoPropertyLoss(_nn.Module):
+class ThermoPropertyLoss(_NNModuleSetstateMixin, _nn.Module):
     """Auxiliary thermo-prediction loss applied at late denoising timesteps.
 
     Reads per-molecule thermo targets (enthalpy_298, gibbs_298, cv_gas,
@@ -360,7 +386,7 @@ class ThermoPropertyLoss(_nn.Module):
         }
 
 
-class RDKitDescriptorLoss(_nn.Module):
+class RDKitDescriptorLoss(_NNModuleSetstateMixin, _nn.Module):
     """Auxiliary RDKit-descriptor prediction loss (9 targets, 100% coverage).
 
     Mirrors ThermoPropertyLoss but without the has_thermo_label gate —
@@ -463,7 +489,7 @@ class RDKitDescriptorLoss(_nn.Module):
         }
 
 
-class EnergyPredictionLoss(_nn.Module):
+class EnergyPredictionLoss(_NNModuleSetstateMixin, _nn.Module):
     """Auxiliary per-molecule energy loss (Phase 1).
 
     Expects `out["energy_pred"]` (build MegaFNV3Conf with energy_head=True)
@@ -524,7 +550,7 @@ class EnergyPredictionLoss(_nn.Module):
         return self.weight * torch.nn.functional.mse_loss(pred, target)
 
 
-class CombinedAuxiliaryLoss(_nn.Module):
+class CombinedAuxiliaryLoss(_NNModuleSetstateMixin, _nn.Module):
     """Wrap several auxiliary losses; delegate per-step telemetry and
     epoch-end metric computation to each sub-loss. Prefixes are baked
     into the sub-losses themselves (thermo/, rdkit/, energy/)."""

@@ -47,7 +47,14 @@ class Graph3DInterpolantModel(pl.LightningModule):
             batch_preprocessor=None,
     ):
         super(Graph3DInterpolantModel, self).__init__()
-        self.save_hyperparameters()
+        # Skip nn.Module-typed kwargs from hparam save: Lightning warns
+        # "instance of `nn.Module` ... already saved during checkpointing"
+        # for these, and pickling them as hparams causes a backward-compat
+        # crash when the class layout changes (loss_fn was a plain class
+        # before the torchmetrics rewrite — loading those ckpts under the
+        # new nn.Module-flavored class breaks load_state_dict).
+        self.save_hyperparameters(ignore=["loss_fn", "batch_preprocessor",
+                                           "batch_preporcessor"])
         self.optimizer_params = optimizer_params
         self.lr_scheduler_params = lr_scheduler_params
         self.dynamics_params = dynamics_params

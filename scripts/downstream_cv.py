@@ -128,13 +128,19 @@ def load_prepared_pt(pt_path):
 def load_backbone(ckpt, cfg_path, device):
     cfg = OmegaConf.load(cfg_path)
     pre = BatchPreProcessor(cfg.data.aug_rotations, cfg.data.scale_coords)
+    # loss_fn=None + strict=False: avoid loading any saved aux loss into the
+    # frozen backbone here (we don't need it for downstream feature
+    # extraction). Also sidesteps the "old non-nn.Module loss_fn pickle"
+    # backward-compat pitfall when reading pre-torchmetrics-rewrite ckpts.
     model = Graph3DInterpolantModel.load_from_checkpoint(
         ckpt,
+        loss_fn=None,
         loss_params=cfg.loss,
         interpolant_params=cfg.interpolant,
         sampling_params=cfg.sample,
         batch_preprocessor=pre,
         map_location=device,
+        strict=False,
     )
     model.eval().to(device)
     for p in model.parameters():

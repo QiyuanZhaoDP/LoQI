@@ -392,12 +392,17 @@ def main():
     atom_aware_batching = bool(args.atom_aware_batching)
     shuffle = bool(args.shuffle)
     target_molecule_size = int(args.target_molecule_size)
+    # loss_fn=None + strict=False: sampling doesn't need an aux loss, and
+    # this dodges the unpickle-of-pre-torchmetrics-loss_fn backward-compat
+    # crash when loading older warm/cold ckpts.
     model = Graph3DInterpolantModel.load_from_checkpoint(
         args.ckpt,
+        loss_fn=None,
         loss_params=cfg.loss,
         interpolant_params=cfg.interpolant,
         sampling_params=cfg.sample,
-        batch_preporcessor=BatchPreProcessor(cfg.data.aug_rotations, cfg.data.scale_coords)
+        batch_preporcessor=BatchPreProcessor(cfg.data.aug_rotations, cfg.data.scale_coords),
+        strict=False,
     )
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = model.to(device).eval()
