@@ -21,7 +21,7 @@ cd "$(dirname "$0")/.."
 INPUT_DIR=${INPUT_DIR:-downstream_ft}              # CSVs to process
 OUTPUT_DIR=${OUTPUT_DIR:-data/downstream_k5}       # where pkls / smi / logs go
 
-FLOW_CKPT=${FLOW_CKPT:-data/loqi_thermo_flow_warm.ckpt}
+FLOW_CKPT=${FLOW_CKPT:-data/thermo_flow_warm.ckpt}
 FLOW_CONFIG=${FLOW_CONFIG:-scripts/conf/loqi/loqi_thermo_flow_warm.yaml}
 
 K=${K:-5}                       # conformers per molecule

@@ -25,8 +25,8 @@ LOQI_CONFIG=scripts/conf/loqi/loqi.yaml
 FT_CFG=scripts/conf/thermo/finetune.yaml
 
 # Flow-matching checkpoint — used only by the `sample_k5` stage.
-FLOW_CKPT=data/loqi_flow.ckpt
-FLOW_CONFIG=scripts/conf/loqi/loqi_flow.yaml
+FLOW_CKPT=data/thermo_flow_warm.ckpt
+FLOW_CONFIG=scripts/conf/loqi/loqi_thermo_flow_warm.yaml
 
 TRAIN_PT=data/chembl3d_stereo/processed/train_h.pt
 VAL_PT=data/chembl3d_stereo/processed/val_h.pt
@@ -34,7 +34,7 @@ TEST_PT=data/chembl3d_stereo/processed/test_h.pt
 PROPERTY_TABLE=data/property_table.parquet
 
 # Output directory for pre-sampled K=5 conformers (stage `sample_k5`).
-K5_OUT=data/labeled_conformers
+K5_OUT=data/labeled_conformers_warm
 K5_N=5
 K5_STEPS=10
 K5_BATCH=256
@@ -171,8 +171,10 @@ stage_sample_k5() {
         echo "ERROR: flow checkpoint not found at $FLOW_CKPT" >&2
         exit 1
     fi
-    local splits=(train val test)
-    local split_paths=("$TRAIN_PT" "$VAL_PT" "$TEST_PT")
+    #local splits=(train val test)
+    #local split_paths=("$TRAIN_PT" "$VAL_PT" "$TEST_PT")
+    local splits=(val test)
+    local split_paths=("$VAL_PT" "$TEST_PT")
     for idx in "${!splits[@]}"; do
         local split="${splits[$idx]}"
         local in_pt="${split_paths[$idx]}"

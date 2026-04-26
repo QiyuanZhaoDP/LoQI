@@ -38,7 +38,7 @@ fi
 # ============ CONFIG ============
 SLEEP_HOURS=${SLEEP_HOURS:-2}
 
-CKPT=${CKPT:-data/loqi_thermo_flow_warm.ckpt}
+CKPT=${CKPT:-data/thermo_flow_warm.ckpt}
 CONFIG=${CONFIG:-scripts/conf/loqi/loqi_thermo_flow_warm.yaml}
 
 INPUT_DIR=${INPUT_DIR:-downstream_ft}

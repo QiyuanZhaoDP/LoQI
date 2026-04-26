@@ -34,7 +34,7 @@ data:
   data_loader_type: "midi"
   aug_rotations: False
   scale_coords: &scale_coords 1.0
-  num_workers: 8                    # per-rank DataLoader workers
+  num_workers: 0                    # per-rank DataLoader workers
 
 loss:
   # Flow-matching training used loss clamps on the coord velocity; keep the
@@ -106,14 +106,14 @@ dynamics:
     prune_edges: False
     # Thermo head — new weights, will random-init and train from scratch.
     thermo_head_args:
-      n_mp_layers: 2
+      n_mp_layers: 4
       mp_n_heads:  4
       hidden:      256
     # RDKit 9-descriptor head (100% label coverage). Lighter than thermo
     # since the targets are cheap to hit. Acts as a regularizer on the
     # global mol representation.
     rdkit_head_args:
-      n_mp_layers: 1
+      n_mp_layers: 2
       mp_n_heads:  4
       hidden:      128
   wrapper_args:
@@ -133,7 +133,7 @@ sample:
 # Order: [H298, G298, Cv, S°, H0].
 thermo_loss:
   min_time: 0.8
-  weight:   0.05                 # scalar weight for the thermo MP head
+  weight:   0.1                 # scalar weight for the thermo MP head
   target_mean: [-317.36, 111.66, 390.86, 676.34, -119.10]
   target_std:  [ 346.40, 344.07,  98.00, 160.56,  364.45]
 
