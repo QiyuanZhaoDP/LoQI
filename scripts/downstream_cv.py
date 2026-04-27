@@ -46,6 +46,7 @@ from tqdm import tqdm
 
 from megalodon.data.batch_preprocessor import BatchPreProcessor
 from megalodon.models.module import Graph3DInterpolantModel
+from megalodon.models.thermo_heads import AtomMolMP
 
 
 # ---------------------------------------------------------------------------
@@ -54,56 +55,59 @@ from megalodon.models.module import Graph3DInterpolantModel
 # ---------------------------------------------------------------------------
 
 class SingleTargetHead(nn.Module):
-    """Attention-pooled MP between atoms and a per-molecule virtual node,
-    final scalar prediction per molecule. Reuses the same architecture as
-    megalodon.models.thermo_heads.AtomMolMP, just with n_targets=1."""
+    """Wraps AtomMolMP (the same architecture as the thermo head) with
+    n_targets=1, so we can warm-start from the ckpt's trained
+    `dynamics.thermo_heads.mp.*` weights when --init-head-from-thermo is set.
+
+    Module-name parity with `megalodon.models.thermo_heads.AtomMolMP` is
+    important: `SingleTargetHead.mp.<...>` ↔ `dynamics.thermo_heads.mp.<...>`
+    in the ckpt state_dict. Only `mp.final[3]` (the last Linear) has a
+    different output dim (1 vs 5) and is always randomly initialized.
+    """
 
     def __init__(self, dim=256, hidden=128, n_mp_layers=2, n_heads=4):
         super().__init__()
-        assert dim % n_heads == 0
-        self.dim = dim
-        self.head_dim = dim // n_heads
-        self.n_heads = n_heads
-        self.n_mp_layers = n_mp_layers
-
-        self.q = nn.ModuleList(nn.Linear(dim, dim) for _ in range(n_mp_layers))
-        self.k = nn.ModuleList(nn.Linear(dim, dim) for _ in range(n_mp_layers))
-        self.v = nn.ModuleList(nn.Linear(dim, dim) for _ in range(n_mp_layers))
-        self.o = nn.ModuleList(nn.Linear(dim, dim) for _ in range(n_mp_layers))
-        self.mol_upd = nn.ModuleList(
-            nn.Sequential(nn.LayerNorm(dim), nn.Linear(dim, dim),
-                          nn.SiLU(), nn.Linear(dim, dim))
-            for _ in range(n_mp_layers)
-        )
-        self.atm_upd = nn.ModuleList(
-            nn.Sequential(nn.LayerNorm(2 * dim), nn.Linear(2 * dim, dim),
-                          nn.SiLU(), nn.Linear(dim, dim))
-            for _ in range(n_mp_layers)
-        )
-        self.final = nn.Sequential(
-            nn.LayerNorm(dim),
-            nn.Linear(dim, hidden),
-            nn.SiLU(),
-            nn.Linear(hidden, 1),
+        self.mp = AtomMolMP(
+            dim=dim, n_layers=n_mp_layers, n_heads=n_heads,
+            hidden=hidden, n_targets=1,
         )
 
     def forward(self, H, batch_idx):
-        N_mols = int(batch_idx.max().item()) + 1
-        mol_H = scatter_mean(H, batch_idx, dim=0)
-        scale = self.head_dim ** -0.5
-        for l in range(self.n_mp_layers):
-            q = self.q[l](mol_H).view(N_mols,      self.n_heads, self.head_dim)
-            k = self.k[l](H).view(H.size(0),       self.n_heads, self.head_dim)
-            v = self.v[l](H).view(H.size(0),       self.n_heads, self.head_dim)
-            q_at = q[batch_idx]
-            scores = (q_at * k).sum(-1) * scale
-            alpha = scatter_softmax(scores, batch_idx, dim=0)
-            agg = scatter_sum(alpha.unsqueeze(-1) * v, batch_idx, dim=0)
-            agg = agg.reshape(N_mols, self.dim)
-            agg = self.o[l](agg)
-            mol_H = mol_H + self.mol_upd[l](agg)
-            H = H + self.atm_upd[l](torch.cat([H, mol_H[batch_idx]], dim=-1))
-        return self.final(mol_H).squeeze(-1)
+        return self.mp(H, batch_idx).squeeze(-1)
+
+
+def load_thermo_head_into(head: "SingleTargetHead", ckpt_path: str) -> int:
+    """Load the trained thermo head's weights into a SingleTargetHead's
+    inner AtomMolMP. Returns the number of tensors copied.
+
+    Skips final.3 (last Linear) because output dim differs (5 → 1).
+    """
+    ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+    sd = ckpt.get("state_dict", ckpt)
+    prefix = "dynamics.thermo_heads.mp."
+    src = {}
+    for k, v in sd.items():
+        if not k.startswith(prefix):
+            continue
+        local = k[len(prefix):]
+        # Drop the final-layer Linear that maps to 5 thermo targets — shape
+        # mismatch with our 1-target head; leave it random-init.
+        if local in ("final.3.weight", "final.3.bias"):
+            continue
+        src[local] = v
+    missing, unexpected = head.mp.load_state_dict(src, strict=False)
+    n_copied = len(src)
+    if unexpected:
+        print(f"  [warm-init] unexpected keys (skipped): {unexpected[:5]}"
+              + (f" + {len(unexpected)-5} more" if len(unexpected) > 5 else ""))
+    if missing:
+        # `final.3.*` will always be missing (we dropped them on purpose).
+        residual_missing = [k for k in missing if not k.startswith("final.3")]
+        if residual_missing:
+            print(f"  [warm-init] still-missing keys (will random-init): "
+                  f"{residual_missing[:5]}"
+                  + (f" + {len(residual_missing)-5} more" if len(residual_missing) > 5 else ""))
+    return n_copied
 
 
 # ---------------------------------------------------------------------------
@@ -240,6 +244,14 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
         n_mp_layers=args.n_mp_layers,
         n_heads=args.mp_n_heads,
     ).to(device)
+    if getattr(args, "init_head_from_thermo", False):
+        n_copied = load_thermo_head_into(model, args.ckpt)
+        model = model.to(device)
+        # Print only on first fold to keep logs clean.
+        if not getattr(args, "_thermo_warm_announced", False):
+            print(f"  [warm-init] copied {n_copied} tensors from thermo head; "
+                  "final Linear (5→1) random-init.")
+            args._thermo_warm_announced = True
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr,
                              weight_decay=args.weight_decay)
     total_steps = max(1, (len(train_idx) // args.batch_size) * args.epochs)
@@ -352,6 +364,13 @@ def main():
                         "uses all K Data per group as augmentation, val "
                         "averages preds across the K conformers per group "
                         "before computing metrics.")
+    p.add_argument("--init-head-from-thermo", action="store_true",
+                   help="Warm-start the downstream head's AtomMolMP weights "
+                        "from the ckpt's trained thermo head. Auto-aligns "
+                        "n_mp_layers/mp_n_heads/head_hidden to "
+                        "cfg.dynamics.model_args.thermo_head_args so the "
+                        "state_dict loads cleanly. The final Linear "
+                        "(output 5→1) is always random-init.")
     # ---- wandb logging (opt-in) ----
     p.add_argument("--wandb", action="store_true",
                    help="Log per-fold metrics + cross-fold summary to wandb.")
@@ -394,6 +413,32 @@ def main():
     # Extract H for every molecule (one-pass cache)
     print(f"Loading backbone {args.ckpt}")
     model, cfg = load_backbone(args.ckpt, args.config, device)
+
+    # If warm-starting the head from the ckpt's thermo head, the head dims
+    # MUST match the trained thermo_head_args (otherwise state_dict won't
+    # load). Override the user's CLI/default head dims accordingly.
+    if args.init_head_from_thermo:
+        th = OmegaConf.select(cfg, "dynamics.model_args.thermo_head_args",
+                              default=None)
+        if th is None:
+            raise SystemExit(
+                "--init-head-from-thermo requires the ckpt's config to define "
+                "dynamics.model_args.thermo_head_args (so we know what dims "
+                "to instantiate)."
+            )
+        n_mp_layers_cfg = int(OmegaConf.select(th, "n_mp_layers", default=2))
+        mp_n_heads_cfg  = int(OmegaConf.select(th, "mp_n_heads",  default=4))
+        hidden_cfg      = int(OmegaConf.select(th, "hidden",      default=128))
+        if (args.n_mp_layers, args.mp_n_heads, args.head_hidden) != \
+           (n_mp_layers_cfg, mp_n_heads_cfg, hidden_cfg):
+            print(f"  [warm-init] aligning head dims to thermo_head_args: "
+                  f"n_mp_layers={n_mp_layers_cfg}, mp_n_heads={mp_n_heads_cfg}, "
+                  f"head_hidden={hidden_cfg} "
+                  f"(was {args.n_mp_layers}/{args.mp_n_heads}/{args.head_hidden})")
+            args.n_mp_layers = n_mp_layers_cfg
+            args.mp_n_heads  = mp_n_heads_cfg
+            args.head_hidden = hidden_cfg
+
     cache_path = out_dir / "H_cache.pt"
     H, offsets, targets, has_target = extract_H(
         model, cfg, ds, list(range(n)),

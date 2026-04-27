@@ -55,6 +55,12 @@ LR=${LR:-3e-4}
 WANDB=${WANDB:-0}
 WANDB_PROJECT=${WANDB_PROJECT:-downstream_cv}
 WANDB_GROUP=${WANDB_GROUP:-warm}
+
+# Set INIT_FROM_THERMO=1 to warm-start the downstream head's AtomMolMP
+# from the ckpt's trained thermo head (auto-aligns head dims to the
+# ckpt's thermo_head_args; final Linear stays random because output dim
+# 5→1 differs).
+INIT_FROM_THERMO=${INIT_FROM_THERMO:-0}
 BATCH=${BATCH:-64}
 # ================================
 
@@ -192,6 +198,10 @@ _run_one() {
     if [[ "$WANDB" == "1" ]]; then
         wandb_args="--wandb --wandb-project $WANDB_PROJECT --wandb-group $WANDB_GROUP --wandb-name ${name}_${WANDB_GROUP}"
     fi
+    local warm_args=""
+    if [[ "$INIT_FROM_THERMO" == "1" ]]; then
+        warm_args="--init-head-from-thermo"
+    fi
     CUDA_VISIBLE_DEVICES=$gpu python scripts/downstream_cv.py \
         --ckpt   "$CKPT"   --config "$CONFIG" \
         --dataset-pt "$pt" \
@@ -200,7 +210,7 @@ _run_one() {
         --n-folds 5 --epochs "$EPOCHS" --lr "$LR" \
         --batch-size "$BATCH" \
         --device cuda \
-        $wandb_args \
+        $wandb_args $warm_args \
         >> "$out_dir/cv.log" 2>&1 \
         || { echo "[$name] CV FAILED, see $out_dir/cv.log" >&2; return 1; }
 
