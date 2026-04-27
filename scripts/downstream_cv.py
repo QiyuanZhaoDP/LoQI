@@ -41,7 +41,7 @@ from torch_geometric.data import InMemoryDataset
 from torch_geometric.data.data import DataEdgeAttr, DataTensorAttr
 from torch_geometric.data.storage import GlobalStorage
 from torch_geometric.loader import DataLoader
-from torch_scatter import scatter_mean, scatter_softmax, scatter_sum
+from torch_scatter import scatter_max, scatter_mean, scatter_softmax, scatter_sum
 from tqdm import tqdm
 
 from megalodon.data.batch_preprocessor import BatchPreProcessor
@@ -234,22 +234,73 @@ def extract_H(model, cfg, ds, indices, batch_size, device, cache_path):
 # Fold training
 # ---------------------------------------------------------------------------
 
-def batch_iter(H, offsets, targets, indices, batch_size, device, shuffle):
-    order = np.array(indices)
-    if shuffle:
-        np.random.shuffle(order)
-    for s in range(0, len(order), batch_size):
-        mids = order[s:s + batch_size]
+def batch_iter(H, offsets, targets, indices, batch_size, device, shuffle,
+               group_ids=None, group_batched=False):
+    """Yields (H, batch_idx, targets, group_ids_or_None).
+
+    When `group_batched=True`, sorts indices by group_id then shuffles group
+    order, so each batch is dominated by full K-conformer groups (gives
+    invariance loss strong within-batch signal). Without it, random shuffle
+    of Data indices means few groups have ≥2 samples per batch and the
+    invariance signal is too noisy.
+    """
+    indices = np.asarray(indices)
+    if group_batched:
+        if group_ids is None:
+            raise ValueError("group_batched requires group_ids")
+        gids_local = group_ids[indices]
+        # Stable sort: members of the same group end up contiguous.
+        sort_order = np.argsort(gids_local, kind="stable")
+        indices = indices[sort_order]
+        gids_local = gids_local[sort_order]
+        # Group boundaries.
+        unique_g, first_idx, counts = np.unique(
+            gids_local, return_index=True, return_counts=True,
+        )
+        if shuffle:
+            perm = np.random.permutation(len(unique_g))
+            indices = np.concatenate([
+                indices[first_idx[p]:first_idx[p] + counts[p]] for p in perm
+            ])
+    else:
+        if shuffle:
+            indices = indices.copy()
+            np.random.shuffle(indices)
+
+    for s in range(0, len(indices), batch_size):
+        mids = indices[s:s + batch_size]
         Hs, bs_idx = [], []
         for bi, mi in enumerate(mids):
             a, b = int(offsets[mi]), int(offsets[mi + 1])
             Hs.append(H[a:b])
             bs_idx.append(torch.full((b - a,), bi, dtype=torch.long))
+        gids_b = (torch.tensor(group_ids[mids], dtype=torch.long, device=device)
+                  if group_ids is not None else None)
         yield (
             torch.cat(Hs).to(device=device, dtype=torch.float32),
             torch.cat(bs_idx).to(device),
             targets[mids].to(device),
+            gids_b,
         )
+
+
+def _within_group_var_loss(pred, group_ids):
+    """Within-group variance of predictions, averaged over groups with ≥2
+    samples. Drives the head toward conformer-invariant predictions when
+    added to the loss with a positive weight λ.
+    """
+    _, inv = torch.unique(group_ids, return_inverse=True)
+    n_groups = int(inv.max().item()) + 1 if inv.numel() > 0 else 0
+    if n_groups == 0:
+        return pred.new_zeros(())
+    mean = scatter_mean(pred, inv, dim=0, dim_size=n_groups)
+    sq_dev = (pred - mean[inv]) ** 2
+    var = scatter_mean(sq_dev, inv, dim=0, dim_size=n_groups)
+    counts = torch.bincount(inv, minlength=n_groups)
+    valid = counts >= 2
+    if not bool(valid.any()):
+        return pred.new_zeros(())
+    return var[valid].mean()
 
 
 def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
@@ -299,24 +350,42 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
     val_groups_local = (ensemble_groups[val_idx_arr_local]
                          if ensemble_groups is not None else None)
 
+    inv_lambda = float(getattr(args, "invariance_lambda", 0.0) or 0.0)
+    use_inv = inv_lambda > 0.0 and ensemble_groups is not None
+    if use_inv and not getattr(args, "_inv_announced", False):
+        print(f"  [inv-loss] λ={inv_lambda} on within-group prediction "
+              f"variance (group-batched train shuffle).")
+        args._inv_announced = True
+
     for ep in range(args.epochs):
         model.train()
         epoch_loss_sum = 0.0
         epoch_loss_count = 0
-        for H_b, b_b, t_b in batch_iter(H, offsets, tgt_norm,
-                                          train_idx.tolist(),
-                                          args.batch_size, device, shuffle=True):
+        epoch_inv_sum = 0.0
+        epoch_inv_count = 0
+        for H_b, b_b, t_b, g_b in batch_iter(
+                H, offsets, tgt_norm, train_idx.tolist(),
+                args.batch_size, device, shuffle=True,
+                group_ids=ensemble_groups if use_inv else None,
+                group_batched=use_inv):
             pred = model(H_b, b_b)             # [B] scalar
             valid = ~torch.isnan(t_b)
             if not valid.any():
                 continue
-            loss = ((pred[valid] - t_b[valid]) ** 2).mean()
+            loss_mse = ((pred[valid] - t_b[valid]) ** 2).mean()
+            if use_inv and g_b is not None:
+                loss_inv = _within_group_var_loss(pred[valid], g_b[valid])
+                loss = loss_mse + inv_lambda * loss_inv
+                epoch_inv_sum += float(loss_inv.detach().item())
+                epoch_inv_count += 1
+            else:
+                loss = loss_mse
             opt.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step()
             sched.step()
-            epoch_loss_sum += float(loss.detach().item()) * int(valid.sum().item())
+            epoch_loss_sum += float(loss_mse.detach().item()) * int(valid.sum().item())
             epoch_loss_count += int(valid.sum().item())
 
         # Per-epoch logging — drives wandb training curves. Cheap because
@@ -329,11 +398,15 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
                 f"fold_{fold_i}/lr":          current_lr,
                 f"fold_{fold_i}/epoch":       ep,
             }
+            if use_inv and epoch_inv_count > 0:
+                log_dict[f"fold_{fold_i}/train_inv_var"] = (
+                    epoch_inv_sum / epoch_inv_count
+                )
             # Quick val MAE in physical units (every epoch).
             model.eval()
             with torch.no_grad():
                 vp = []
-                for H_b, b_b, _ in batch_iter(H, offsets, tgt_norm,
+                for H_b, b_b, _, _ in batch_iter(H, offsets, tgt_norm,
                                                 val_idx_list,
                                                 args.batch_size, device,
                                                 shuffle=False):
@@ -358,7 +431,7 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
     model.eval()
     preds = []
     with torch.no_grad():
-        for H_b, b_b, _ in batch_iter(H, offsets, tgt_norm,
+        for H_b, b_b, _, _ in batch_iter(H, offsets, tgt_norm,
                                        val_idx.tolist(),
                                        args.batch_size, device, shuffle=False):
             pred = model(H_b, b_b)
@@ -443,6 +516,13 @@ def main():
                         "uses all K Data per group as augmentation, val "
                         "averages preds across the K conformers per group "
                         "before computing metrics.")
+    p.add_argument("--invariance-lambda", type=float, default=0.0,
+                   help="Weight on within-group prediction-variance loss "
+                        "(forces the head to predict the same value across "
+                        "the K conformers of one input). z-score units; "
+                        "useful range ~1-10. Requires --ensemble-by. Enables "
+                        "group-batched train shuffling so each batch is "
+                        "dominated by full K-conformer groups.")
     p.add_argument("--max-k-per-input", type=int, default=None,
                    help="Cap on conformers per input on the TRAIN side only "
                         "(val keeps all K for apples-to-apples comparison). "
@@ -472,6 +552,9 @@ def main():
     if args.max_k_per_input is not None and args.ensemble_by is None:
         raise SystemExit("--max-k-per-input requires --ensemble-by "
                          "(it caps per-group conformer count).")
+    if args.invariance_lambda > 0 and args.ensemble_by is None:
+        raise SystemExit("--invariance-lambda requires --ensemble-by "
+                         "(it needs group_ids to compute within-group var).")
 
     out_dir = Path(args.out_dir); out_dir.mkdir(parents=True, exist_ok=True)
     device = torch.device(args.device)
