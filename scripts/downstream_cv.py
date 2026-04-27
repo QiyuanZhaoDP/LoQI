@@ -337,9 +337,14 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr,
                              weight_decay=args.weight_decay)
     total_steps = max(1, (len(train_idx) // args.batch_size) * args.epochs)
-    sched = torch.optim.lr_scheduler.CosineAnnealingLR(
-        opt, T_max=total_steps, eta_min=args.lr_min
-    )
+    if args.lr_schedule == "constant":
+        # Identity factor — keeps lr fixed; still steps so LightningModule-
+        # like logging stays consistent.
+        sched = torch.optim.lr_scheduler.LambdaLR(opt, lr_lambda=lambda _: 1.0)
+    else:
+        sched = torch.optim.lr_scheduler.CosineAnnealingLR(
+            opt, T_max=total_steps, eta_min=args.lr_min
+        )
 
     # Pre-compute val_idx tensor once for efficient per-epoch eval.
     val_idx_list = val_idx.tolist() if hasattr(val_idx, "tolist") else list(val_idx)
@@ -361,6 +366,7 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
         model.train()
         epoch_loss_sum = 0.0
         epoch_loss_count = 0
+        epoch_abs_err_sum = 0.0   # accumulate Σ|pred - target| in z-space
         epoch_inv_sum = 0.0
         epoch_inv_count = 0
         for H_b, b_b, t_b, g_b in batch_iter(
@@ -372,7 +378,8 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
             valid = ~torch.isnan(t_b)
             if not valid.any():
                 continue
-            loss_mse = ((pred[valid] - t_b[valid]) ** 2).mean()
+            residual = pred[valid] - t_b[valid]
+            loss_mse = (residual ** 2).mean()
             if use_inv and g_b is not None:
                 loss_inv = _within_group_var_loss(pred[valid], g_b[valid])
                 loss = loss_mse + inv_lambda * loss_inv
@@ -385,18 +392,26 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step()
             sched.step()
-            epoch_loss_sum += float(loss_mse.detach().item()) * int(valid.sum().item())
-            epoch_loss_count += int(valid.sum().item())
+            n_valid = int(valid.sum().item())
+            epoch_loss_sum += float(loss_mse.detach().item()) * n_valid
+            epoch_abs_err_sum += float(residual.detach().abs().sum().item())
+            epoch_loss_count += n_valid
 
         # Per-epoch logging — drives wandb training curves. Cheap because
         # head is small (~M params); val pass on cached H is sub-second.
         if wandb_run is not None:
             train_loss_zspace = (epoch_loss_sum / max(epoch_loss_count, 1))
+            train_mae_phys = (
+                epoch_abs_err_sum / max(epoch_loss_count, 1) * std
+            )
+            train_rmse_phys = float(np.sqrt(train_loss_zspace)) * std
             current_lr = float(opt.param_groups[0]["lr"])
             log_dict = {
-                f"fold_{fold_i}/train_loss":  train_loss_zspace,   # z-score MSE
-                f"fold_{fold_i}/lr":          current_lr,
-                f"fold_{fold_i}/epoch":       ep,
+                f"fold_{fold_i}/train_loss":      train_loss_zspace,   # z-MSE
+                f"fold_{fold_i}/train_mae_phys":  train_mae_phys,      # physical
+                f"fold_{fold_i}/train_rmse_phys": train_rmse_phys,     # physical
+                f"fold_{fold_i}/lr":              current_lr,
+                f"fold_{fold_i}/epoch":           ep,
             }
             if use_inv and epoch_inv_count > 0:
                 log_dict[f"fold_{fold_i}/train_inv_var"] = (
@@ -503,6 +518,10 @@ def main():
     p.add_argument("--extract-batch-size", type=int, default=64)
     p.add_argument("--lr", type=float, default=3e-4)
     p.add_argument("--lr-min", type=float, default=0.0)
+    p.add_argument("--lr-schedule", choices=["cosine", "constant"], default="cosine",
+                   help="LR schedule. 'constant' keeps lr fixed at --lr the "
+                        "whole run (use to test whether cosine decay is "
+                        "choking late-epoch learning).")
     p.add_argument("--weight-decay", type=float, default=1e-5)
     p.add_argument("--n-mp-layers", type=int, default=2)
     p.add_argument("--mp-n-heads", type=int, default=4)
