@@ -98,17 +98,21 @@ DATASETS=(
 # ---- Helpers -----------------------------------------------------------
 
 # Concatenate train/valid/test CSVs into one (single header retained).
-# `pattern` is the file basename (without dir prefix) — e.g. "train.csv"
-# or "train.filtered.csv". When the filtered.csv is missing (older run
-# without the element filter) we fall back to the original .csv.
+# Prefers the filtered.csv emitted by sample_downstream_K5.sh's
+# extract_smiles (lives under PKL_DIR/<dataset>/). Falls back to the
+# original CSV under INPUT_DIR/<dataset>/ when filtered.csv is absent
+# (e.g., pickles were sampled before extract_smiles was added).
 _merge_csv() {
-    local in_dir="$1" out_csv="$2"
+    local pkl_dir="$1" input_dir="$2" out_csv="$3"
     local files=()
     for split in train valid test; do
-        if [[ -f "$in_dir/${split}.filtered.csv" ]]; then
-            files+=("$in_dir/${split}.filtered.csv")
+        if [[ -f "$pkl_dir/${split}.filtered.csv" ]]; then
+            files+=("$pkl_dir/${split}.filtered.csv")
+        elif [[ -f "$input_dir/${split}.csv" ]]; then
+            files+=("$input_dir/${split}.csv")
         else
-            files+=("$in_dir/${split}.csv")
+            echo "ERROR: neither $pkl_dir/${split}.filtered.csv nor $input_dir/${split}.csv exists" >&2
+            return 1
         fi
     done
     {
@@ -152,11 +156,15 @@ _run_one() {
 
     local csv pkl
     if [[ "$is_split" == "1" ]]; then
-        # Pre-split: merge train+valid+test (prefers filtered.csv from PKL_DIR
-        # so target rows align with the K=5 conformers post-validation).
+        # Pre-split: merge train+valid+test. `_merge_csv` prefers
+        # filtered.csv from PKL_DIR (post-validation row order matches the
+        # pickle's conformer order); falls back to the original CSV under
+        # INPUT_DIR when filtered.csv isn't present. `csv_rel` is the
+        # subdir name (e.g. "lipo_s") in both directories.
         csv="$out_dir/_merged.csv"
         pkl="$out_dir/_merged.pkl"
-        _merge_csv "$PKL_DIR/$pkl_rel" "$csv"   >> "$out_dir/prep.log" 2>&1
+        _merge_csv "$PKL_DIR/$pkl_rel" "$INPUT_DIR/$csv_rel" "$csv"  >> "$out_dir/prep.log" 2>&1 \
+            || { echo "[$name] _merge_csv FAILED, see $out_dir/prep.log" >&2; return 2; }
         _merge_pkl "$PKL_DIR/$pkl_rel" "$pkl"   >> "$out_dir/prep.log" 2>&1
     else
         # Flat CSV: prefer the filtered.csv emitted by sample_downstream_K5's
