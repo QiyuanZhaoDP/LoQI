@@ -123,10 +123,19 @@ def main():
     n_skipped_mol = 0
     n_csv_rows_no_conformer = 0
     K_used = []                      # actual K observed per input mol
+    n_disconnected = 0
     for i, smi in enumerate(smiles_list):
+        # Skip multi-molecule SMILES upfront — chembl3d is single-component,
+        # the flow model doesn't handle dimers/dissociations.
+        if "." in smi:
+            n_disconnected += 1
+            continue
         canon = _canon(smi)
         if canon is None or canon not in by_canon:
             n_csv_rows_no_conformer += 1
+            continue
+        if "." in canon:
+            n_disconnected += 1
             continue
 
         t_raw = targets_raw[i]
@@ -166,6 +175,9 @@ def main():
     if n_csv_rows_no_conformer:
         print(f"  CSV rows with no matching pickle conformer: "
               f"{n_csv_rows_no_conformer:,} (dropped — likely filtered by sampler)")
+    if n_disconnected:
+        print(f"  CSV rows with disconnected SMILES (.): "
+              f"{n_disconnected:,} (dropped — chembl3d is single-component)")
 
     print(f"  built {len(data_list):,} Data "
           f"({n_skipped_mol} mol-conv skipped, "

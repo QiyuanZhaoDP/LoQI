@@ -126,6 +126,7 @@ n_empty = 0
 n_unparseable = 0
 n_radical = 0
 n_disconnected = 0
+n_bad_charge = 0
 bad_elements = {}
 
 for i, smi_raw in enumerate(df[col].astype(str)):
@@ -149,6 +150,12 @@ for i, smi_raw in enumerate(df[col].astype(str)):
         for e in bad:
             bad_elements[e] = bad_elements.get(e, 0) + 1
         continue
+    # chembl3d's training data only contains formal charges in {-1, 0, +1};
+    # OOD charges (-2, +2, +3, ...) weren't seen during pretraining, so
+    # filter them out for distributional alignment.
+    if any(abs(a.GetFormalCharge()) > 1 for a in mol.GetAtoms()):
+        n_bad_charge += 1
+        continue
     kept_rows.append(i)
     kept_smis.append(smi)
 
@@ -166,6 +173,7 @@ if n_empty:        print(f"    empty/NaN:        {n_empty}")
 if n_unparseable:  print(f"    unparseable:      {n_unparseable}")
 if n_radical:      print(f"    radical:          {n_radical}")
 if n_disconnected: print(f"    disconnected:     {n_disconnected}")
+if n_bad_charge:   print(f"    |charge|>1:       {n_bad_charge}")
 if bad_elements:
     pretty = ", ".join(f"{e}:{n}" for e, n in
                        sorted(bad_elements.items(), key=lambda x: -x[1]))

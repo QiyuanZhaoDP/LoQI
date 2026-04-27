@@ -72,15 +72,42 @@ BOND_TO_INNER = {
     Chem.BondType.TRIPLE:    3,
     Chem.BondType.AROMATIC:  4,
 }
-# Formal charge inner index (per process_geom.py encoding: 0..5 for -2..+3
-# with offset=2).
+# Formal charge — save RAW formal charge to match chembl3d's `_h.pt`
+# convention.  DO NOT apply the +2 offset here:
+# Graph3DInterpolantModel.pre_format_molecules does
+#   batch["charges"] = batch["charges"] + interp_param.offset
+# at runtime (offset=2 from YAML), mapping raw {-1..+1} → {1..3} indices for
+# F.one_hot(num_classes=6).  Pre-applying the offset in our prepare step
+# double-shifts the values, triggering CUDA's
+#   "ScatterGather index out of bounds"
+# assertion in F.one_hot at training time.
+#
+# We additionally REJECT mols with any atom |formal_charge| > 1 — chembl3d
+# itself only contains −1..+1 (verified empirically on val_h.pt), so OOD
+# charges weren't seen during pretraining and would degrade prediction
+# quality regardless.
+class _UnsupportedCharge(ValueError):
+    pass
+
+
 def _charge_to_inner(q):
-    return max(0, min(5, int(q) + 2))
+    qi = int(q)
+    if qi < -1 or qi > 1:
+        raise _UnsupportedCharge(f"formal charge {qi} outside [-1, +1]")
+    return qi
 
 
 def _fallback_mol_to_data(mol):
     """Convert a 3D-embedded RDKit Mol (with explicit Hs) to a PyG Data
-    matching the chembl3d_stereo format."""
+    matching the chembl3d_stereo format. Raises ValueError on inputs that
+    don't match the training distribution (multi-fragment / OOD charges)."""
+    # Reject disconnected systems (multi-molecule SMILES with "."). chembl3d
+    # is single-component; the LoQI flow doesn't model dimers/dissociations
+    # consistently. Caller is expected to catch and skip.
+    smi_check = Chem.MolToSmiles(Chem.RemoveHs(mol), isomericSmiles=True)
+    if "." in smi_check:
+        raise ValueError(f"disconnected fragments in SMILES: {smi_check!r}")
+
     conf = mol.GetConformer()
     pos = torch.tensor(conf.GetPositions(), dtype=torch.float32)
 
