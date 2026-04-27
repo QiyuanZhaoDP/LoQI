@@ -223,7 +223,8 @@ def batch_iter(H, offsets, targets, indices, batch_size, device, shuffle):
 
 
 def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
-                    args, device, ensemble_groups=None):
+                    args, device, ensemble_groups=None,
+                    wandb_run=None, fold_i=0):
     """Train head on train_idx Data points, evaluate on val_idx.
 
     If `ensemble_groups` is provided (numpy array length n, one int per Data
@@ -259,8 +260,19 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
         opt, T_max=total_steps, eta_min=args.lr_min
     )
 
+    # Pre-compute val_idx tensor once for efficient per-epoch eval.
+    val_idx_list = val_idx.tolist() if hasattr(val_idx, "tolist") else list(val_idx)
+    val_idx_arr_local = np.asarray(val_idx)
+    val_has_local = has_target[val_idx_arr_local].bool().numpy()
+    y_true_local = targets[val_idx_arr_local].float().numpy()
+    val_mask_local = val_has_local & ~np.isnan(y_true_local)
+    val_groups_local = (ensemble_groups[val_idx_arr_local]
+                         if ensemble_groups is not None else None)
+
     for ep in range(args.epochs):
         model.train()
+        epoch_loss_sum = 0.0
+        epoch_loss_count = 0
         for H_b, b_b, t_b in batch_iter(H, offsets, tgt_norm,
                                           train_idx.tolist(),
                                           args.batch_size, device, shuffle=True):
@@ -274,6 +286,43 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step()
             sched.step()
+            epoch_loss_sum += float(loss.detach().item()) * int(valid.sum().item())
+            epoch_loss_count += int(valid.sum().item())
+
+        # Per-epoch logging — drives wandb training curves. Cheap because
+        # head is small (~M params); val pass on cached H is sub-second.
+        if wandb_run is not None:
+            train_loss_zspace = (epoch_loss_sum / max(epoch_loss_count, 1))
+            current_lr = float(opt.param_groups[0]["lr"])
+            log_dict = {
+                f"fold_{fold_i}/train_loss":  train_loss_zspace,   # z-score MSE
+                f"fold_{fold_i}/lr":          current_lr,
+                f"fold_{fold_i}/epoch":       ep,
+            }
+            # Quick val MAE in physical units (every epoch).
+            model.eval()
+            with torch.no_grad():
+                vp = []
+                for H_b, b_b, _ in batch_iter(H, offsets, tgt_norm,
+                                                val_idx_list,
+                                                args.batch_size, device,
+                                                shuffle=False):
+                    vp.append(model(H_b, b_b).cpu().numpy())
+            vp_phys = np.concatenate(vp) * std + mean
+            if val_groups_local is None:
+                err = vp_phys[val_mask_local] - y_true_local[val_mask_local]
+                log_dict[f"fold_{fold_i}/val_mae"] = float(np.mean(np.abs(err)))
+            else:
+                # Aggregate by group_id before MAE — same as final eval.
+                vp_m = vp_phys[val_mask_local]
+                yt_m = y_true_local[val_mask_local]
+                grps = val_groups_local[val_mask_local]
+                _, inv = np.unique(grps, return_inverse=True)
+                cnt = np.bincount(inv).clip(min=1)
+                pm = np.bincount(inv, weights=vp_m) / cnt
+                ym = np.bincount(inv, weights=yt_m) / cnt
+                log_dict[f"fold_{fold_i}/val_mae"] = float(np.mean(np.abs(pm - ym)))
+            wandb_run.log(log_dict)
 
     # Evaluate (preds in val_idx ORDER, then de-normalize to physical units).
     model.eval()
@@ -510,7 +559,8 @@ def main():
                   f"train={len(train_idx)}  val={len(val_idx)} ===")
         rep = train_one_fold(H, offsets, targets, has_target,
                               train_idx, val_idx, args, device,
-                              ensemble_groups=ensemble_groups)
+                              ensemble_groups=ensemble_groups,
+                              wandb_run=wandb_run, fold_i=fold_i)
         rep["fold"] = fold_i
         fold_reports.append(rep)
         # Compact per-fold summary; include conformer-spread when in ensemble mode.
