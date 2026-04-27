@@ -285,7 +285,7 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
             "n_train": n_train_total, "n_val": int(mask.sum()),
             "target_mean": mean, "target_std": std,
             "mae":  float(mean_absolute_error(y_true[mask], preds[mask])),
-            "rmse": float(mean_squared_error(y_true[mask], preds[mask], squared=False)),
+            "rmse": float(np.sqrt(mean_squared_error(y_true[mask], preds[mask]))),
             "r2":   float(r2_score(y_true[mask], preds[mask])),
         }
 
@@ -312,7 +312,7 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
         "ensemble_K":    int(np.median(counts)),
         "target_mean":   mean, "target_std": std,
         "mae":  float(mean_absolute_error(y_per_group, pred_per_group)),
-        "rmse": float(mean_squared_error(y_per_group, pred_per_group, squared=False)),
+        "rmse": float(np.sqrt(mean_squared_error(y_per_group, pred_per_group))),
         "r2":   float(r2_score(y_per_group, pred_per_group)),
     }
 
