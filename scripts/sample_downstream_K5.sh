@@ -33,10 +33,13 @@ FLOW_CONFIG=${FLOW_CONFIG:-scripts/conf/loqi/loqi_thermo_flow_warm.yaml}
 K=${K:-5}                       # conformers per molecule
 N_STEPS=${N_STEPS:-10}          # flow integration steps
 BATCH_SIZE=${BATCH_SIZE:-64}    # sampling batch size
-POSTPROCESS=${POSTPROCESS:-optimization}    # "none" | "optimization" | "optimization+irmsd"
-                                            # ("optimization+irmsd" can drop conformers, breaking
-                                            #  the prepare_downstream_K_pt position-based join —
-                                            #  use plain "optimization" unless you handle that.)
+POSTPROCESS=${POSTPROCESS:-none}            # "none" | "optimization" | "optimization+irmsd"
+                                            # Default `none`: downstream FT just needs reasonable
+                                            # conformers, not AIMNet2-relaxed minima. Optimization
+                                            # also crashes on batches whose mols contain elements
+                                            # outside AIMNet2's coverage (`torch.cat(): expected a
+                                            # non-empty list`). Set POSTPROCESS=optimization to
+                                            # opt-in (after running this with the element filter).
 OPT_MAX_NSTEP=${OPT_MAX_NSTEP:-100}
 
 # GPU pool. Empty → auto-detect via nvidia-smi. Leave at 1 to keep the
@@ -82,25 +85,91 @@ if [[ ! -d "$INPUT_DIR" ]]; then
     exit 1
 fi
 
-# Helper: extract SMILES column from a CSV → .smi (one SMILES per line, no header).
-# Auto-detects the column case-insensitively. Drops empty / NaN rows.
+# Helper: extract + validate SMILES from a CSV.
+# Writes TWO files:
+#   <out>.smi          — one SMILES per line (input to sample_conformers.py)
+#   <out>.filtered.csv — subset of original CSV rows that survived validation,
+#                        SAME ORDER as the .smi. Downstream prepare_downstream_K_pt
+#                        joins targets from this filtered CSV (positions still
+#                        match the K-conformer pickle ordering).
+# Drops rows with: empty / NaN SMILES, RDKit parse failure, radical electrons,
+# elements outside LoQI's 17-element atom encoder, disconnected fragments.
+# Mirrors sample_conformers.py's validate_smiles checks so the sampler
+# doesn't drop additional rows downstream of this filter.
 extract_smiles() {
     local csv="$1"
-    local out="$2"
-    python3 - "$csv" "$out" <<'PY'
-import sys, csv, pandas as pd
-csv_path, out_path = sys.argv[1], sys.argv[2]
+    local smi_out="$2"
+    local csv_out="${smi_out%.smi}.filtered.csv"
+    python3 - "$csv" "$smi_out" "$csv_out" <<'PY'
+import sys, pandas as pd
+from rdkit import Chem, RDLogger
+RDLogger.DisableLog("rdApp.*")
+
+# LoQI's atom encoder (matches src/megalodon/metrics/molecule_evaluation_callback.py)
+SUPPORTED = {
+    "H","B","C","N","O","F","Al","Si","P","S","Cl",
+    "As","Br","I","Hg","Bi","Se",
+}
+
+csv_path, smi_path, csv_filtered_path = sys.argv[1], sys.argv[2], sys.argv[3]
 df = pd.read_csv(csv_path)
-# case-insensitive smiles column lookup
+# case-insensitive smiles column
 matches = [c for c in df.columns if c.lower() == "smiles"]
 if not matches:
-    raise SystemExit(f"No SMILES column found in {csv_path}.  Columns: {list(df.columns)}")
+    raise SystemExit(f"No SMILES column in {csv_path}.  Columns: {list(df.columns)}")
 col = matches[0]
-ser = df[col].astype(str).str.strip()
-ser = ser[ser.str.len() > 0]
-ser = ser[~ser.str.lower().isin(("nan", "none"))]
-ser.to_csv(out_path, index=False, header=False)
-print(f"  {col!r}: {len(ser):,} SMILES -> {out_path}")
+
+n_raw = len(df)
+kept_rows = []      # list of original CSV row indices that passed
+kept_smis = []      # parallel list of SMILES strings
+n_empty = 0
+n_unparseable = 0
+n_radical = 0
+n_disconnected = 0
+bad_elements = {}
+
+for i, smi_raw in enumerate(df[col].astype(str)):
+    smi = smi_raw.strip()
+    if not smi or smi.lower() in ("nan", "none"):
+        n_empty += 1
+        continue
+    mol = Chem.MolFromSmiles(smi)
+    if mol is None:
+        n_unparseable += 1
+        continue
+    if any(a.GetNumRadicalElectrons() > 0 for a in mol.GetAtoms()):
+        n_radical += 1
+        continue
+    if "." in Chem.MolToSmiles(mol):
+        n_disconnected += 1
+        continue
+    elems = {a.GetSymbol() for a in mol.GetAtoms()}
+    bad = elems - SUPPORTED
+    if bad:
+        for e in bad:
+            bad_elements[e] = bad_elements.get(e, 0) + 1
+        continue
+    kept_rows.append(i)
+    kept_smis.append(smi)
+
+# Write .smi (one per line)
+with open(smi_path, "w") as f:
+    for s in kept_smis:
+        f.write(s + "\n")
+
+# Write filtered.csv (subset of original CSV in the same order as .smi)
+df.iloc[kept_rows].to_csv(csv_filtered_path, index=False)
+
+n_dropped = n_raw - len(kept_smis)
+print(f"  {col!r}: {n_raw:,} raw → {len(kept_smis):,} kept  ({n_dropped} dropped)")
+if n_empty:        print(f"    empty/NaN:        {n_empty}")
+if n_unparseable:  print(f"    unparseable:      {n_unparseable}")
+if n_radical:      print(f"    radical:          {n_radical}")
+if n_disconnected: print(f"    disconnected:     {n_disconnected}")
+if bad_elements:
+    pretty = ", ".join(f"{e}:{n}" for e, n in
+                       sorted(bad_elements.items(), key=lambda x: -x[1]))
+    print(f"    bad elements:     {pretty}")
 PY
 }
 

@@ -87,13 +87,24 @@ DATASETS=(
 # ---- Helpers -----------------------------------------------------------
 
 # Concatenate train/valid/test CSVs into one (single header retained).
+# `pattern` is the file basename (without dir prefix) — e.g. "train.csv"
+# or "train.filtered.csv". When the filtered.csv is missing (older run
+# without the element filter) we fall back to the original .csv.
 _merge_csv() {
     local in_dir="$1" out_csv="$2"
+    local files=()
+    for split in train valid test; do
+        if [[ -f "$in_dir/${split}.filtered.csv" ]]; then
+            files+=("$in_dir/${split}.filtered.csv")
+        else
+            files+=("$in_dir/${split}.csv")
+        fi
+    done
     {
-        head -1 "$in_dir/train.csv"
-        tail -n +2 "$in_dir/train.csv"
-        tail -n +2 "$in_dir/valid.csv"
-        tail -n +2 "$in_dir/test.csv"
+        head -1 "${files[0]}"
+        for f in "${files[@]}"; do
+            tail -n +2 "$f"
+        done
     } > "$out_csv"
 }
 
@@ -130,13 +141,21 @@ _run_one() {
 
     local csv pkl
     if [[ "$is_split" == "1" ]]; then
-        # Pre-split: merge train+valid+test
+        # Pre-split: merge train+valid+test (prefers filtered.csv from PKL_DIR
+        # so target rows align with the K=5 conformers post-validation).
         csv="$out_dir/_merged.csv"
         pkl="$out_dir/_merged.pkl"
-        _merge_csv "$INPUT_DIR/$csv_rel" "$csv"   >> "$out_dir/prep.log" 2>&1
-        _merge_pkl "$PKL_DIR/$pkl_rel"   "$pkl"   >> "$out_dir/prep.log" 2>&1
+        _merge_csv "$PKL_DIR/$pkl_rel" "$csv"   >> "$out_dir/prep.log" 2>&1
+        _merge_pkl "$PKL_DIR/$pkl_rel" "$pkl"   >> "$out_dir/prep.log" 2>&1
     else
-        csv="$INPUT_DIR/$csv_rel"
+        # Flat CSV: prefer the filtered.csv emitted by sample_downstream_K5's
+        # extract_smiles (positions match the pickle). Fall back to original
+        # CSV if filter wasn't run.
+        if [[ -f "$PKL_DIR/${csv_rel%.csv}.filtered.csv" ]]; then
+            csv="$PKL_DIR/${csv_rel%.csv}.filtered.csv"
+        else
+            csv="$INPUT_DIR/$csv_rel"
+        fi
         pkl="$PKL_DIR/$pkl_rel"
     fi
 

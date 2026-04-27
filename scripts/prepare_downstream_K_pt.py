@@ -77,58 +77,91 @@ def main():
     mols = d["generated"]
     energies = d.get("energies", None)
     n_total = len(mols)
-    K = args.n_confs
-    if n_total % K != 0:
-        raise SystemExit(
-            f"pickle has {n_total} conformers, not divisible by K={K}. "
-            "If --postprocess optimization+irmsd was used, K is no longer "
-            "fixed — rerun upstream with plain --postprocess optimization."
-        )
-    n_input = n_total // K
-    print(f"  {n_total:,} conformers = {n_input:,} mols × K={K}")
+    print(f"  {n_total:,} conformers in pickle")
 
-    # --- Load target CSV -------------------------------------------------
+    # --- Load target CSV (no row-count assertion — we now join by SMILES) ---
     df = pd.read_csv(args.target_csv)
-    if len(df) != n_input:
-        raise SystemExit(
-            f"CSV has {len(df)} rows but pickle implies {n_input} input mols. "
-            "Did the upstream sampling skip rows? Re-run sample_conformers.py "
-            "with the same .smi (no filtering) so positions stay in sync."
-        )
-
-    smiles_list = df[args.smiles_col].tolist()
+    print(f"  {len(df):,} rows in target CSV")
+    smiles_list = df[args.smiles_col].astype(str).tolist()
     targets_raw = df[args.target_col].tolist()
 
-    # --- Build Data list -------------------------------------------------
+    # --- Group pickle conformers by canonical SMILES ------------------------
+    # sample_conformers.py may silently drop molecules (radicals, disconnected,
+    # unsupported elements, etc.), which used to break our position-based
+    # join with a single assertion. Switching to SMILES-based join makes us
+    # robust to any upstream filtering + lets us emit a clean per-row report
+    # at the end ("N CSV rows had no conformers in the pickle").
+    from rdkit import Chem
+    from rdkit import RDLogger
+    RDLogger.DisableLog("rdApp.*")
+
+    def _canon(smi):
+        m = Chem.MolFromSmiles(smi)
+        return None if m is None else Chem.MolToSmiles(m, isomericSmiles=True)
+
+    by_canon: dict[str, list] = {}
+    by_canon_energy: dict[str, list] = {}
+    for j, mol in enumerate(mols):
+        if mol is None:
+            continue
+        try:
+            canon = Chem.MolToSmiles(mol, isomericSmiles=True)
+        except Exception:
+            continue
+        by_canon.setdefault(canon, []).append(mol)
+        if energies is not None:
+            by_canon_energy.setdefault(canon, []).append(float(energies[j]))
+    print(f"  unique canonical SMILES with conformers in pickle: {len(by_canon):,}")
+
+    # --- Build Data list, joining by canonical SMILES -----------------------
     print("Building PyG Data list...")
     data_list = []
-    n_skipped = 0
-    for i in range(n_input):
-        smi = str(smiles_list[i])
+    n_skipped_mol = 0
+    n_csv_rows_no_conformer = 0
+    K_used = []                      # actual K observed per input mol
+    for i, smi in enumerate(smiles_list):
+        canon = _canon(smi)
+        if canon is None or canon not in by_canon:
+            n_csv_rows_no_conformer += 1
+            continue
+
         t_raw = targets_raw[i]
         has_target = not (t_raw is None
                           or (isinstance(t_raw, float) and math.isnan(t_raw)))
         target_val = float(t_raw) if has_target else float("nan")
-        for k in range(K):
-            mol = mols[i * K + k]
-            if mol is None or mol.GetNumAtoms() == 0:
-                n_skipped += 1
+
+        group_mols = by_canon[canon]
+        K_used.append(len(group_mols))
+        group_energies = by_canon_energy.get(canon, [])
+        for k, mol in enumerate(group_mols):
+            if mol.GetNumAtoms() == 0:
+                n_skipped_mol += 1
                 continue
             try:
                 data = _mol_to_data(mol)
-            except Exception as e:
-                n_skipped += 1
+            except Exception:
+                n_skipped_mol += 1
                 continue
-            data.input_id = smi          # group key for ensemble splitting
-            data.smiles = smi             # for debugging / reporting
-            data.conf_idx = int(k)        # 0..K-1, useful for analysis
+            data.input_id = canon         # group key for ensemble splitting
+            data.smiles = smi              # original (un-canonicalized) form
+            data.conf_idx = int(k)
             data.target = torch.tensor([target_val], dtype=torch.float32)
             data.has_target = torch.tensor([bool(has_target)], dtype=torch.bool)
-            if args.keep_energies and energies is not None:
+            if args.keep_energies and group_energies:
                 data.aimnet2_energy_eV = torch.tensor(
-                    [float(energies[i * K + k])], dtype=torch.float32
+                    [group_energies[k] if k < len(group_energies) else float("nan")],
+                    dtype=torch.float32,
                 )
             data_list.append(data)
+
+    if K_used:
+        import statistics as _stats
+        print(f"  K observed per input: median={int(_stats.median(K_used))}, "
+              f"mean={sum(K_used)/len(K_used):.2f}, "
+              f"min={min(K_used)}, max={max(K_used)}")
+    if n_csv_rows_no_conformer:
+        print(f"  CSV rows with no matching pickle conformer: "
+              f"{n_csv_rows_no_conformer:,} (dropped — likely filtered by sampler)")
 
     print(f"  built {len(data_list):,} Data ({n_skipped} skipped)")
     n_unique_inputs = len({d.input_id for d in data_list})
