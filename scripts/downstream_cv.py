@@ -80,21 +80,51 @@ def load_thermo_head_into(head: "SingleTargetHead", ckpt_path: str) -> int:
     """Load the trained thermo head's weights into a SingleTargetHead's
     inner AtomMolMP. Returns the number of tensors copied.
 
+    Tries multiple candidate prefixes because Lightning's checkpoint path
+    depends on whether the model uses an EMA wrapper:
+        dynamics.ema_model.thermo_heads.mp.<...>      (EMA-wrapped)
+        dynamics.online_model.thermo_heads.mp.<...>   (EMA-wrapped, raw)
+        dynamics.thermo_heads.mp.<...>                (no EMA)
+    Prefers EMA when present (better val numbers), falls back to online,
+    then plain.
+
     Skips final.3 (last Linear) because output dim differs (5 → 1).
     """
     ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
     sd = ckpt.get("state_dict", ckpt)
-    prefix = "dynamics.thermo_heads.mp."
+
+    candidates = [
+        "dynamics.ema_model.thermo_heads.mp.",
+        "dynamics.online_model.thermo_heads.mp.",
+        "dynamics.thermo_heads.mp.",
+    ]
+    chosen_prefix = None
+    for p in candidates:
+        if any(k.startswith(p) for k in sd.keys()):
+            chosen_prefix = p
+            break
+    if chosen_prefix is None:
+        # Last-resort scan: any key containing the substring
+        for k in sd.keys():
+            if "thermo_heads.mp." in k:
+                chosen_prefix = k.split("thermo_heads.mp.", 1)[0] + "thermo_heads.mp."
+                break
+    if chosen_prefix is None:
+        print(f"  [warm-init] no thermo_heads.mp.* keys in {ckpt_path} — "
+              f"falling back to random init.")
+        return 0
+
     src = {}
     for k, v in sd.items():
-        if not k.startswith(prefix):
+        if not k.startswith(chosen_prefix):
             continue
-        local = k[len(prefix):]
+        local = k[len(chosen_prefix):]
         # Drop the final-layer Linear that maps to 5 thermo targets — shape
         # mismatch with our 1-target head; leave it random-init.
         if local in ("final.3.weight", "final.3.bias"):
             continue
         src[local] = v
+    print(f"  [warm-init] using prefix {chosen_prefix!r}; matched {len(src)} tensors")
     missing, unexpected = head.mp.load_state_dict(src, strict=False)
     n_copied = len(src)
     if unexpected:
