@@ -443,6 +443,14 @@ def main():
                         "uses all K Data per group as augmentation, val "
                         "averages preds across the K conformers per group "
                         "before computing metrics.")
+    p.add_argument("--max-k-per-input", type=int, default=None,
+                   help="Cap on conformers per input on the TRAIN side only "
+                        "(val keeps all K for apples-to-apples comparison). "
+                        "Use this to ablate the K-conformer augmentation: "
+                        "--max-k-per-input 1 trains as if you'd prepared a "
+                        "K=1 dataset, without re-running prepare_downstream_K_pt. "
+                        "Only valid with --ensemble-by. Picks the first K_cap "
+                        "Data per group (deterministic).")
     p.add_argument("--init-head-from-thermo", action="store_true",
                    help="Warm-start the downstream head's AtomMolMP weights "
                         "from the ckpt's trained thermo head. Auto-aligns "
@@ -460,6 +468,10 @@ def main():
                    help="wandb run name (default: <dataset basename>_<group>).")
     args = p.parse_args()
     torch.manual_seed(args.seed); np.random.seed(args.seed)
+
+    if args.max_k_per_input is not None and args.ensemble_by is None:
+        raise SystemExit("--max-k-per-input requires --ensemble-by "
+                         "(it caps per-group conformer count).")
 
     out_dir = Path(args.out_dir); out_dir.mkdir(parents=True, exist_ok=True)
     device = torch.device(args.device)
@@ -579,6 +591,23 @@ def main():
                 [i for i in labeled if int(ensemble_groups[i]) in val_set],
                 dtype=np.int64,
             )
+
+            # K-cap on training side only (val keeps all K conformers).
+            # First K_cap Data per group — deterministic; conformer order
+            # in the .pt is set by prepare_downstream_K_pt.py.
+            if args.max_k_per_input is not None:
+                n_before = len(train_idx)
+                seen: dict[int, int] = {}
+                kept = []
+                for i in train_idx:
+                    g = int(ensemble_groups[i])
+                    if seen.get(g, 0) < args.max_k_per_input:
+                        kept.append(i)
+                        seen[g] = seen.get(g, 0) + 1
+                train_idx = np.array(kept, dtype=np.int64)
+                print(f"  [K-cap] train Data: {n_before} -> {len(train_idx)}  "
+                      f"(max_k_per_input={args.max_k_per_input})")
+
             print(f"\n=== Fold {fold_i+1}/{args.n_folds} | "
                   f"train={len(train_idx)} ({len(train_groups)} grp)  "
                   f"val={len(val_idx)} ({len(val_groups)} grp) ===")
