@@ -433,7 +433,13 @@ def main():
     ids = []
     timesteps = args.n_steps
     
-    for batch in tqdm(loader, desc="Sampling"):
+    # AdaptiveBatchSampler reports __len__ in DATAPOINTS, not batches, so the
+    # default tqdm "n/total" is wildly off (you'd see "28/4065" when actually
+    # all 4065 datapoints were processed in 28 adaptive batches). Suppress the
+    # bogus total — tqdm falls back to "iterations" without a percentage.
+    n_data = len(data_list)
+    for batch in tqdm(loader, desc="Sampling", total=None,
+                       bar_format="{desc}: {n_fmt} batches | {elapsed} | {rate_fmt}"):
         batch = batch.to(model.device)
         sample = model.sample(batch=batch, timesteps=timesteps, pre_format=True)
         coords_list = convert_coords_to_np(sample)
@@ -518,7 +524,21 @@ def main():
         print("Evaluation Results:")
         print(results)
 
-    print(f"Generated {len(generated)} conformers for {len(set(ids))} unique molecules.")
+    # Count by canonical SMILES of the actually-generated mols. The old
+    # `len(set(ids))` was misleading: when input is a .smi file the mols'
+    # `_Name` is never set, so set(ids) collapses to {"NA"} → "1 unique
+    # molecules" no matter how many were sampled.
+    unique_canon = set()
+    for m in generated:
+        if m is None:
+            continue
+        try:
+            unique_canon.add(Chem.MolToSmiles(m, isomericSmiles=True))
+        except Exception:
+            pass
+    print(f"Generated {len(generated)} conformers for "
+          f"{len(unique_canon)} unique canonical SMILES "
+          f"(K={args.n_confs}, expected {len(unique_canon)*args.n_confs}).")
 
 
 if __name__ == "__main__":
