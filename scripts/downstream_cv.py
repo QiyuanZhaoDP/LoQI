@@ -295,15 +295,18 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
     preds_masked = preds[mask]
     y_true_masked = y_true[mask]
 
-    # group_id -> mean of preds, first y_true (all should be equal)
+    # group_id -> mean / std of preds, first y_true (all should be equal)
     unique_groups, inv = np.unique(val_groups_masked, return_inverse=True)
+    counts = np.bincount(inv, minlength=len(unique_groups)).clip(min=1)
     sums = np.bincount(inv, weights=preds_masked, minlength=len(unique_groups))
-    counts = np.bincount(inv, minlength=len(unique_groups))
-    pred_per_group = sums / counts.clip(min=1)
-    # y_true: take per-group mean too (should be constant within group; mean
-    # is robust to small float noise).
+    sums_sq = np.bincount(inv, weights=preds_masked ** 2, minlength=len(unique_groups))
+    pred_per_group = sums / counts
+    # Per-group prediction std across the K conformers — diagnoses how
+    # conformer-stable the head is. Low value = robust prediction.
+    pred_var_per_group = np.maximum(sums_sq / counts - pred_per_group ** 2, 0.0)
+    pred_std_per_group = np.sqrt(pred_var_per_group)
     y_sums = np.bincount(inv, weights=y_true_masked, minlength=len(unique_groups))
-    y_per_group = y_sums / counts.clip(min=1)
+    y_per_group = y_sums / counts
 
     return {
         "n_train":       n_train_total,
@@ -314,6 +317,12 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
         "mae":  float(mean_absolute_error(y_per_group, pred_per_group)),
         "rmse": float(np.sqrt(mean_squared_error(y_per_group, pred_per_group))),
         "r2":   float(r2_score(y_per_group, pred_per_group)),
+        # Conformer-spread diagnostics (per-input-id pred-stddev, in target units):
+        "ensemble_pred_std_mean":   float(np.mean(pred_std_per_group)),
+        "ensemble_pred_std_median": float(np.median(pred_std_per_group)),
+        "ensemble_pred_std_p95":    float(np.percentile(pred_std_per_group, 95)),
+        # Express conformer noise as fraction of target spread for portability:
+        "ensemble_pred_std_over_target_std": float(np.mean(pred_std_per_group) / max(std, 1e-12)),
     }
 
 
@@ -343,11 +352,39 @@ def main():
                         "uses all K Data per group as augmentation, val "
                         "averages preds across the K conformers per group "
                         "before computing metrics.")
+    # ---- wandb logging (opt-in) ----
+    p.add_argument("--wandb", action="store_true",
+                   help="Log per-fold metrics + cross-fold summary to wandb.")
+    p.add_argument("--wandb-project", default="downstream_cv")
+    p.add_argument("--wandb-group", default=None,
+                   help="wandb group (e.g. 'warm' / 'vanilla') for run grouping.")
+    p.add_argument("--wandb-name", default=None,
+                   help="wandb run name (default: <dataset basename>_<group>).")
     args = p.parse_args()
     torch.manual_seed(args.seed); np.random.seed(args.seed)
 
     out_dir = Path(args.out_dir); out_dir.mkdir(parents=True, exist_ok=True)
     device = torch.device(args.device)
+
+    # ---- wandb init (opt-in) -----------------------------------------
+    wandb_run = None
+    if args.wandb:
+        try:
+            import wandb
+            run_name = args.wandb_name or (
+                f"{Path(args.dataset_pt).stem}"
+                + (f"_{args.wandb_group}" if args.wandb_group else "")
+            )
+            wandb_run = wandb.init(
+                project=args.wandb_project,
+                group=args.wandb_group,
+                name=run_name,
+                config=vars(args),
+                reinit=True,
+            )
+        except Exception as e:
+            print(f"WARNING: wandb init failed ({e}); continuing without wandb.")
+            wandb_run = None
 
     print(f"Loading dataset {args.dataset_pt}")
     ds = load_prepared_pt(args.dataset_pt)
@@ -431,7 +468,16 @@ def main():
                               ensemble_groups=ensemble_groups)
         rep["fold"] = fold_i
         fold_reports.append(rep)
-        print(f"  MAE={rep['mae']:.4f}  RMSE={rep['rmse']:.4f}  R2={rep['r2']:.3f}")
+        # Compact per-fold summary; include conformer-spread when in ensemble mode.
+        ens_str = ""
+        if "ensemble_pred_std_mean" in rep:
+            ens_str = (f"  pred_σ_mean={rep['ensemble_pred_std_mean']:.4f} "
+                       f"(={rep['ensemble_pred_std_over_target_std']*100:.1f}% of target σ)")
+        print(f"  MAE={rep['mae']:.4f}  RMSE={rep['rmse']:.4f}  "
+              f"R2={rep['r2']:.3f}{ens_str}")
+        if wandb_run is not None:
+            wandb_run.log({f"fold/{fold_i}/{k}": v for k, v in rep.items()
+                            if isinstance(v, (int, float))})
 
     # Aggregate
     summary = {
@@ -445,6 +491,11 @@ def main():
         "n_labeled":   int(has_target.sum().item()),
         "wall_seconds": round(time.time()-t0, 1),
     }
+    if "ensemble_pred_std_mean" in fold_reports[0]:
+        summary["ensemble_pred_std_mean_avg"] = float(np.mean(
+            [r["ensemble_pred_std_mean"] for r in fold_reports]))
+        summary["ensemble_pred_std_over_target_std_avg"] = float(np.mean(
+            [r["ensemble_pred_std_over_target_std"] for r in fold_reports]))
     report_path = out_dir / "cv_report.json"
     with open(report_path, "w") as f:
         json.dump(summary, f, indent=2)
@@ -456,8 +507,19 @@ def main():
     print(f"  MAE  = {summary['mae_mean']:.4f} ± {summary['mae_std']:.4f}")
     print(f"  RMSE = {summary['rmse_mean']:.4f}")
     print(f"  R²   = {summary['r2_mean']:.3f}")
+    if "ensemble_pred_std_mean_avg" in summary:
+        print(f"  pred σ across K conformers (avg over folds): "
+              f"{summary['ensemble_pred_std_mean_avg']:.4f}  "
+              f"({100*summary['ensemble_pred_std_over_target_std_avg']:.1f}% of target σ)")
     print("=" * 70)
     print(f"Report -> {report_path}")
+
+    # ---- wandb final summary ------------------------------------------
+    if wandb_run is not None:
+        flat_summary = {k: v for k, v in summary.items()
+                         if isinstance(v, (int, float))}
+        wandb_run.summary.update(flat_summary)
+        wandb_run.finish()
 
 
 if __name__ == "__main__":

@@ -50,6 +50,11 @@ K=${K:-5}
 N_GPUS=${N_GPUS:-4}
 EPOCHS=${EPOCHS:-100}
 LR=${LR:-3e-4}
+
+# wandb (opt-in). Set WANDB=1 to enable; one wandb run per dataset.
+WANDB=${WANDB:-0}
+WANDB_PROJECT=${WANDB_PROJECT:-downstream_cv}
+WANDB_GROUP=${WANDB_GROUP:-warm}
 BATCH=${BATCH:-64}
 # ================================
 
@@ -183,6 +188,10 @@ _run_one() {
 
     # Step 2: 5-fold CV
     echo "[$name] starting 5-fold CV on GPU $gpu"
+    local wandb_args=""
+    if [[ "$WANDB" == "1" ]]; then
+        wandb_args="--wandb --wandb-project $WANDB_PROJECT --wandb-group $WANDB_GROUP --wandb-name ${name}_${WANDB_GROUP}"
+    fi
     CUDA_VISIBLE_DEVICES=$gpu python scripts/downstream_cv.py \
         --ckpt   "$CKPT"   --config "$CONFIG" \
         --dataset-pt "$pt" \
@@ -191,6 +200,7 @@ _run_one() {
         --n-folds 5 --epochs "$EPOCHS" --lr "$LR" \
         --batch-size "$BATCH" \
         --device cuda \
+        $wandb_args \
         >> "$out_dir/cv.log" 2>&1 \
         || { echo "[$name] CV FAILED, see $out_dir/cv.log" >&2; return 1; }
 
