@@ -105,7 +105,11 @@ def main():
         if mol is None:
             continue
         try:
-            canon = Chem.MolToSmiles(mol, isomericSmiles=True)
+            # sample_conformers.py adds explicit Hs (via AddHs in
+            # validate_smiles), so the mol's MolToSmiles would be the
+            # explicit-H form (`[H]OC([H])...`). The CSV side uses
+            # implicit-H canonicals (`CCO`). RemoveHs aligns them.
+            canon = Chem.MolToSmiles(Chem.RemoveHs(mol), isomericSmiles=True)
         except Exception:
             continue
         by_canon.setdefault(canon, []).append(mol)
@@ -163,9 +167,11 @@ def main():
         print(f"  CSV rows with no matching pickle conformer: "
               f"{n_csv_rows_no_conformer:,} (dropped — likely filtered by sampler)")
 
-    print(f"  built {len(data_list):,} Data ({n_skipped} skipped)")
+    print(f"  built {len(data_list):,} Data "
+          f"({n_skipped_mol} mol-conv skipped, "
+          f"{n_csv_rows_no_conformer} CSV rows had no matching conformer)")
     n_unique_inputs = len({d.input_id for d in data_list})
-    print(f"  unique input SMILES retained: {n_unique_inputs:,} / {n_input:,}")
+    print(f"  unique input SMILES retained: {n_unique_inputs:,} / {len(smiles_list):,}")
 
     # --- Save as InMemoryDataset -----------------------------------------
     out = Path(args.output)
