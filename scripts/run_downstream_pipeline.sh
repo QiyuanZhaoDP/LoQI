@@ -59,9 +59,18 @@ WANDB_GROUP=${WANDB_GROUP:-warm}
 # Set INIT_FROM_THERMO=1 to warm-start the downstream head's AtomMolMP
 # from the ckpt's trained thermo head (auto-aligns head dims to the
 # ckpt's thermo_head_args; final Linear stays random because output dim
-# 5→1 differs).
+# 5→1 differs). When 0, HEAD_HIDDEN / N_MP_LAYERS / MP_N_HEADS take effect.
 INIT_FROM_THERMO=${INIT_FROM_THERMO:-0}
+HEAD_HIDDEN=${HEAD_HIDDEN:-256}        # ignored when INIT_FROM_THERMO=1
+N_MP_LAYERS=${N_MP_LAYERS:-4}          # ignored when INIT_FROM_THERMO=1
+MP_N_HEADS=${MP_N_HEADS:-4}            # ignored when INIT_FROM_THERMO=1
 BATCH=${BATCH:-64}
+
+EARLY_STOP_PATIENCE=${EARLY_STOP_PATIENCE:-0}   # 0 = disabled
+
+# Suffix appended to each dataset's per-mode output dir so multiple modes
+# (warm vs cold-small vs cold-large) don't collide under OUT_ROOT.
+OUT_SUFFIX=${OUT_SUFFIX:-warm}
 # ================================
 
 mkdir -p "$PT_DIR" "$OUT_ROOT"
@@ -151,7 +160,7 @@ PY
 # One dataset end-to-end. Run in a sub-shell with a single GPU pinned.
 _run_one() {
     local name=$1 csv_rel=$2 pkl_rel=$3 smi_col=$4 tgt_col=$5 is_split=$6 gpu=$7
-    local out_dir="$OUT_ROOT/${name}_warm"
+    local out_dir="$OUT_ROOT/${name}_${OUT_SUFFIX}"
     mkdir -p "$out_dir"
 
     local csv pkl
@@ -178,7 +187,7 @@ _run_one() {
         pkl="$PKL_DIR/$pkl_rel"
     fi
 
-    local pt="$PT_DIR/${name}.pt"
+    local pt="$PT_DIR/${name}_K${K}.pt"
     if [[ ! -f "$csv" ]]; then
         echo "[$name] MISSING CSV: $csv" >&2; return 2
     fi
@@ -209,6 +218,12 @@ _run_one() {
     local warm_args=""
     if [[ "$INIT_FROM_THERMO" == "1" ]]; then
         warm_args="--init-head-from-thermo"
+    else
+        warm_args="--head-hidden $HEAD_HIDDEN --n-mp-layers $N_MP_LAYERS --mp-n-heads $MP_N_HEADS"
+    fi
+    local stop_args=""
+    if (( EARLY_STOP_PATIENCE > 0 )); then
+        stop_args="--early-stopping-patience $EARLY_STOP_PATIENCE"
     fi
     CUDA_VISIBLE_DEVICES=$gpu python scripts/downstream_cv.py \
         --ckpt   "$CKPT"   --config "$CONFIG" \
@@ -218,7 +233,7 @@ _run_one() {
         --n-folds 5 --epochs "$EPOCHS" --lr "$LR" \
         --batch-size "$BATCH" \
         --device cuda \
-        $wandb_args $warm_args \
+        $wandb_args $warm_args $stop_args \
         >> "$out_dir/cv.log" 2>&1 \
         || { echo "[$name] CV FAILED, see $out_dir/cv.log" >&2; return 1; }
 
@@ -287,13 +302,13 @@ echo
 echo "============================================================"
 echo "  Pipeline done: $n_done total, $n_failed failed"
 echo "============================================================"
-python3 - "$OUT_ROOT" <<'PY'
+python3 - "$OUT_ROOT" "$OUT_SUFFIX" <<'PY'
 import sys, json, glob, os
-root = sys.argv[1]
+root, suffix = sys.argv[1], sys.argv[2]
 print(f"\n{'dataset':<14s}  {'MAE':>10s}  {'RMSE':>10s}  {'R2':>8s}  {'n_folds':>8s}")
 print("-" * 60)
-for rep in sorted(glob.glob(os.path.join(root, "*_warm/cv_report.json"))):
-    name = os.path.basename(os.path.dirname(rep)).replace("_warm", "")
+for rep in sorted(glob.glob(os.path.join(root, f"*_{suffix}/cv_report.json"))):
+    name = os.path.basename(os.path.dirname(rep)).replace(f"_{suffix}", "")
     try:
         d = json.load(open(rep))
         print(f"{name:<14s}  {d['mae_mean']:>10.4f}  {d['rmse_mean']:>10.4f}  "

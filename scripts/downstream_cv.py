@@ -362,6 +362,17 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
               f"variance (group-batched train shuffle).")
         args._inv_announced = True
 
+    # Best-val tracking + optional early stopping. We always track val MAE
+    # per epoch (cheap on cached H) and at the end restore the best model
+    # for the comprehensive eval, so cv_report.json reflects val_min not
+    # val_last regardless of any late-epoch overfit.
+    patience_n = int(getattr(args, "early_stopping_patience", 0) or 0)
+    best_val_mae = float("inf")
+    best_state = None
+    best_epoch = -1
+    patience_counter = 0
+    n_epochs_run = 0
+
     for ep in range(args.epochs):
         model.train()
         epoch_loss_sum = 0.0
@@ -397,8 +408,43 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
             epoch_abs_err_sum += float(residual.detach().abs().sum().item())
             epoch_loss_count += n_valid
 
-        # Per-epoch logging — drives wandb training curves. Cheap because
-        # head is small (~M params); val pass on cached H is sub-second.
+        # Per-epoch val MAE in physical units. Always computed (cheap on
+        # cached H) so we can drive best-val tracking + early stopping
+        # regardless of whether wandb is enabled.
+        model.eval()
+        with torch.no_grad():
+            vp = []
+            for H_b, b_b, _, _ in batch_iter(H, offsets, tgt_norm,
+                                            val_idx_list,
+                                            args.batch_size, device,
+                                            shuffle=False):
+                vp.append(model(H_b, b_b).cpu().numpy())
+        vp_phys = np.concatenate(vp) * std + mean
+        if val_groups_local is None:
+            err = vp_phys[val_mask_local] - y_true_local[val_mask_local]
+            val_mae_ep = float(np.mean(np.abs(err)))
+        else:
+            vp_m = vp_phys[val_mask_local]
+            yt_m = y_true_local[val_mask_local]
+            grps = val_groups_local[val_mask_local]
+            _, inv = np.unique(grps, return_inverse=True)
+            cnt = np.bincount(inv).clip(min=1)
+            pm = np.bincount(inv, weights=vp_m) / cnt
+            ym = np.bincount(inv, weights=yt_m) / cnt
+            val_mae_ep = float(np.mean(np.abs(pm - ym)))
+
+        # Best-val tracking. Snapshot model state on improvement so the
+        # final eval uses val_min, not val_last.
+        n_epochs_run = ep + 1
+        if val_mae_ep < best_val_mae:
+            best_val_mae = val_mae_ep
+            best_epoch = ep
+            best_state = {k: v.detach().cpu().clone()
+                          for k, v in model.state_dict().items()}
+            patience_counter = 0
+        else:
+            patience_counter += 1
+
         if wandb_run is not None:
             train_loss_zspace = (epoch_loss_sum / max(epoch_loss_count, 1))
             train_mae_phys = (
@@ -407,40 +453,30 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
             train_rmse_phys = float(np.sqrt(train_loss_zspace)) * std
             current_lr = float(opt.param_groups[0]["lr"])
             log_dict = {
-                f"fold_{fold_i}/train_loss":      train_loss_zspace,   # z-MSE
-                f"fold_{fold_i}/train_mae_phys":  train_mae_phys,      # physical
-                f"fold_{fold_i}/train_rmse_phys": train_rmse_phys,     # physical
+                f"fold_{fold_i}/train_loss":      train_loss_zspace,
+                f"fold_{fold_i}/train_mae_phys":  train_mae_phys,
+                f"fold_{fold_i}/train_rmse_phys": train_rmse_phys,
                 f"fold_{fold_i}/lr":              current_lr,
                 f"fold_{fold_i}/epoch":           ep,
+                f"fold_{fold_i}/val_mae":         val_mae_ep,
+                f"fold_{fold_i}/best_val_mae":    best_val_mae,
             }
             if use_inv and epoch_inv_count > 0:
                 log_dict[f"fold_{fold_i}/train_inv_var"] = (
                     epoch_inv_sum / epoch_inv_count
                 )
-            # Quick val MAE in physical units (every epoch).
-            model.eval()
-            with torch.no_grad():
-                vp = []
-                for H_b, b_b, _, _ in batch_iter(H, offsets, tgt_norm,
-                                                val_idx_list,
-                                                args.batch_size, device,
-                                                shuffle=False):
-                    vp.append(model(H_b, b_b).cpu().numpy())
-            vp_phys = np.concatenate(vp) * std + mean
-            if val_groups_local is None:
-                err = vp_phys[val_mask_local] - y_true_local[val_mask_local]
-                log_dict[f"fold_{fold_i}/val_mae"] = float(np.mean(np.abs(err)))
-            else:
-                # Aggregate by group_id before MAE — same as final eval.
-                vp_m = vp_phys[val_mask_local]
-                yt_m = y_true_local[val_mask_local]
-                grps = val_groups_local[val_mask_local]
-                _, inv = np.unique(grps, return_inverse=True)
-                cnt = np.bincount(inv).clip(min=1)
-                pm = np.bincount(inv, weights=vp_m) / cnt
-                ym = np.bincount(inv, weights=yt_m) / cnt
-                log_dict[f"fold_{fold_i}/val_mae"] = float(np.mean(np.abs(pm - ym)))
             wandb_run.log(log_dict)
+
+        # Early stop after the improvement check / wandb log.
+        if patience_n > 0 and patience_counter >= patience_n:
+            print(f"  [early-stop] no improvement for {patience_n} epochs "
+                  f"(best val_mae={best_val_mae:.4f} @ ep {best_epoch+1}); "
+                  f"stopped at ep {ep+1}/{args.epochs}")
+            break
+
+    # Restore best-val state for the comprehensive eval below.
+    if best_state is not None:
+        model.load_state_dict({k: v.to(device) for k, v in best_state.items()})
 
     # Evaluate (preds in val_idx ORDER, then de-normalize to physical units).
     model.eval()
@@ -466,6 +502,8 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
             "mae":  float(mean_absolute_error(y_true[mask], preds[mask])),
             "rmse": float(np.sqrt(mean_squared_error(y_true[mask], preds[mask]))),
             "r2":   float(r2_score(y_true[mask], preds[mask])),
+            "best_epoch":   best_epoch + 1,
+            "n_epochs_run": n_epochs_run,
         }
 
     # Ensemble path: aggregate K conformer preds per group_id, then metrics.
@@ -502,6 +540,8 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
         "ensemble_pred_std_p95":    float(np.percentile(pred_std_per_group, 95)),
         # Express conformer noise as fraction of target spread for portability:
         "ensemble_pred_std_over_target_std": float(np.mean(pred_std_per_group) / max(std, 1e-12)),
+        "best_epoch":   best_epoch + 1,
+        "n_epochs_run": n_epochs_run,
     }
 
 
@@ -522,6 +562,12 @@ def main():
                    help="LR schedule. 'constant' keeps lr fixed at --lr the "
                         "whole run (use to test whether cosine decay is "
                         "choking late-epoch learning).")
+    p.add_argument("--early-stopping-patience", type=int, default=0,
+                   help="Stop training a fold if val MAE has not improved "
+                        "for this many epochs. 0 = disabled. The reported "
+                        "metrics always come from the val_min epoch "
+                        "regardless of this flag (best model is restored "
+                        "before final eval).")
     p.add_argument("--weight-decay", type=float, default=1e-5)
     p.add_argument("--n-mp-layers", type=int, default=2)
     p.add_argument("--mp-n-heads", type=int, default=4)
@@ -729,8 +775,10 @@ def main():
         if "ensemble_pred_std_mean" in rep:
             ens_str = (f"  pred_σ_mean={rep['ensemble_pred_std_mean']:.4f} "
                        f"(={rep['ensemble_pred_std_over_target_std']*100:.1f}% of target σ)")
+        ep_str = (f"  best_ep={rep['best_epoch']}/{rep['n_epochs_run']}"
+                  if "best_epoch" in rep else "")
         print(f"  MAE={rep['mae']:.4f}  RMSE={rep['rmse']:.4f}  "
-              f"R2={rep['r2']:.3f}{ens_str}")
+              f"R2={rep['r2']:.3f}{ep_str}{ens_str}")
         if wandb_run is not None:
             wandb_run.log({f"fold/{fold_i}/{k}": v for k, v in rep.items()
                             if isinstance(v, (int, float))})
