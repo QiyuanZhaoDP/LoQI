@@ -68,6 +68,14 @@ BATCH=${BATCH:-64}
 
 EARLY_STOP_PATIENCE=${EARLY_STOP_PATIENCE:-0}   # 0 = disabled
 
+# LoRA-adapter FT (backbone unfrozen via low-rank deltas). 0 = disabled
+# (head-only on cached H). Useful for breaking the H ceiling without
+# losing the base ckpt's generation capability — no LoRA → original
+# generative behavior; with LoRA → property-tuned behavior.
+LORA_R=${LORA_R:-0}
+LORA_ALPHA=${LORA_ALPHA:-}                       # empty → defaults to LORA_R
+LORA_TARGET=${LORA_TARGET:-qkv_proj,out_projection}
+
 # Suffix appended to each dataset's per-mode output dir so multiple modes
 # (warm vs cold-small vs cold-large) don't collide under OUT_ROOT.
 OUT_SUFFIX=${OUT_SUFFIX:-warm}
@@ -225,6 +233,13 @@ _run_one() {
     if (( EARLY_STOP_PATIENCE > 0 )); then
         stop_args="--early-stopping-patience $EARLY_STOP_PATIENCE"
     fi
+    local lora_args=""
+    if (( LORA_R > 0 )); then
+        lora_args="--lora-r $LORA_R --lora-target $LORA_TARGET"
+        if [[ -n "$LORA_ALPHA" ]]; then
+            lora_args="$lora_args --lora-alpha $LORA_ALPHA"
+        fi
+    fi
     CUDA_VISIBLE_DEVICES=$gpu python scripts/downstream_cv.py \
         --ckpt   "$CKPT"   --config "$CONFIG" \
         --dataset-pt "$pt" \
@@ -233,7 +248,7 @@ _run_one() {
         --n-folds 5 --epochs "$EPOCHS" --lr "$LR" \
         --batch-size "$BATCH" \
         --device cuda \
-        $wandb_args $warm_args $stop_args \
+        $wandb_args $warm_args $stop_args $lora_args \
         >> "$out_dir/cv.log" 2>&1 \
         || { echo "[$name] CV FAILED, see $out_dir/cv.log" >&2; return 1; }
 

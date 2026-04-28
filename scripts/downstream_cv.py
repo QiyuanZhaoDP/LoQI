@@ -33,6 +33,7 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from omegaconf import OmegaConf
 from rdkit.Chem.rdchem import Mol
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
@@ -303,6 +304,66 @@ def _within_group_var_loss(pred, group_ids):
     return var[valid].mean()
 
 
+# ---------------------------------------------------------------------------
+# LoRA: low-rank adapters on backbone Linear layers. When --lora-r > 0, the
+# downstream FT path keeps the backbone in memory and lets gradients flow
+# through it (only into LoRA A/B params + head; the base Linear weights stay
+# frozen). LoRA params are reset between folds so each fold is independent.
+# ---------------------------------------------------------------------------
+
+class LoRALinear(nn.Module):
+    """y = base(x) + (alpha / r) * (B @ A @ x), with base frozen.
+
+    LoRA paper init: A ~ kaiming_uniform, B = 0  →  initial output equals
+    base(x), so injecting LoRA at any point preserves the model's behavior
+    until the adapters get gradient.
+    """
+
+    def __init__(self, base: nn.Linear, r: int, alpha: float | None = None):
+        super().__init__()
+        self.base = base
+        for p in self.base.parameters():
+            p.requires_grad = False
+        self.r = int(r)
+        self.scaling = (float(alpha) if alpha is not None else float(r)) / float(r)
+        self.lora_A = nn.Parameter(torch.empty(r, base.in_features))
+        self.lora_B = nn.Parameter(torch.zeros(base.out_features, r))
+        nn.init.kaiming_uniform_(self.lora_A, a=5 ** 0.5)
+
+    def forward(self, x):
+        # base(x) + scaling * (x @ A.T) @ B.T
+        return self.base(x) + F.linear(F.linear(x, self.lora_A), self.lora_B) * self.scaling
+
+
+def inject_lora(module: nn.Module, target_names: set, r: int, alpha=None) -> int:
+    """Recursively replace nn.Linear children whose attribute name is in
+    `target_names` with LoRALinear wrappers. Returns count wrapped."""
+    n = 0
+    for name, child in list(module.named_children()):
+        if isinstance(child, nn.Linear) and name in target_names:
+            setattr(module, name, LoRALinear(child, r=r, alpha=alpha))
+            n += 1
+        else:
+            n += inject_lora(child, target_names, r, alpha)
+    return n
+
+
+def reset_lora_params(module: nn.Module) -> None:
+    """Re-init all LoRALinear A/B params to their starting values. Call
+    between folds so a shared backbone object can serve fresh fold trainings."""
+    for m in module.modules():
+        if isinstance(m, LoRALinear):
+            nn.init.kaiming_uniform_(m.lora_A, a=5 ** 0.5)
+            nn.init.zeros_(m.lora_B)
+
+
+def lora_parameters(module: nn.Module):
+    """Iterator over LoRA-only trainable parameters in a module tree."""
+    for n, p in module.named_parameters():
+        if n.split(".")[-1] in ("lora_A", "lora_B"):
+            yield p
+
+
 def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
                     args, device, ensemble_groups=None,
                     wandb_run=None, fold_i=0):
@@ -545,6 +606,249 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
     }
 
 
+def train_one_fold_lora(ds, model, train_idx, val_idx, args, device,
+                        ensemble_groups=None, wandb_run=None, fold_i=0,
+                        t_type=None, t_max=None):
+    """LoRA-adapted FT path: each batch runs full backbone + head forward,
+    gradients flow into LoRA A/B + head only. Mirrors train_one_fold's
+    semantics for early stopping / best-val tracking / ensemble metrics
+    so cv_report.json shape stays identical."""
+
+    reset_lora_params(model)
+
+    # --- Train-side z-score normalization (cheap iter over Data) --------
+    tr_targets = []
+    for i in train_idx:
+        d = ds[int(i)]
+        if bool(d.has_target.item()):
+            tr_targets.append(float(d.target.item()))
+    mean = float(np.mean(tr_targets)) if tr_targets else 0.0
+    std = float(np.std(tr_targets)) if len(tr_targets) > 1 else 1.0
+    if std == 0.0:
+        std = 1.0
+
+    # --- DataLoaders -----------------------------------------------------
+    train_subset = [ds[int(i)] for i in train_idx]
+    val_subset = [ds[int(i)] for i in val_idx]
+    train_loader = DataLoader(train_subset, batch_size=args.batch_size, shuffle=True)
+    val_loader = DataLoader(val_subset, batch_size=args.batch_size, shuffle=False)
+
+    # Discover H_dim from a probe forward (cheap; one batch on val_loader).
+    model.eval()
+    with torch.no_grad():
+        probe = next(iter(val_loader)).to(device)
+        bs = int(probe.batch.max().item()) + 1
+        probe_pp = model.batch_preprocessor(probe)
+        t_p = (torch.full((bs,), int(t_max), dtype=torch.long, device=device)
+               if t_type == "discrete"
+               else torch.full((bs,), float(t_max), dtype=torch.float32, device=device))
+        out, _, _ = model(probe_pp, t_p)
+        H_dim = int(out["H"].shape[-1])
+    head = SingleTargetHead(
+        dim=H_dim, hidden=args.head_hidden,
+        n_mp_layers=args.n_mp_layers, n_heads=args.mp_n_heads,
+    ).to(device)
+    if getattr(args, "init_head_from_thermo", False):
+        n_copied = load_thermo_head_into(head, args.ckpt)
+        head = head.to(device)
+        if not getattr(args, "_thermo_warm_announced", False):
+            print(f"  [warm-init] copied {n_copied} tensors from thermo head; "
+                  "final Linear (5→1) random-init.")
+            args._thermo_warm_announced = True
+
+    # --- Optimizer over LoRA A/B + head params ---------------------------
+    lora_p = list(lora_parameters(model))
+    head_p = list(head.parameters())
+    if not getattr(args, "_lora_announced", False):
+        n_lora = sum(p.numel() for p in lora_p)
+        n_head = sum(p.numel() for p in head_p)
+        n_frozen = sum(p.numel() for p in model.parameters() if not p.requires_grad)
+        print(f"  [LoRA] r={args.lora_r}  trainable: lora={n_lora:,}  "
+              f"head={n_head:,}  frozen_backbone={n_frozen:,}")
+        args._lora_announced = True
+    opt = torch.optim.AdamW(lora_p + head_p, lr=args.lr,
+                             weight_decay=args.weight_decay)
+    total_steps = max(1, len(train_loader) * args.epochs)
+    if args.lr_schedule == "constant":
+        sched = torch.optim.lr_scheduler.LambdaLR(opt, lr_lambda=lambda _: 1.0)
+    else:
+        sched = torch.optim.lr_scheduler.CosineAnnealingLR(
+            opt, T_max=total_steps, eta_min=args.lr_min,
+        )
+
+    # --- Pre-computed val info -------------------------------------------
+    val_idx_arr = np.asarray(val_idx)
+    val_has = np.array([bool(ds[int(i)].has_target.item()) for i in val_idx_arr],
+                       dtype=bool)
+    y_true_val = np.array([float(ds[int(i)].target.item()) for i in val_idx_arr],
+                          dtype=np.float32)
+    val_mask = val_has & ~np.isnan(y_true_val)
+    val_groups = (ensemble_groups[val_idx_arr] if ensemble_groups is not None
+                  else None)
+    n_train_total = int(sum(1 for i in train_idx
+                            if bool(ds[int(i)].has_target.item())))
+
+    # --- Best-val tracking + early stopping ------------------------------
+    patience_n = int(getattr(args, "early_stopping_patience", 0) or 0)
+    best_val_mae = float("inf")
+    best_state = None
+    best_epoch = -1
+    patience_counter = 0
+    n_epochs_run = 0
+
+    def _snapshot():
+        return {
+            "head": {k: v.detach().cpu().clone()
+                     for k, v in head.state_dict().items()},
+            "lora": {n: p.detach().cpu().clone()
+                     for n, p in model.named_parameters()
+                     if n.split(".")[-1] in ("lora_A", "lora_B")},
+        }
+
+    def _restore(s):
+        head.load_state_dict({k: v.to(device) for k, v in s["head"].items()})
+        live = dict(model.named_parameters())
+        for n, p in s["lora"].items():
+            live[n].data.copy_(p.to(device))
+
+    def _val_pass():
+        model.eval(); head.eval()
+        chunks = []
+        with torch.no_grad():
+            for batch in val_loader:
+                batch = batch.to(device)
+                bs_ = int(batch.batch.max().item()) + 1
+                bp = model.batch_preprocessor(batch)
+                t_v = (torch.full((bs_,), int(t_max), dtype=torch.long, device=device)
+                       if t_type == "discrete"
+                       else torch.full((bs_,), float(t_max), dtype=torch.float32, device=device))
+                out_v, _, _ = model(bp, t_v)
+                chunks.append(head(out_v["H"], bp.batch).cpu().numpy())
+        return np.concatenate(chunks) * std + mean
+
+    def _val_mae_aggr(vp_phys):
+        if val_groups is None:
+            return float(np.mean(np.abs(vp_phys[val_mask] - y_true_val[val_mask])))
+        vp_m = vp_phys[val_mask]; yt_m = y_true_val[val_mask]
+        grps = val_groups[val_mask]
+        _, inv = np.unique(grps, return_inverse=True)
+        cnt = np.bincount(inv).clip(min=1)
+        pm = np.bincount(inv, weights=vp_m) / cnt
+        ym = np.bincount(inv, weights=yt_m) / cnt
+        return float(np.mean(np.abs(pm - ym)))
+
+    # --- Train loop ------------------------------------------------------
+    for ep in range(args.epochs):
+        model.train(); head.train()
+        epoch_loss_sum = 0.0
+        epoch_loss_count = 0
+        epoch_abs_err_sum = 0.0
+        for batch in train_loader:
+            batch = batch.to(device)
+            bs_ = int(batch.batch.max().item()) + 1
+            tgt = batch.target.view(-1).float()
+            has = batch.has_target.view(-1).bool()
+            tgt_norm = (tgt - mean) / std
+            valid = has & ~torch.isnan(tgt_norm)
+            if not valid.any():
+                continue
+            bp = model.batch_preprocessor(batch)
+            t_b = (torch.full((bs_,), int(t_max), dtype=torch.long, device=device)
+                   if t_type == "discrete"
+                   else torch.full((bs_,), float(t_max), dtype=torch.float32, device=device))
+            out, _, _ = model(bp, t_b)
+            pred = head(out["H"], bp.batch)
+            residual = pred[valid] - tgt_norm[valid]
+            loss = (residual ** 2).mean()
+            opt.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(lora_p + head_p, 1.0)
+            opt.step()
+            sched.step()
+            n_valid = int(valid.sum().item())
+            epoch_loss_sum += float(loss.detach().item()) * n_valid
+            epoch_abs_err_sum += float(residual.detach().abs().sum().item())
+            epoch_loss_count += n_valid
+
+        # Per-epoch val + best/early-stop
+        vp_phys = _val_pass()
+        val_mae_ep = _val_mae_aggr(vp_phys)
+        n_epochs_run = ep + 1
+        if val_mae_ep < best_val_mae:
+            best_val_mae = val_mae_ep
+            best_epoch = ep
+            best_state = _snapshot()
+            patience_counter = 0
+        else:
+            patience_counter += 1
+
+        if wandb_run is not None:
+            train_loss_zspace = epoch_loss_sum / max(epoch_loss_count, 1)
+            train_mae_phys = epoch_abs_err_sum / max(epoch_loss_count, 1) * std
+            train_rmse_phys = float(np.sqrt(train_loss_zspace)) * std
+            wandb_run.log({
+                f"fold_{fold_i}/train_loss":      train_loss_zspace,
+                f"fold_{fold_i}/train_mae_phys":  train_mae_phys,
+                f"fold_{fold_i}/train_rmse_phys": train_rmse_phys,
+                f"fold_{fold_i}/lr":              float(opt.param_groups[0]["lr"]),
+                f"fold_{fold_i}/epoch":           ep,
+                f"fold_{fold_i}/val_mae":         val_mae_ep,
+                f"fold_{fold_i}/best_val_mae":    best_val_mae,
+            })
+
+        if patience_n > 0 and patience_counter >= patience_n:
+            print(f"  [early-stop] no improvement for {patience_n} epochs "
+                  f"(best val_mae={best_val_mae:.4f} @ ep {best_epoch+1}); "
+                  f"stopped at ep {ep+1}/{args.epochs}")
+            break
+
+    # Restore best LoRA + head, then comprehensive eval.
+    if best_state is not None:
+        _restore(best_state)
+    preds = _val_pass()
+
+    if ensemble_groups is None:
+        return {
+            "n_train": n_train_total, "n_val": int(val_mask.sum()),
+            "target_mean": mean, "target_std": std,
+            "mae":  float(mean_absolute_error(y_true_val[val_mask], preds[val_mask])),
+            "rmse": float(np.sqrt(mean_squared_error(y_true_val[val_mask], preds[val_mask]))),
+            "r2":   float(r2_score(y_true_val[val_mask], preds[val_mask])),
+            "best_epoch":   best_epoch + 1,
+            "n_epochs_run": n_epochs_run,
+        }
+
+    val_groups_masked = val_groups[val_mask]
+    preds_masked = preds[val_mask]
+    y_true_masked = y_true_val[val_mask]
+    unique_groups, inv = np.unique(val_groups_masked, return_inverse=True)
+    counts = np.bincount(inv, minlength=len(unique_groups)).clip(min=1)
+    sums = np.bincount(inv, weights=preds_masked, minlength=len(unique_groups))
+    sums_sq = np.bincount(inv, weights=preds_masked ** 2, minlength=len(unique_groups))
+    pred_per_group = sums / counts
+    pred_var_per_group = np.maximum(sums_sq / counts - pred_per_group ** 2, 0.0)
+    pred_std_per_group = np.sqrt(pred_var_per_group)
+    y_sums = np.bincount(inv, weights=y_true_masked, minlength=len(unique_groups))
+    y_per_group = y_sums / counts
+
+    return {
+        "n_train":       n_train_total,
+        "n_val":         int(val_mask.sum()),
+        "n_val_groups":  int(len(unique_groups)),
+        "ensemble_K":    int(np.median(counts)),
+        "target_mean":   mean, "target_std": std,
+        "mae":  float(mean_absolute_error(y_per_group, pred_per_group)),
+        "rmse": float(np.sqrt(mean_squared_error(y_per_group, pred_per_group))),
+        "r2":   float(r2_score(y_per_group, pred_per_group)),
+        "ensemble_pred_std_mean":   float(np.mean(pred_std_per_group)),
+        "ensemble_pred_std_median": float(np.median(pred_std_per_group)),
+        "ensemble_pred_std_p95":    float(np.percentile(pred_std_per_group, 95)),
+        "ensemble_pred_std_over_target_std": float(np.mean(pred_std_per_group) / max(std, 1e-12)),
+        "best_epoch":   best_epoch + 1,
+        "n_epochs_run": n_epochs_run,
+    }
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--ckpt", required=True)
@@ -562,6 +866,20 @@ def main():
                    help="LR schedule. 'constant' keeps lr fixed at --lr the "
                         "whole run (use to test whether cosine decay is "
                         "choking late-epoch learning).")
+    p.add_argument("--lora-r", type=int, default=0,
+                   help="LoRA rank for backbone-adapter FT. 0 = disabled "
+                        "(use cached-H head-only path). When > 0 we keep the "
+                        "backbone in memory, wrap target Linears with rank-r "
+                        "adapters, and let gradients flow into LoRA A/B + "
+                        "head. Base backbone weights stay frozen.")
+    p.add_argument("--lora-alpha", type=float, default=None,
+                   help="LoRA scaling: forward = base + (alpha/r) * delta. "
+                        "Default = r (so alpha/r = 1).")
+    p.add_argument("--lora-target", type=str,
+                   default="qkv_proj,out_projection",
+                   help="Comma-separated attribute names of nn.Linear modules "
+                        "to wrap. Defaults to attention QKV + out projection. "
+                        "Add ffn_norm/etc to expand coverage.")
     p.add_argument("--early-stopping-patience", type=int, default=0,
                    help="Stop training a fold if val MAE has not improved "
                         "for this many epochs. 0 = disabled. The reported "
@@ -678,12 +996,43 @@ def main():
             args.mp_n_heads  = mp_n_heads_cfg
             args.head_hidden = hidden_cfg
 
-    cache_path = out_dir / "H_cache.pt"
-    H, offsets, targets, has_target = extract_H(
-        model, cfg, ds, list(range(n)),
-        args.extract_batch_size, device, cache_path,
-    )
-    del model  # free GPU memory
+    use_lora = args.lora_r > 0
+    if use_lora:
+        # LoRA path: keep backbone in memory, inject adapters once. We
+        # still need targets/has_target for the fold split — derive them
+        # by iterating the dataset (no backbone forward).
+        target_names = {s.strip() for s in args.lora_target.split(",")
+                         if s.strip()}
+        n_wrapped = inject_lora(model, target_names,
+                                r=args.lora_r, alpha=args.lora_alpha)
+        if n_wrapped == 0:
+            raise SystemExit(
+                f"[LoRA] no Linears matched names {target_names}. Check "
+                f"--lora-target against your backbone module names."
+            )
+        n_lora_total = sum(p.numel() for p in lora_parameters(model))
+        print(f"[LoRA] wrapped {n_wrapped} Linears, "
+              f"alpha={args.lora_alpha if args.lora_alpha is not None else args.lora_r}, "
+              f"trainable LoRA params: {n_lora_total:,}")
+        # Keep base backbone frozen (LoRALinear.__init__ already did this
+        # for wrapped Linears; freeze the rest too).
+        for n_p, p in model.named_parameters():
+            if n_p.split(".")[-1] not in ("lora_A", "lora_B"):
+                p.requires_grad = False
+
+        # Targets / has_target without H caching.
+        targets = torch.tensor(
+            [float(ds[i].target.item()) for i in range(n)], dtype=torch.float)
+        has_target = torch.tensor(
+            [bool(ds[i].has_target.item()) for i in range(n)], dtype=torch.bool)
+        H = offsets = None  # not used in LoRA path
+    else:
+        cache_path = out_dir / "H_cache.pt"
+        H, offsets, targets, has_target = extract_H(
+            model, cfg, ds, list(range(n)),
+            args.extract_batch_size, device, cache_path,
+        )
+        del model  # free GPU memory
 
     # K-fold split on indices where has_target==True.
     # In ensemble mode we split by GROUP (e.g. input_id), so all K conformers
@@ -764,10 +1113,21 @@ def main():
             val_idx   = labeled[vl]
             print(f"\n=== Fold {fold_i+1}/{args.n_folds} | "
                   f"train={len(train_idx)}  val={len(val_idx)} ===")
-        rep = train_one_fold(H, offsets, targets, has_target,
-                              train_idx, val_idx, args, device,
-                              ensemble_groups=ensemble_groups,
-                              wandb_run=wandb_run, fold_i=fold_i)
+        if use_lora:
+            t_type = str(cfg.interpolant.time_type)
+            t_max = (cfg.interpolant.timesteps - 1
+                      if t_type == "discrete" else 1.0)
+            rep = train_one_fold_lora(
+                ds, model, train_idx, val_idx, args, device,
+                ensemble_groups=ensemble_groups,
+                wandb_run=wandb_run, fold_i=fold_i,
+                t_type=t_type, t_max=t_max,
+            )
+        else:
+            rep = train_one_fold(H, offsets, targets, has_target,
+                                  train_idx, val_idx, args, device,
+                                  ensemble_groups=ensemble_groups,
+                                  wandb_run=wandb_run, fold_i=fold_i)
         rep["fold"] = fold_i
         fold_reports.append(rep)
         # Compact per-fold summary; include conformer-spread when in ensemble mode.
