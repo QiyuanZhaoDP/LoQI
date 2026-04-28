@@ -336,13 +336,30 @@ class LoRALinear(nn.Module):
 
 
 def inject_lora(module: nn.Module, target_names: set, r: int, alpha=None) -> int:
-    """Recursively replace nn.Linear children whose attribute name is in
-    `target_names` with LoRALinear wrappers. Returns count wrapped."""
+    """Recursively wrap target Linears with LoRALinear. Returns count wrapped.
+
+    A child whose attribute name is in `target_names` is treated as a target.
+    Two cases:
+      * direct Linear  → wrap it
+      * Sequential / ModuleList → wrap every direct Linear child of the
+        container (catches the two Linears inside swiglu_ffn, since they're
+        anonymous indices 0 and 2 of an `ffn` Sequential and otherwise
+        un-targetable by attribute name).
+
+    Anything else that doesn't match: recurse into it."""
     n = 0
     for name, child in list(module.named_children()):
-        if isinstance(child, nn.Linear) and name in target_names:
-            setattr(module, name, LoRALinear(child, r=r, alpha=alpha))
-            n += 1
+        if name in target_names:
+            if isinstance(child, nn.Linear):
+                setattr(module, name, LoRALinear(child, r=r, alpha=alpha))
+                n += 1
+            elif isinstance(child, (nn.Sequential, nn.ModuleList)):
+                for sub_name, sub_child in list(child.named_children()):
+                    if isinstance(sub_child, nn.Linear):
+                        setattr(child, sub_name,
+                                LoRALinear(sub_child, r=r, alpha=alpha))
+                        n += 1
+            # don't recurse into matched names — already handled.
         else:
             n += inject_lora(child, target_names, r, alpha)
     return n
