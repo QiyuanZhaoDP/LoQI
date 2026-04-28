@@ -586,6 +586,14 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
     y_sums = np.bincount(inv, weights=y_true_masked, minlength=len(unique_groups))
     y_per_group = y_sums / counts
 
+    # Per-conformer metrics (UniMol-style: MAE on raw K predictions, no
+    # ensemble averaging). Computed exactly here, complementing the
+    # ensemble metrics above. y_true is broadcast to per-Data so the
+    # comparison sees all K (X_ij, y_i) pairs.
+    pc_mae  = float(mean_absolute_error(y_true_masked, preds_masked))
+    pc_rmse = float(np.sqrt(mean_squared_error(y_true_masked, preds_masked)))
+    pc_r2   = float(r2_score(y_true_masked, preds_masked))
+
     return {
         "n_train":       n_train_total,
         "n_val":         int(mask.sum()),
@@ -595,6 +603,10 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
         "mae":  float(mean_absolute_error(y_per_group, pred_per_group)),
         "rmse": float(np.sqrt(mean_squared_error(y_per_group, pred_per_group))),
         "r2":   float(r2_score(y_per_group, pred_per_group)),
+        # Per-conformer (single-conformer) eval — directly comparable to UniMol:
+        "mae_per_conformer":  pc_mae,
+        "rmse_per_conformer": pc_rmse,
+        "r2_per_conformer":   pc_r2,
         # Conformer-spread diagnostics (per-input-id pred-stddev, in target units):
         "ensemble_pred_std_mean":   float(np.mean(pred_std_per_group)),
         "ensemble_pred_std_median": float(np.median(pred_std_per_group)),
@@ -831,6 +843,11 @@ def train_one_fold_lora(ds, model, train_idx, val_idx, args, device,
     y_sums = np.bincount(inv, weights=y_true_masked, minlength=len(unique_groups))
     y_per_group = y_sums / counts
 
+    # Per-conformer eval (UniMol-comparable; see train_one_fold).
+    pc_mae  = float(mean_absolute_error(y_true_masked, preds_masked))
+    pc_rmse = float(np.sqrt(mean_squared_error(y_true_masked, preds_masked)))
+    pc_r2   = float(r2_score(y_true_masked, preds_masked))
+
     return {
         "n_train":       n_train_total,
         "n_val":         int(val_mask.sum()),
@@ -840,6 +857,9 @@ def train_one_fold_lora(ds, model, train_idx, val_idx, args, device,
         "mae":  float(mean_absolute_error(y_per_group, pred_per_group)),
         "rmse": float(np.sqrt(mean_squared_error(y_per_group, pred_per_group))),
         "r2":   float(r2_score(y_per_group, pred_per_group)),
+        "mae_per_conformer":  pc_mae,
+        "rmse_per_conformer": pc_rmse,
+        "r2_per_conformer":   pc_r2,
         "ensemble_pred_std_mean":   float(np.mean(pred_std_per_group)),
         "ensemble_pred_std_median": float(np.median(pred_std_per_group)),
         "ensemble_pred_std_p95":    float(np.percentile(pred_std_per_group, 95)),
@@ -1160,6 +1180,15 @@ def main():
             [r["ensemble_pred_std_mean"] for r in fold_reports]))
         summary["ensemble_pred_std_over_target_std_avg"] = float(np.mean(
             [r["ensemble_pred_std_over_target_std"] for r in fold_reports]))
+    if "mae_per_conformer" in fold_reports[0]:
+        summary["mae_per_conformer_mean"]  = float(np.mean(
+            [r["mae_per_conformer"]  for r in fold_reports]))
+        summary["mae_per_conformer_std"]   = float(np.std(
+            [r["mae_per_conformer"]  for r in fold_reports]))
+        summary["rmse_per_conformer_mean"] = float(np.mean(
+            [r["rmse_per_conformer"] for r in fold_reports]))
+        summary["r2_per_conformer_mean"]   = float(np.mean(
+            [r["r2_per_conformer"]   for r in fold_reports]))
     report_path = out_dir / "cv_report.json"
     with open(report_path, "w") as f:
         json.dump(summary, f, indent=2)
@@ -1171,6 +1200,12 @@ def main():
     print(f"  MAE  = {summary['mae_mean']:.4f} ± {summary['mae_std']:.4f}")
     print(f"  RMSE = {summary['rmse_mean']:.4f}")
     print(f"  R²   = {summary['r2_mean']:.3f}")
+    if "mae_per_conformer_mean" in summary:
+        print(f"  ---- per-conformer (UniMol-style, no ensembling) ----")
+        print(f"  MAE  = {summary['mae_per_conformer_mean']:.4f} "
+              f"± {summary['mae_per_conformer_std']:.4f}")
+        print(f"  RMSE = {summary['rmse_per_conformer_mean']:.4f}")
+        print(f"  R²   = {summary['r2_per_conformer_mean']:.3f}")
     if "ensemble_pred_std_mean_avg" in summary:
         print(f"  pred σ across K conformers (avg over folds): "
               f"{summary['ensemble_pred_std_mean_avg']:.4f}  "
