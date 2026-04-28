@@ -58,6 +58,12 @@ WANDB=${WANDB:-0}
 WANDB_PROJECT=${WANDB_PROJECT:-downstream_cv}
 
 SKIP_SAMPLING=${SKIP_SAMPLING:-0}
+
+# Subset of modes to actually run. Default: all three. Use this to skip
+# modes you don't need — e.g. for an alternate-backbone control where
+# warm-init has no thermo head to load and cold_small adds little:
+#   MODES="cold_large" bash scripts/run_downstream_K8_full.sh
+MODES=${MODES:-"warm cold_small cold_large"}
 # ================================
 
 mkdir -p "$PKL_DIR" "$PT_DIR" "$OUT_ROOT"
@@ -137,9 +143,10 @@ _run_mode() {
 # warm:        head warm-init; head dims auto-aligned to thermo_head_args
 # cold_small:  no warm-init; small head 128/2/4
 # cold_large:  no warm-init; same dims as warm 256/4/4 (apples-to-apples)
-_run_mode warm       1 256 4 4
-_run_mode cold_small 0 128 2 4
-_run_mode cold_large 0 256 4 4
+_modes_list=" $MODES "
+[[ "$_modes_list" == *" warm "*       ]] && _run_mode warm       1 256 4 4
+[[ "$_modes_list" == *" cold_small "* ]] && _run_mode cold_small 0 128 2 4
+[[ "$_modes_list" == *" cold_large "* ]] && _run_mode cold_large 0 256 4 4
 
 # -----------------------------------------------------------------------
 # Stage 3: Aggregated table across all 3 modes (mae_mean ± std per dataset).
