@@ -41,7 +41,12 @@ SLEEP_HOURS=${SLEEP_HOURS:-2}
 CKPT=${CKPT:-data/thermo_flow_warm.ckpt}
 CONFIG=${CONFIG:-scripts/conf/loqi/loqi_thermo_flow_warm.yaml}
 
-INPUT_DIR=${INPUT_DIR:-downstream_ft}
+# INPUT_DIR defaults to downstream_ft/clean (the deduplicated/filtered
+# output of scripts/clean_downstream.py). Pre-split datasets are FLAT
+# in the clean dir (delaney_s/freesolv_s/lipo_s merged into one CSV
+# with a `_split` column preserved for reference). Override with
+# INPUT_DIR=downstream_ft to reproduce the original raw-data pipeline.
+INPUT_DIR=${INPUT_DIR:-downstream_ft/clean}
 PKL_DIR=${PKL_DIR:-data/downstream_k5}
 PT_DIR=${PT_DIR:-data/downstream_pt}
 OUT_ROOT=${OUT_ROOT:-outputs/downstream_cv}
@@ -97,9 +102,14 @@ fi
 # ---- Dataset table -----------------------------------------------------
 # Each row: NAME|CSV_REL|PKL_REL|SMILES_COL|TARGET_COL|IS_PRESPLIT
 #
-# For pre-split (delaney_s/freesolv_s/lipo_s) the script merges
-# train+valid+test before prepare. CSV_REL is the directory; PKL_REL is
-# also the directory. (No glob needed — we hardcode the 3 split names.)
+# When INPUT_DIR=downstream_ft/clean (default): all 9 datasets are FLAT
+# CSVs in INPUT_DIR (delaney_s/freesolv_s/lipo_s have already been
+# merged from train+valid+test by clean_downstream.py), so IS_PRESPLIT=0
+# everywhere.
+#
+# When INPUT_DIR=downstream_ft (raw): delaney_s/freesolv_s/lipo_s exist
+# as subdirs with train/valid/test.csv. Use IS_PRESPLIT=1 in that case
+# (uncomment the alt block below).
 DATASETS=(
     "Cp|Cp.csv|Cp.pkl|SMILES|TARGET|0"
     "V_cp|V_cp.csv|V_cp.pkl|SMILES|TARGET|0"
@@ -107,10 +117,20 @@ DATASETS=(
     "gas_Hf|gas_Hf.csv|gas_Hf.pkl|smiles|mean|0"
     "k|k.csv|k.pkl|SMILES|TARGET|0"
     "liquid_Hf|liquid_Hf.csv|liquid_Hf.pkl|smiles|mean|0"
-    "delaney_s|delaney_s|delaney_s|SMILES|TARGET|1"
-    "freesolv_s|freesolv_s|freesolv_s|SMILES|TARGET|1"
-    "lipo_s|lipo_s|lipo_s|SMILES|TARGET|1"
+    "delaney_s|delaney_s.csv|delaney_s.pkl|SMILES|TARGET|0"
+    "freesolv_s|freesolv_s.csv|freesolv_s.pkl|SMILES|TARGET|0"
+    "lipo_s|lipo_s.csv|lipo_s.pkl|SMILES|TARGET|0"
 )
+# --- Alt: raw downstream_ft/ (pre-split) ---
+# Restore IS_PRESPLIT=1 for the last three rows when running against the
+# raw input tree. Kept here for reference; not used by default.
+# DATASETS=(
+#     "Cp|Cp.csv|Cp.pkl|SMILES|TARGET|0"
+#     ...
+#     "delaney_s|delaney_s|delaney_s|SMILES|TARGET|1"
+#     "freesolv_s|freesolv_s|freesolv_s|SMILES|TARGET|1"
+#     "lipo_s|lipo_s|lipo_s|SMILES|TARGET|1"
+# )
 
 # ---- Helpers -----------------------------------------------------------
 

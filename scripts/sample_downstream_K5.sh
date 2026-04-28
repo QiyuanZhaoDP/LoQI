@@ -24,7 +24,7 @@ set -uo pipefail        # NOTE: no -e — one CSV's failure shouldn't abort the 
 cd "$(dirname "$0")/.."
 
 # ============ CONFIG ============
-INPUT_DIR=${INPUT_DIR:-downstream_ft}              # CSVs to process (recursive)
+INPUT_DIR=${INPUT_DIR:-downstream_ft/clean}        # CSVs to process (recursive); default = cleaned
 OUTPUT_DIR=${OUTPUT_DIR:-data/downstream_k5}       # where pkls / smi / logs go
 
 FLOW_CKPT=${FLOW_CKPT:-data/thermo_flow_warm.ckpt}

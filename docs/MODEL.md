@@ -198,23 +198,31 @@ Standard `predict()` returns the property value.
 
 ### Downstream FT corpus
 
-9 standard property prediction benchmarks under `downstream_ft/`:
+9 standard property-prediction benchmarks. **Canonical source is
+`downstream_ft/clean/`** — flat, deduplicated, filtered CSVs produced
+by `scripts/clean_downstream.py`. The raw `downstream_ft/<flat>.csv`
+and `downstream_ft/<presplit>/{train,valid,test}.csv` are kept for
+reference; pipelines (`run_downstream_pipeline.sh`,
+`run_downstream_K8_full.sh`, `sample_downstream_K5.sh`) all default
+to `INPUT_DIR=downstream_ft/clean`. To reproduce the original raw-data
+behavior, set `INPUT_DIR=downstream_ft`.
 
-| Dataset | Target | Domain | Size (kept) |
-|---|---|---|---:|
-| Cp | heat capacity | thermo | 1,459 |
-| V_cp | heat capacity at T | thermo | 813 |
-| de | density | thermo | 778 |
-| gas_Hf | Hf at 298 K, gas phase | thermo | 2,419 |
-| k | rate constant | kinetics | 755 |
-| liquid_Hf | Hf at 298 K, liquid | thermo | 1,624 |
-| delaney_s | solubility | ADMET | 1,117 |
-| freesolv_s | hydration free energy | ADMET | 641 |
-| lipo_s | lipophilicity | ADMET | 4,199 |
+| Dataset | Target | Domain | Raw rows | Kept (cleaned) | Drops |
+|---|---|---|---:|---:|---|
+| Cp | heat capacity | thermo | 1,498 | 1,459 | 10 radical + 29 disconnect |
+| V_cp | heat capacity at T | thermo | 813 | 813 | — |
+| de | density | thermo | 782 | 778 | 2 radical + 2 OOD-elem (Sn, Ti) |
+| gas_Hf | Hf at 298 K, gas phase | thermo | 2,486 | 2,419 | 67 radical |
+| k | rate constant | kinetics | 756 | 755 | 1 \|charge\|>1 |
+| liquid_Hf | Hf at 298 K, liquid | thermo | 1,628 | 1,624 | 4 radical |
+| delaney_s | solubility | ADMET | 1,128 (merged) | 1,117 | 11 canonical-dup |
+| freesolv_s | hydration free energy | ADMET | 642 (merged) | 641 | 1 \|charge\|>1 |
+| lipo_s | lipophilicity | ADMET | 4,200 (merged) | 4,199 | 1 disconnect |
 
-Cleaning pipeline (`scripts/clean_downstream.py`) writes deduplicated,
-filtered CSVs to `downstream_ft/clean/`. See
-`downstream_ft/clean/cleaning_report.md` for per-dataset drop counts.
+Pre-split datasets are merged from `train+valid+test` *before* cleaning,
+so canonical-dedup catches duplicates that span the official splits.
+The cleaned CSVs preserve a `_split` column for reference. The full
+report is at `downstream_ft/clean/cleaning_report.md`.
 
 ---
 
@@ -248,21 +256,31 @@ filtered CSVs to `downstream_ft/clean/`. See
 ## Reproducing key numbers
 
 ```bash
+# 0. Clean the downstream CSVs (one-shot; outputs downstream_ft/clean/).
+#    All pipelines below default to INPUT_DIR=downstream_ft/clean, so
+#    this step gates everything that follows.
+python scripts/clean_downstream.py
+
 # 1. Pretrain (cold-start, large config)
 python scripts/train.py --config-name loqi_thermo_flow_cold
 
-# 2. Sample K=8 conformers for all downstream datasets
+# 2. Sample K=8 conformers for every cleaned dataset
 K=8 OUTPUT_DIR=data/downstream_k8 \
     bash scripts/sample_downstream_K5.sh
 
-# 3. Downstream FT — three head modes × 9 datasets
+# 3. Downstream FT — three head modes × 9 datasets, sampling + CV
 nohup bash scripts/run_downstream_K8_full.sh > downstream_K8.log 2>&1 &
 
-# 4. (Optional) LoRA backbone FT
+# 4. (Optional) LoRA backbone FT — breaks the frozen-H ceiling
 LORA_R=8 LORA_TARGET=qkv_proj,out_projection \
     OUT_SUFFIX=lora_r8 \
     bash scripts/run_downstream_pipeline.sh
 ```
+
+To re-run against raw downstream_ft/ instead of the cleaned tree, prefix
+each pipeline call with `INPUT_DIR=downstream_ft` and (for
+run_downstream_pipeline.sh) edit the DATASETS table to restore
+`IS_PRESPLIT=1` for delaney_s / freesolv_s / lipo_s.
 
 ---
 
@@ -293,8 +311,9 @@ scripts/
     loqi_thermo_flow_cold.yaml # phase 2 cold, large backbone
 
 downstream_ft/
-  <dataset>.csv  /  <presplit>/{train,valid,test}.csv  # raw
-  clean/                                               # cleaned (dedup'd)
-    <dataset>.csv
-    cleaning_report.md
+  <dataset>.csv  /  <presplit>/{train,valid,test}.csv  # raw (reference)
+  clean/                                               # CANONICAL
+    <dataset>.csv                                      # flat, dedup'd, filtered
+    cleaning_report.md                                 # per-dataset drop counts
+    cleaning_report.json                               # machine-readable
 ```

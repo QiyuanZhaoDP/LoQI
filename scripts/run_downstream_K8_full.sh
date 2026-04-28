@@ -49,7 +49,10 @@ BATCH=${BATCH:-64}
 CKPT=${CKPT:-data/thermo_flow_warm.ckpt}
 CONFIG=${CONFIG:-scripts/conf/loqi/loqi_thermo_flow_warm.yaml}
 
-INPUT_DIR=${INPUT_DIR:-downstream_ft}
+# Default to the cleaned, deduplicated CSVs from
+# scripts/clean_downstream.py. Override with INPUT_DIR=downstream_ft to
+# run against raw data.
+INPUT_DIR=${INPUT_DIR:-downstream_ft/clean}
 PKL_DIR=${PKL_DIR:-data/downstream_k${K}}
 PT_DIR=${PT_DIR:-data/downstream_pt}
 OUT_ROOT=${OUT_ROOT:-outputs/downstream_cv_K${K}}
