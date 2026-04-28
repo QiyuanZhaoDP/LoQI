@@ -1,6 +1,6 @@
 # downstream_ft cleaning report
 
-Generated: `2026-04-28T14:03:23`  
+Generated: `2026-04-28T14:40:04`  
 Source:    `downstream_ft/`  
 Output:    `downstream_ft/clean/<dataset>.csv`
 
@@ -17,6 +17,25 @@ Each row drops on the **first** condition it fails (counted at that step only; s
 7. **canonical-SMILES dedup** (first occurrence kept across the entire dataset, including across pre-split files)
 
 Pre-split datasets (`delaney_s`, `freesolv_s`, `lipo_s`) are merged from `train.csv + valid.csv + test.csv` before cleaning, so canonical dedup also catches duplicates that span the official splits. The `_split` column is preserved in the cleaned CSV for downstream that wants to honor it.
+
+## Why radicals are filtered (and not kept for completeness)
+
+The dropped radicals are **not data errors** — they are real molecules with measured thermochemistry. Examples from `gas_Hf.csv` (Hf in kJ/mol):
+
+| SMILES | species | Hf |
+|---|---|---:|
+| `[H]`     | H atom        | 218.0 |
+| `[OH]`    | hydroxyl      |  39.0 |
+| `C[O]`    | methoxyl      |  17.0 |
+| `[CH]=O`  | formyl        |  42.8 |
+| `[C]#N`   | cyano         | 435.1 |
+| `[CH2]O`  | hydroxymethyl |  -9.0 |
+
+They are dropped because **our atom encoder (`ATOMIC_TO_INNER` in `prepare_downstream_dataset.py`) records only `(element, formal_charge)`, NOT the unpaired-electron count.** Under that encoding, the closed-shell methanol `CO` (Hf ≈ −200 kJ/mol) and the open-shell hydroxymethyl radical `[CH2]O` (Hf ≈ −9 kJ/mol) hash to identical atom features — yet their Hf differs by ~190 kJ/mol. Keeping radicals would not just lose 2-3% of data but **silently inject 50-200 kJ/mol systematic errors** on those rows.
+
+Standard practice in pretrained molecular models (UniMol, SchNet, MACE-MP, AIMNet2 family) is the same: closed-shell only. Treat this as a benchmark scope restriction, not a quality issue.
+
+**Future work:** extend the encoder to a `(z, q, n_rad)` triplet and re-pretrain on a corpus that includes radicals. That unlocks gas-phase radical thermochemistry as a distinct ThermoGen capability — closed-shell-only models cannot do this at all.
 
 ## Per-dataset summary
 

@@ -6,11 +6,25 @@ sample_conformers.py without per-mol failures derailing the batch:
 
     * empty / NaN / non-string SMILES        → drop
     * RDKit unparseable                      → drop
-    * radicals (any unpaired electron)       → drop
+    * radicals (any unpaired electron)       → drop  (see note below)
     * disconnected (multi-fragment, "." in)  → drop
     * elements outside LoQI's 17-atom set    → drop
     * |formal_charge| > 1                    → drop  (chembl3d range)
     * canonical SMILES already seen          → drop  (default; --no-dedup)
+
+Why radicals are dropped (and not just "be safe"):
+  Our atom encoder (`ATOMIC_TO_INNER` in prepare_downstream_dataset.py)
+  encodes only element + formal charge — NOT the unpaired-electron count.
+  So a closed-shell methanol `CO` and the open-shell hydroxymethyl
+  radical `[CH2]O` would be indistinguishable to the backbone, even
+  though their Hf differs by ~190 kJ/mol. Keeping radicals means
+  silently mispredicting them by tens-to-hundreds of kJ/mol — the loss
+  of ~2-3% of data (mostly small species like ·OH, ·CN, ·CHO in
+  gas_Hf) is the cheaper option until the encoder is upgraded to a
+  (z, q, n_rad) triplet and the backbone re-pretrained. Our
+  closed-shell-only restriction matches what UniMol / SchNet / MACE
+  also typically do; document it as a benchmark limitation, not as
+  a noise source.
 
 Writes:
     <out>.smi          — one SMILES per line (input to sample_conformers.py)

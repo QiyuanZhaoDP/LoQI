@@ -10,11 +10,22 @@ Per dataset:
 Cleaning steps (delegated to extract_smiles.filter_and_dedup):
     1. empty / NaN
     2. RDKit unparseable
-    3. radicals (any unpaired electron)
+    3. radicals (any unpaired electron)        — see note below
     4. disconnected ('.' in canonical)
     5. elements outside LoQI's 17-atom set
     6. |formal_charge| > 1
     7. canonical-SMILES dedup (first occurrence kept)
+
+Note on the radical filter — these are real molecules with measured Hf
+(e.g. ·OH, ·CN, ·CHO, methoxyl), but our atom encoder records only
+element + formal charge, NOT unpaired-electron count. A closed-shell
+methanol `CO` (Hf=-200 kJ/mol) and the open-shell hydroxymethyl
+radical `[CH2]O` (Hf=-9 kJ/mol) hash to the same atom features under
+our encoding, so keeping radicals means silently mispredicting them
+by tens-to-hundreds of kJ/mol. We drop them and explicitly document
+the closed-shell-only scope; the same restriction is standard practice
+in UniMol / SchNet / MACE benchmarks. Future work: extend the encoder
+to (z, q, n_rad) and re-pretrain on a corpus that includes radicals.
 
 Outputs:
     downstream_ft/clean/<name>.csv          — cleaned, deduplicated CSV
@@ -141,6 +152,44 @@ def main():
               "cleaning, so canonical dedup also catches duplicates that "
               "span the official splits. The `_split` column is preserved "
               "in the cleaned CSV for downstream that wants to honor it.")
+    md.append("")
+    md.append("## Why radicals are filtered (and not "
+              "kept for completeness)")
+    md.append("")
+    md.append("The dropped radicals are **not data errors** — they are real "
+              "molecules with measured thermochemistry. Examples from "
+              "`gas_Hf.csv` (Hf in kJ/mol):")
+    md.append("")
+    md.append("| SMILES | species | Hf |")
+    md.append("|---|---|---:|")
+    md.append("| `[H]`     | H atom        | 218.0 |")
+    md.append("| `[OH]`    | hydroxyl      |  39.0 |")
+    md.append("| `C[O]`    | methoxyl      |  17.0 |")
+    md.append("| `[CH]=O`  | formyl        |  42.8 |")
+    md.append("| `[C]#N`   | cyano         | 435.1 |")
+    md.append("| `[CH2]O`  | hydroxymethyl |  -9.0 |")
+    md.append("")
+    md.append("They are dropped because **our atom encoder "
+              "(`ATOMIC_TO_INNER` in `prepare_downstream_dataset.py`) "
+              "records only `(element, formal_charge)`, NOT the "
+              "unpaired-electron count.** Under that encoding, the "
+              "closed-shell methanol `CO` (Hf ≈ −200 kJ/mol) and the "
+              "open-shell hydroxymethyl radical `[CH2]O` (Hf ≈ −9 kJ/mol) "
+              "hash to identical atom features — yet their Hf differs by "
+              "~190 kJ/mol. Keeping radicals would not just lose 2-3% of "
+              "data but **silently inject 50-200 kJ/mol systematic errors** "
+              "on those rows.")
+    md.append("")
+    md.append("Standard practice in pretrained molecular models "
+              "(UniMol, SchNet, MACE-MP, AIMNet2 family) is the same: "
+              "closed-shell only. Treat this as a benchmark scope "
+              "restriction, not a quality issue.")
+    md.append("")
+    md.append("**Future work:** extend the encoder to a `(z, q, n_rad)` "
+              "triplet and re-pretrain on a corpus that includes "
+              "radicals. That unlocks gas-phase radical thermochemistry "
+              "as a distinct ThermoGen capability — closed-shell-only "
+              "models cannot do this at all.")
     md.append("")
     md.append("## Per-dataset summary")
     md.append("")
