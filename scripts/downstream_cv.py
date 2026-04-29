@@ -984,6 +984,20 @@ def main():
     if args.wandb:
         try:
             import wandb
+            # Optional SwanLab mirror — must be installed BEFORE wandb.init
+            # so swanlab.sync_wandb()'s monkey-patch sees this run. Same env
+            # switch (SWANLAB_SYNC=1) as scripts/train.py; default off.
+            import os as _os
+            if _os.environ.get("SWANLAB_SYNC", "").lower() in ("1", "true", "yes", "on"):
+                try:
+                    import swanlab
+                    swanlab.sync_wandb()
+                    print("[swanlab] sync_wandb() enabled — mirroring wandb metrics to swanlab")
+                except ImportError:
+                    print("[swanlab] requested but `swanlab` not installed; "
+                          "run `pip install swanlab && swanlab login`. Continuing wandb-only.")
+                except Exception as e:
+                    print(f"[swanlab] sync_wandb() failed: {e}; continuing wandb-only.")
             run_name = args.wandb_name or (
                 f"{Path(args.dataset_pt).stem}"
                 + (f"_{args.wandb_group}" if args.wandb_group else "")
