@@ -113,6 +113,33 @@ def main(cfg: DictConfig) -> None:
     logging.info("\n\n************** Experiment Configuration ***********")
     pl.seed_everything(cfg.train.seed)
     logging.info(f"\n{OmegaConf.to_yaml(cfg)}")
+
+    # ----- Optional SwanLab mirror (opt-in) ---------------------------------
+    # Three ways to enable, any one is enough:
+    #   1. env:        SWANLAB_SYNC=1
+    #   2. Hydra CLI:  +swanlab.sync=true
+    #   3. YAML:       swanlab: { sync: true }
+    # When on, swanlab.sync_wandb() is installed before any wandb.init / Pl
+    # WandbLogger so wandb metrics are mirrored to swanlab in real time.
+    # Default off — original wandb-only behavior preserved.
+    _swanlab_on = (
+        os.environ.get("SWANLAB_SYNC", "").lower() in ("1", "true", "yes", "on")
+        or bool(OmegaConf.select(cfg, "swanlab.sync", default=False))
+    )
+    if _swanlab_on:
+        try:
+            import swanlab
+            swanlab.sync_wandb()
+            logging.info("[swanlab] sync_wandb() enabled — wandb metrics will mirror to swanlab")
+        except ImportError:
+            logging.warning(
+                "[swanlab] requested but `swanlab` not installed; skipping. "
+                "Run `pip install swanlab && swanlab login` to enable."
+            )
+        except Exception as e:
+            logging.warning(f"[swanlab] sync_wandb() failed: {e}; continuing without swanlab.")
+    # ------------------------------------------------------------------------
+
     cfg.outdir = os.path.join(cfg.outdir, cfg.run_name)
     os.makedirs(cfg.outdir, exist_ok=True)
     os.makedirs(os.path.join(cfg.outdir, 'checkpoints'), exist_ok=True)
