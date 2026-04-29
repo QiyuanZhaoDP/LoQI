@@ -84,6 +84,13 @@ LORA_TARGET=${LORA_TARGET:-qkv_proj,out_projection}
 # Suffix appended to each dataset's per-mode output dir so multiple modes
 # (warm vs cold-small vs cold-large) don't collide under OUT_ROOT.
 OUT_SUFFIX=${OUT_SUFFIX:-warm}
+
+# Subset filter: comma-separated dataset names. Either keeps only those
+# (ONLY_DATASETS=lipo_s) or skips them (SKIP_DATASETS=lipo_s,delaney_s).
+# Useful for splitting heavy jobs across multiple machines/sessions —
+# e.g. lipo_s alone on one box, the other 8 on another.
+ONLY_DATASETS=${ONLY_DATASETS:-}
+SKIP_DATASETS=${SKIP_DATASETS:-}
 # ================================
 
 mkdir -p "$PT_DIR" "$OUT_ROOT"
@@ -110,16 +117,21 @@ fi
 # When INPUT_DIR=downstream_ft (raw): delaney_s/freesolv_s/lipo_s exist
 # as subdirs with train/valid/test.csv. Use IS_PRESPLIT=1 in that case
 # (uncomment the alt block below).
+# Order by descending size after K=8 cleaning ("longest processing time
+# first" / LPT scheduling). Largest job lipo_s starts in the seed pool
+# and runs in parallel with the others, so by the time lipo finishes
+# everyone else has already cycled through. With alphabetical order
+# lipo_s used to start last, holding 1 GPU while the other 3 sat idle.
 DATASETS=(
-    "Cp|Cp.csv|Cp.pkl|SMILES|TARGET|0"
-    "V_cp|V_cp.csv|V_cp.pkl|SMILES|TARGET|0"
-    "de|de.csv|de.pkl|SMILES|TARGET|0"
-    "gas_Hf|gas_Hf.csv|gas_Hf.pkl|smiles|mean|0"
-    "k|k.csv|k.pkl|SMILES|TARGET|0"
-    "liquid_Hf|liquid_Hf.csv|liquid_Hf.pkl|smiles|mean|0"
-    "delaney_s|delaney_s.csv|delaney_s.pkl|SMILES|TARGET|0"
-    "freesolv_s|freesolv_s.csv|freesolv_s.pkl|SMILES|TARGET|0"
-    "lipo_s|lipo_s.csv|lipo_s.pkl|SMILES|TARGET|0"
+    "lipo_s|lipo_s.csv|lipo_s.pkl|SMILES|TARGET|0"            # 4,199 mols (largest, schedule first)
+    "gas_Hf|gas_Hf.csv|gas_Hf.pkl|smiles|mean|0"              # 2,419
+    "liquid_Hf|liquid_Hf.csv|liquid_Hf.pkl|smiles|mean|0"     # 1,624
+    "Cp|Cp.csv|Cp.pkl|SMILES|TARGET|0"                        # 1,459
+    "delaney_s|delaney_s.csv|delaney_s.pkl|SMILES|TARGET|0"   # 1,117
+    "V_cp|V_cp.csv|V_cp.pkl|SMILES|TARGET|0"                  # 813
+    "de|de.csv|de.pkl|SMILES|TARGET|0"                        # 778
+    "k|k.csv|k.pkl|SMILES|TARGET|0"                           # 755
+    "freesolv_s|freesolv_s.csv|freesolv_s.pkl|SMILES|TARGET|0"  # 641
 )
 # --- Alt: raw downstream_ft/ (pre-split) ---
 # Restore IS_PRESPLIT=1 for the last three rows when running against the
@@ -274,6 +286,33 @@ _run_one() {
 
     echo "[$name] DONE"
 }
+
+# ---- Apply ONLY_DATASETS / SKIP_DATASETS filters ----------------------
+if [[ -n "$ONLY_DATASETS" || -n "$SKIP_DATASETS" ]]; then
+    _only=",$ONLY_DATASETS,"
+    _skip=",$SKIP_DATASETS,"
+    filtered=()
+    for row in "${DATASETS[@]}"; do
+        IFS='|' read -r _name _rest <<< "$row"
+        if [[ -n "$ONLY_DATASETS" && "$_only" != *",$_name,"* ]]; then
+            continue
+        fi
+        if [[ -n "$SKIP_DATASETS" && "$_skip" == *",$_name,"* ]]; then
+            continue
+        fi
+        filtered+=("$row")
+    done
+    DATASETS=("${filtered[@]}")
+    echo "[$(date +%T)] Filter applied — running ${#DATASETS[@]} dataset(s):"
+    for row in "${DATASETS[@]}"; do
+        IFS='|' read -r _name _rest <<< "$row"
+        echo "  - $_name"
+    done
+fi
+if [[ ${#DATASETS[@]} -eq 0 ]]; then
+    echo "[$(date +%T)] No datasets to run after filtering. Exiting." >&2
+    exit 0
+fi
 
 # ---- Worker pool dispatch ---------------------------------------------
 echo "[$(date +%T)] Dispatching ${#DATASETS[@]} datasets across $N_GPUS GPUs"

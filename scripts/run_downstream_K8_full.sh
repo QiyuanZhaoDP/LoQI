@@ -139,6 +139,8 @@ _run_mode() {
     WANDB=$WANDB \
     WANDB_PROJECT=$WANDB_PROJECT \
     WANDB_GROUP=$suffix \
+    ONLY_DATASETS="${ONLY_DATASETS:-}" \
+    SKIP_DATASETS="${SKIP_DATASETS:-}" \
         bash scripts/run_downstream_pipeline.sh \
         2>&1 | tee -a "$OUT_ROOT/_${suffix}.log"
 }
