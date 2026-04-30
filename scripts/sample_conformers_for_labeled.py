@@ -222,7 +222,7 @@ def main():
         loss_params=cfg.loss,
         interpolant_params=cfg.interpolant,
         sampling_params=cfg.sample,
-        batch_preporcessor=BatchPreProcessor(cfg.data.aug_rotations, cfg.data.scale_coords),
+        batch_preprocessor=BatchPreProcessor(cfg.data.aug_rotations, cfg.data.scale_coords),
         strict=False,
     ).to(args.device).eval()
     total_params = sum(p.numel() for p in model.parameters())

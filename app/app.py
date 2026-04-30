@@ -95,7 +95,7 @@ def load_model(selected_model_type):
         loss_params=cfg.loss,
         interpolant_params=cfg.interpolant,
         sampling_params=cfg.sample,
-        batch_preporcessor=BatchPreProcessor(cfg.data.aug_rotations, cfg.data.scale_coords),
+        batch_preprocessor=BatchPreProcessor(cfg.data.aug_rotations, cfg.data.scale_coords),
     )
     device = "cuda" if torch.cuda.is_available() else "cpu"
     return model.to(device).eval(), cfg
