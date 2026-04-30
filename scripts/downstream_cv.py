@@ -326,8 +326,18 @@ class LoRALinear(nn.Module):
             p.requires_grad = False
         self.r = int(r)
         self.scaling = (float(alpha) if alpha is not None else float(r)) / float(r)
-        self.lora_A = nn.Parameter(torch.empty(r, base.in_features))
-        self.lora_B = nn.Parameter(torch.zeros(base.out_features, r))
+        # Inherit device + dtype from base.weight so injecting LoRA into an
+        # already-on-GPU backbone doesn't leave A/B on CPU. Without this,
+        # forward() crashes with "Expected all tensors to be on the same
+        # device" the first time x hits LoRALinear.
+        device = base.weight.device
+        dtype = base.weight.dtype
+        self.lora_A = nn.Parameter(
+            torch.empty(r, base.in_features, device=device, dtype=dtype)
+        )
+        self.lora_B = nn.Parameter(
+            torch.zeros(base.out_features, r, device=device, dtype=dtype)
+        )
         nn.init.kaiming_uniform_(self.lora_A, a=5 ** 0.5)
 
     def forward(self, x):
