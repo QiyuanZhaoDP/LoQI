@@ -12,10 +12,11 @@
 #   python scripts/train.py --config-name=loqi_thermo_flow_cold \
 #       outdir=./outputs/loqi_thermo_flow_cold train.gpus=4
 
-run_name: 'loqi_thermo_flow_cold'
+run_name: 'loqi_thermo_flow_cold_v2'
 outdir: null
-resume: null
+resume: outputs/loqi_thermo_flow_cold_v2/checkpoints/last.ckpt
 ema: True
+resume_strict: True
 
 wandb_params:
   mode: 'online'
@@ -27,13 +28,13 @@ data:
   processed_folder: "processed"
   data_suffix: "_h"
   property_table: "data/property_table.parquet"
-  batch_size: &batch_size 96      # smaller than 150 because backbone is 2.5x bigger
-  inference_batch_size: 96
+  batch_size: &batch_size 128     # smaller than 150 because backbone is 2.5x bigger
+  inference_batch_size: 128
   removed_h: False
   data_loader_type: "midi"
   aug_rotations: False
   scale_coords: &scale_coords 1.0
-  num_workers: 8
+  num_workers: 0
 
 loss:
   # Flow-matching training used loss clamps on the coord velocity.
@@ -98,13 +99,13 @@ dynamics:
     invariant_node_feat_dim: 384    # was 256  -> dominant cost, ~2.25x scaling
     n_vector_features: 96           # was 64
     equivariant_node_feature_dim: 3
-    num_layers: 14                  # was 10
-    num_heads: 8                    # was 4
-    dist_size: 16
+    num_layers: 12                  # was 10
+    num_heads: 4                    # was 4
+    dist_size: 32
     prune_edges: False
     # ---- Thermo head wired into MegaFNV3Conf.forward ----
     thermo_head_args:
-      n_mp_layers: 3
+      n_mp_layers: 4
       mp_n_heads:  4
       hidden:      256
     # ---- RDKit 9-descriptor head — 100% coverage regularizer ----
@@ -127,9 +128,9 @@ sample:
 # (n=652,567 labeled). Rerun compute_rdkit_stats.py if the parquet changes.
 # Order: [H298, G298, Cv, S°, H0].
 thermo_loss:
-  min_time: 0.9            # from-scratch: backbone needs to warm up first;
+  min_time: 0.85            # from-scratch: backbone needs to warm up first;
                            # use the cleanest timesteps for thermo signal
-  weight:   0.05
+  weight:   0.1
   target_mean: [-317.36, 111.66, 390.86, 676.34, -119.10]
   target_std:  [ 346.40, 344.07,  98.00, 160.56,  364.45]
 
@@ -138,7 +139,7 @@ thermo_loss:
 # Order: [logp, tpsa, n_h_donors, n_h_acceptors, n_rot_bonds,
 #         frac_csp3, n_aliph_rings, qed, labute_asa]
 rdkit_loss:
-  min_time: 0.9
+  min_time: 0.85
   weight:   0.02
   target_mean: [3.0455, 77.0193, 1.4421, 4.9728, 5.2942, 0.3220, 0.9307, 0.5899, 161.6316]
   target_std:  [1.7329, 31.3564, 1.1131, 2.0423, 2.5879, 0.1930, 0.9768, 0.2033,  41.1187]
@@ -150,7 +151,7 @@ train:
   # (MiDiDataloader bypasses Lightning's DistributedSampler auto-inject) — so
   # one "epoch" here is effectively n_gpus × full-dataset passes. 400 epochs
   # on 4 GPUs ≈ 1600 single-GPU-epoch equivalent data exposure.
-  n_epochs: 400            # from-scratch pre-training
+  n_epochs: 250            # from-scratch pre-training
   enable_progress_bar: True
   gradient_clip_value: 1.0
   log_freq: 50
@@ -191,7 +192,7 @@ lr_scheduler:
   final_lr: 1.e-4             # peak LR after warmup
   num_warmup_steps: 5000
   milestone_steps: 5000       # decay starts here
-  num_decay_steps: 4700000    # ~400 epoch × 12k step − warmup
+  num_decay_steps: 2000000    # ~400 epoch × 12k step − warmup
   min_lr_decay: 1.e-6         # 1% of peak — floor
   interval: step
   frequency: 1
