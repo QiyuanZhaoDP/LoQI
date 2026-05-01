@@ -140,6 +140,11 @@ def main(cfg: DictConfig) -> None:
             logging.warning(f"[swanlab] sync_wandb() failed: {e}; continuing without swanlab.")
     # ------------------------------------------------------------------------
 
+    # All YAMLs default outdir=null. Fall back to ./outputs so a plain
+    # `python scripts/train.py --config-name=...` works without an extra
+    # `outdir=...` override and writes to outputs/<run_name>/.
+    if cfg.outdir is None:
+        cfg.outdir = "outputs"
     cfg.outdir = os.path.join(cfg.outdir, cfg.run_name)
     os.makedirs(cfg.outdir, exist_ok=True)
     os.makedirs(os.path.join(cfg.outdir, 'checkpoints'), exist_ok=True)
@@ -148,16 +153,19 @@ def main(cfg: DictConfig) -> None:
     # in the YAML. Both can be active simultaneously via CombinedAuxiliaryLoss.
     from megalodon.models.loss_fn import (
         CombinedAuxiliaryLoss,
+        CombinedPropertyLoss,
         EnergyPredictionLoss,
         RDKitDescriptorLoss,
         ThermoPropertyLoss,
     )
-    tl_cfg = OmegaConf.select(cfg, "thermo_loss", default=None)
-    rl_cfg = OmegaConf.select(cfg, "rdkit_loss",  default=None)
-    el_cfg = OmegaConf.select(cfg, "energy_loss", default=None)
+    tl_cfg = OmegaConf.select(cfg, "thermo_loss",   default=None)
+    rl_cfg = OmegaConf.select(cfg, "rdkit_loss",    default=None)
+    el_cfg = OmegaConf.select(cfg, "energy_loss",   default=None)
+    cl_cfg = OmegaConf.select(cfg, "combined_loss", default=None)
     thermo_loss = None
     rdkit_loss = None
     energy_loss = None
+    combined_loss = None
     if tl_cfg is not None:
         thermo_loss = ThermoPropertyLoss(
             min_time=tl_cfg.min_time,
@@ -189,11 +197,32 @@ def main(cfg: DictConfig) -> None:
         )
         logging.info(f"Enabled EnergyPredictionLoss (min_time={el_cfg.min_time}, "
                      f"weight={el_cfg.weight})")
-    _active = [x for x in (thermo_loss, rdkit_loss, energy_loss) if x is not None]
+    if cl_cfg is not None:
+        # Combined 14-target head loss. Mutually exclusive with
+        # thermo_loss + rdkit_loss in practice (both heads can't coexist
+        # in MegaFNV3Conf forward), but the wrapper just sums whatever
+        # is configured.
+        combined_loss = CombinedPropertyLoss(
+            min_time=cl_cfg.min_time,
+            thermo_weight=float(OmegaConf.select(cl_cfg, "thermo_weight", default=0.1)),
+            rdkit_weight=float(OmegaConf.select(cl_cfg, "rdkit_weight", default=0.02)),
+            target_weights=OmegaConf.select(cl_cfg, "target_weights", default=None),
+            target_mean=list(cl_cfg.target_mean),
+            target_std=list(cl_cfg.target_std),
+            timesteps=cfg.interpolant.timesteps,
+        )
+        logging.info(
+            f"Enabled CombinedPropertyLoss (min_time={cl_cfg.min_time}, "
+            f"thermo_w={combined_loss.target_weights[0]}, "
+            f"rdkit_w={combined_loss.target_weights[5]})"
+        )
+    _active = [x for x in (thermo_loss, rdkit_loss, energy_loss, combined_loss)
+                if x is not None]
     if len(_active) > 1:
         loss_fn = CombinedAuxiliaryLoss(thermo_loss=thermo_loss,
                                          rdkit_loss=rdkit_loss,
-                                         energy_loss=energy_loss)
+                                         energy_loss=energy_loss,
+                                         combined_loss=combined_loss)
     else:
         loss_fn = _active[0] if _active else None
 

@@ -550,36 +550,245 @@ class EnergyPredictionLoss(_NNModuleSetstateMixin, _nn.Module):
         return self.weight * torch.nn.functional.mse_loss(pred, target)
 
 
+class CombinedPropertyLoss(_NNModuleSetstateMixin, _nn.Module):
+    """Single-head 14-target loss: 5 thermo + 9 RDKit predicted by one
+    AtomMolMP (CombinedHeadModel). Replaces ThermoPropertyLoss +
+    RDKitDescriptorLoss when the dynamics config sets
+    `combined_head_args` (mutually exclusive with thermo_head_args /
+    rdkit_head_args).
+
+    Each of the 14 targets has its own (mean, std) for z-score
+    normalization and its own loss weight, so users can keep the
+    asymmetric weighting (thermo dominant, RDKit regularizer) of the
+    split-head setup while sharing the head's representation.
+
+    Args:
+        target_fields: 14 names in [thermo (5), rdkit (9)] order.
+        target_mean / target_std: lists of length 14, z-score stats.
+        target_weights: list of 14 floats, per-target loss weights.
+            Defaults to [thermo_weight]*5 + [rdkit_weight]*9.
+        thermo_weight / rdkit_weight: shortcut to broadcast a uniform
+            weight across the thermo / rdkit blocks. Used only if
+            target_weights is None.
+        min_time: only apply loss when t >= min_time.
+        timesteps: needed to convert discrete time to fraction [0, 1].
+
+    Has-label semantics:
+        * Thermo block (cols 0..4): masked by per-row `thermo_has_label`
+          if present, else by per-cell NaN.
+        * RDKit block (cols 5..13): all rows have valid descriptors
+          (build_property_table.py drops all-NaN RDKit rows), masked
+          only by per-cell NaN.
+
+    Per-target diagnostics via compute_and_reset(stage): mae, rmse, r²,
+    pred_std, target_std (in physical units).
+    """
+
+    _PREFIX = "combined"
+
+    def __init__(self,
+                 min_time: float = 0.8,
+                 thermo_weight: float = 0.1,
+                 rdkit_weight: float = 0.02,
+                 target_weights=None,
+                 target_fields=None,
+                 target_mean=None,
+                 target_std=None,
+                 timesteps: int = 25):
+        super().__init__()
+        self.min_time = min_time
+        self.timesteps = timesteps
+
+        # 14 fields = 5 thermo + 9 rdkit
+        if target_fields is None:
+            target_fields = list(TARGET_FIELDS_DEFAULT) + list(RDKIT_FIELDS_DEFAULT)
+        if len(target_fields) != 14:
+            raise ValueError(
+                f"CombinedPropertyLoss expects 14 target_fields "
+                f"(5 thermo + 9 RDKit); got {len(target_fields)}."
+            )
+        self.target_fields = list(target_fields)
+        self.thermo_fields = self.target_fields[:5]
+        self.rdkit_fields  = self.target_fields[5:]
+
+        if target_mean is None or target_std is None:
+            raise ValueError(
+                "CombinedPropertyLoss requires target_mean and target_std "
+                "(length 14, in [thermo, rdkit] order)."
+            )
+        if len(target_mean) != 14 or len(target_std) != 14:
+            raise ValueError(
+                f"target_mean and target_std must each have length 14; "
+                f"got {len(target_mean)} / {len(target_std)}."
+            )
+        self.target_mean = list(target_mean)
+        self.target_std = list(target_std)
+
+        if target_weights is None:
+            target_weights = [float(thermo_weight)] * 5 + [float(rdkit_weight)] * 9
+        if len(target_weights) != 14:
+            raise ValueError(
+                f"target_weights must have length 14; got {len(target_weights)}."
+            )
+        self.target_weights = list(target_weights)
+
+        self.register_buffer(
+            "_mean_t", torch.tensor(self.target_mean, dtype=torch.float32),
+            persistent=False,
+        )
+        self.register_buffer(
+            "_std_t", torch.tensor(self.target_std, dtype=torch.float32),
+            persistent=False,
+        )
+        self.register_buffer(
+            "_weight_t", torch.tensor(self.target_weights, dtype=torch.float32),
+            persistent=False,
+        )
+
+        # Telemetry
+        self.last_batch_size = 0
+        self.last_gated_in = 0
+        self.last_labeled_active_thermo = 0
+        # Per-target torchmetrics — one set for train, one for val.
+        self.train_metrics = _build_per_target_metric_set(self.target_fields)
+        self.val_metrics   = _build_per_target_metric_set(self.target_fields)
+
+    def forward(self, batch, out, time, ws_t, stage="train"):
+        if "combined_mp" not in out:
+            return torch.tensor(0.0, device=time.device)
+        # Don't bother computing if all weights are zero.
+        if float(self._weight_t.abs().sum().item()) == 0.0:
+            return torch.tensor(0.0, device=time.device)
+
+        device = time.device
+        t_frac = _t_frac(time, self.timesteps)
+        time_mask = t_frac >= self.min_time
+        self.last_batch_size = int(time_mask.numel())
+        self.last_gated_in = int(time_mask.sum().item())
+        if not time_mask.any():
+            return torch.tensor(0.0, device=device)
+
+        # Pull 14 targets in order.
+        targets = torch.stack(
+            [batch[f].view(-1).float() for f in self.target_fields], dim=1
+        )  # [B, 14]
+        targets_norm = (targets - self._mean_t) / self._std_t
+
+        # Build a [B, 14] valid mask. Thermo cols (0..4) gated by
+        # thermo_has_label if present; rdkit cols (5..13) only by NaN.
+        if hasattr(batch, "thermo_has_label"):
+            thermo_label = batch.thermo_has_label.view(-1).bool()
+        else:
+            thermo_label = ~torch.isnan(targets[:, :5]).any(dim=1)
+        # Per-row time-gate
+        row_gate = time_mask
+        # Per-cell NaN gate
+        cell_finite = ~torch.isnan(targets_norm)
+        # Compose: thermo cols additionally need thermo_has_label
+        thermo_mask = (
+            row_gate.unsqueeze(-1)
+            & thermo_label.unsqueeze(-1)
+            & cell_finite[:, :5]
+        )
+        rdkit_mask = (
+            row_gate.unsqueeze(-1)
+            & cell_finite[:, 5:]
+        )
+        valid = torch.cat([thermo_mask, rdkit_mask], dim=1)   # [B, 14]
+        self.last_labeled_active_thermo = int(thermo_mask.any(dim=1).sum().item())
+        if not valid.any():
+            return torch.tensor(0.0, device=device)
+
+        pred = out["combined_mp"]                              # [B, 14]
+        # Per-target weighted MSE; normalize by the *count of valid cells*
+        # within each column to keep the gradient scale stable when label
+        # density differs across targets.
+        diff = (pred - torch.nan_to_num(targets_norm)) * valid  # [B, 14]
+        sq = diff ** 2
+        # Sum over batch per target, then weighted average.
+        per_target_count = valid.sum(dim=0).clamp_min(1).float()    # [14]
+        per_target_loss = sq.sum(dim=0) / per_target_count           # [14]
+        loss = (self._weight_t * per_target_loss).sum()
+
+        # Update torchmetrics on the physical-unit predictions/targets.
+        with torch.no_grad():
+            pred_phys = pred * self._std_t + self._mean_t
+            target_phys = torch.nan_to_num(targets)
+            metrics = self.train_metrics if stage == "train" else self.val_metrics
+            for i, f in enumerate(self.target_fields):
+                col_valid = valid[:, i]
+                n_v = int(col_valid.sum().item())
+                if n_v == 0:
+                    continue
+                p = pred_phys[col_valid, i]
+                t = target_phys[col_valid, i]
+                metrics[f]["mae"].update(p, t)
+                metrics[f]["rmse"].update(p, t)
+                if n_v >= 2:
+                    metrics[f]["r2"].update(p, t)
+                metrics[f]["pred_mean"].update(p)
+                metrics[f]["pred_msq"].update(p ** 2)
+                metrics[f]["target_mean"].update(t)
+                metrics[f]["target_msq"].update(t ** 2)
+
+        return loss
+
+    def compute_and_reset(self, stage):
+        metrics = self.train_metrics if stage == "train" else self.val_metrics
+        return _compute_and_reset_metric_set(metrics, self._PREFIX)
+
+    def get_metrics_dict(self):
+        return {
+            f"{self._PREFIX}/batch_size":    float(self.last_batch_size),
+            f"{self._PREFIX}/gated_in":      float(self.last_gated_in),
+            f"{self._PREFIX}/labeled_thermo_active":
+                                              float(self.last_labeled_active_thermo),
+        }
+
+
 class CombinedAuxiliaryLoss(_NNModuleSetstateMixin, _nn.Module):
     """Wrap several auxiliary losses; delegate per-step telemetry and
     epoch-end metric computation to each sub-loss. Prefixes are baked
-    into the sub-losses themselves (thermo/, rdkit/, energy/)."""
+    into the sub-losses themselves (thermo/, rdkit/, energy/, combined/).
 
-    def __init__(self, thermo_loss=None, rdkit_loss=None, energy_loss=None):
+    `combined_loss` is mutually exclusive with `thermo_loss + rdkit_loss`
+    in practice — when the dynamics has a CombinedHeadModel, the
+    backbone emits `out["combined_mp"]` and the per-task heads aren't
+    populated. But the wrapper itself doesn't enforce this; YAML config
+    determines which sub-losses are active.
+    """
+
+    def __init__(self, thermo_loss=None, rdkit_loss=None, energy_loss=None,
+                 combined_loss=None):
         super().__init__()
         # nn.Module.__setattr__ auto-registers nn.Module children, so
         # .to(device), state_dict(), and DDP all just work.
         self.thermo_loss = thermo_loss
         self.rdkit_loss = rdkit_loss
         self.energy_loss = energy_loss
+        self.combined_loss = combined_loss
+
+    def _subs(self):
+        return (self.thermo_loss, self.rdkit_loss, self.energy_loss,
+                self.combined_loss)
 
     def forward(self, batch, out, time, ws_t, stage="train"):
         loss = torch.tensor(0.0, device=time.device)
-        for sub in (self.thermo_loss, self.rdkit_loss, self.energy_loss):
+        for sub in self._subs():
             if sub is not None:
                 loss = loss + sub(batch, out, time, ws_t, stage)
         return loss
 
     def get_metrics_dict(self):
         out = {}
-        for sub in (self.thermo_loss, self.rdkit_loss, self.energy_loss):
+        for sub in self._subs():
             if sub is not None and hasattr(sub, "get_metrics_dict"):
                 out.update(sub.get_metrics_dict())
         return out
 
     def compute_and_reset(self, stage):
         out = {}
-        for sub in (self.thermo_loss, self.rdkit_loss, self.energy_loss):
+        for sub in self._subs():
             if sub is not None and hasattr(sub, "compute_and_reset"):
                 out.update(sub.compute_and_reset(stage))
         return out

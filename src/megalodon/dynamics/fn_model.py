@@ -704,6 +704,7 @@ class MegaFNV3Conf(nn.Module):
             return_features=False,
             thermo_head_args=None,
             rdkit_head_args=None,
+            combined_head_args=None,
             energy_head=False,
     ):
         super(MegaFNV3Conf, self).__init__()
@@ -775,6 +776,30 @@ class MegaFNV3Conf(nn.Module):
                 hidden=rdkit_head_args.get("hidden", 128),
             )
 
+        # Optional combined 14-target head (5 thermo + 9 RDKit). Mutually
+        # exclusive with thermo_head_args / rdkit_head_args — if set, those
+        # two are silently ignored. The combined head shares one AtomMolMP
+        # for all 14 targets, forcing H to encode features useful for both
+        # task families.
+        self.combined_heads = None
+        if combined_head_args is not None:
+            from omegaconf import OmegaConf as _OC
+            if not isinstance(combined_head_args, dict):
+                combined_head_args = _OC.to_container(combined_head_args, resolve=True)
+            from megalodon.models.thermo_heads import CombinedHeadModel
+            if self.thermo_heads is not None or self.rdkit_heads is not None:
+                # The forward() builds out["combined_mp"] but ALSO populates
+                # out["thermo_mp"] / out["rdkit_mp"] for backward-compat
+                # (see below). Allowing both to be configured is a YAML
+                # smell, not an error.
+                pass
+            self.combined_heads = CombinedHeadModel(
+                dim=invariant_node_feat_dim,
+                n_mp_layers=combined_head_args.get("n_mp_layers", 4),
+                n_mp_heads=combined_head_args.get("mp_n_heads", 4),
+                hidden=combined_head_args.get("hidden", 256),
+            )
+
         # Optional scalar energy head (Phase 1). Predicts a per-molecule energy
         # from scatter_mean(H). Forces can be obtained via autograd of energy
         # wrt input coords — no separate force head needed.
@@ -821,6 +846,16 @@ class MegaFNV3Conf(nn.Module):
         if self.rdkit_heads is not None:
             rh = self.rdkit_heads(H, batch)
             out["rdkit_mp"] = rh["mp"]      # [N_mols, 9]
+        if self.combined_heads is not None:
+            ch = self.combined_heads(H, batch)
+            out["combined_mp"] = ch["mp"]   # [N_mols, 14]
+            # Also expose the conventional split for any downstream code
+            # that still reads thermo_mp / rdkit_mp (zero-shot scripts,
+            # per-task losses, etc.). Slicing is free.
+            if "thermo_mp" not in out:
+                out["thermo_mp"] = ch["mp"][:, :5]
+            if "rdkit_mp" not in out:
+                out["rdkit_mp"]  = ch["mp"][:, 5:]
         if self.energy_head is not None:
             mol_repr = scatter_mean(H, batch, dim=0)
             out["energy_pred"] = self.energy_head(mol_repr).squeeze(-1)

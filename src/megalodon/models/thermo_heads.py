@@ -129,6 +129,36 @@ class RDKitHeadModel(nn.Module):
         return {"mp": self.mp(H, batch)}
 
 
+# 14 targets total when combined: 5 thermo + 9 RDKit, in this order.
+COMBINED_TARGET_FIELDS = TARGET_FIELDS + RDKIT_TARGET_FIELDS
+
+
+class CombinedHeadModel(nn.Module):
+    """Single AtomMolMP-based head producing all 14 targets (5 thermo + 9
+    RDKit) at once. Replaces the separate ThermoHeadModel + RDKitHeadModel
+    when `combined_head_args` is set in the dynamics config.
+
+    Sharing one atom-mol attention pool forces the per-mol representation
+    to encode features useful for **both** task families simultaneously,
+    which acts as a multi-task regularizer on H. Saves ~20% head params
+    over separate heads (one bigger AtomMolMP vs two smaller ones).
+
+    Output ordering on dim=1: indices [0:5] = thermo targets in
+    `TARGET_FIELDS` order; indices [5:14] = RDKit descriptors in
+    `RDKIT_TARGET_FIELDS` order.
+    """
+
+    def __init__(self, dim=256, n_mp_layers=4, n_mp_heads=4, hidden=256):
+        super().__init__()
+        self.mp = AtomMolMP(
+            dim=dim, n_layers=n_mp_layers, n_heads=n_mp_heads,
+            hidden=hidden, n_targets=len(COMBINED_TARGET_FIELDS),
+        )
+
+    def forward(self, H, batch):
+        return {"mp": self.mp(H, batch)}
+
+
 def masked_mse(pred, target):
     """Mean-squared error that ignores NaN entries in target.
 
