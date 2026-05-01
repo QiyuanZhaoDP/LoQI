@@ -1,0 +1,187 @@
+# Cold config (384/12/4 backbone, ~25M params) + COMBINED 14-target head.
+#
+# Single AtomMolMP outputs all 14 properties (5 thermo + 9 RDKit) at once,
+# replacing the separate thermo_head_args + rdkit_head_args of
+# loqi_thermo_flow_cold.yaml. The combined head has the same dims as the
+# original thermo head (4 layers / 4 heads / hidden=256) — the old rdkit
+# head (2/4/128) is absorbed.
+#
+# COLD-from-scratch: no `resume:` line, all weights start random.
+# Same 250-epoch budget as loqi_thermo_flow_cold.yaml.
+#
+# Launch:
+#   python scripts/train.py --config-name=loqi_thermo_flow_cold_combined \
+#       outdir=outputs train.gpus=4
+
+run_name: 'loqi_thermo_flow_cold_combined'
+outdir: null
+ema: True
+
+wandb_params:
+  mode: 'online'
+  group: 'foundation-cold-combined-head'
+  project: 'thermogen'
+
+data:
+  dataset_root: "data/chembl3d_stereo"
+  processed_folder: "processed"
+  data_suffix: "_h"
+  property_table: "data/property_table.parquet"
+  batch_size: &batch_size 128
+  inference_batch_size: 128
+  removed_h: False
+  data_loader_type: "midi"
+  aug_rotations: False
+  scale_coords: &scale_coords 1.0
+  num_workers: 0
+
+loss:
+  use_loss_clamps: True
+  loss_clamp_epoch_threshold: 10
+  loss_clamps:
+    ts_coord: 1.0
+  variables:
+    - variable_name: 'x'
+      loss_scale: 1.0
+      aggregate: 'mean'
+      continuous: True
+      loss_type: 'mse'
+      use_distance: null
+      distance_scale: null
+
+interpolant:
+  timesteps: &timesteps 25
+  time_type: &time_type "continuous"
+  sample_time_method: "uniform"
+  sample_time_mean: 0
+  sample_time_scale: 1.0
+  global_variable_name: 'x'
+  min_t: &min_t 0.0
+  variables:
+    - variable_name: 'x'
+      interpolant_type: 'continuous_flow_matching'
+      prediction_type: 'velocity'
+      optimal_transport: 'rigid'
+      prior_type: 'gaussian'
+      timesteps: *timesteps
+      num_classes: 3
+      scheduler_type: "linear"
+      scheduler_cut: False
+      time_type: *time_type
+      min_t: *min_t
+      com_free: True
+      noise_sigma: 0.0
+      inference_noise_sigma: 0.
+    - variable_name: 'h'
+      interpolant_type: "discrete_null"
+      num_classes: &num_atoms 17
+      prior_type: null
+    - variable_name: 'edge_attr'
+      interpolant_type: "discrete_null"
+      num_classes: 9
+      prior_type: null
+    - variable_name: 'charges'
+      interpolant_type: "discrete_null"
+      concat: 'h'
+      num_classes: 6
+      offset: 2
+      prior_type: null
+
+# ==== Scaled backbone (same dims as loqi_thermo_flow_cold.yaml) =============
+dynamics:
+  model_name: "megav3conf"
+  model_args:
+    atom_classes: 23
+    edge_classes: 9
+    invariant_edge_feat_dim: 96
+    invariant_node_feat_dim: 384
+    n_vector_features: 96
+    equivariant_node_feature_dim: 3
+    num_layers: 12
+    num_heads: 4
+    dist_size: 32
+    prune_edges: False
+    # COMBINED 14-target head replaces the separate thermo + rdkit pair.
+    # Same dims as the cold thermo_head_args (4/4/256) so head capacity
+    # is comparable; the rdkit (2/4/128) gets folded in.
+    combined_head_args:
+      n_mp_layers: 4
+      mp_n_heads:  4
+      hidden:      256
+  wrapper_args:
+    timesteps: *timesteps
+    time_type: *time_type
+
+sample:
+  node_distribution: "${data.dataset_root}/processed/train_n_h.pickle"
+  return_step_output: True
+
+# ==== Combined 14-target loss ===============================================
+# Stats: first 5 entries = thermo (H298, G298, Cv, S°, H0), next 9 = RDKit
+# (logp, tpsa, n_h_donors, n_h_acceptors, n_rot_bonds, frac_csp3,
+#  n_aliph_rings, qed, labute_asa). Means/stds copied verbatim from the
+# split-loss cold config (loqi_thermo_flow_cold.yaml). min_time=0.85 to
+# match cold config (from-scratch needs cleaner backbone state).
+combined_loss:
+  min_time: 0.85
+  thermo_weight: 0.1     # broadcast to all 5 thermo targets
+  rdkit_weight:  0.02    # broadcast to all 9 rdkit targets
+  # target_weights: null  # uncomment to override per-target weights (length 14)
+  target_mean: [-317.36, 111.66, 390.86, 676.34, -119.10,
+                3.0455, 77.0193, 1.4421, 4.9728, 5.2942,
+                0.3220, 0.9307, 0.5899, 161.6316]
+  target_std:  [ 346.40, 344.07,  98.00, 160.56,  364.45,
+                1.7329, 31.3564, 1.1131, 2.0423, 2.5879,
+                0.1930, 0.9768, 0.2033,  41.1187]
+
+train:
+  seed: 42
+  gpus: 4
+  # Note: with n_gpus > 1, each rank iterates the FULL dataset independently
+  # (MiDiDataloader bypasses Lightning's DistributedSampler auto-inject) — so
+  # one "epoch" here is effectively n_gpus × full-dataset passes.
+  n_epochs: 250            # from-scratch pre-training, same budget as cold split
+  enable_progress_bar: True
+  gradient_clip_value: 1.0
+  log_freq: 50
+  val_freq: 2
+  checkpoint_monitor: opt_median_relative_energy
+  checkpoint_monitor_mode: min
+  checkpoint_every_n_train_steps: 1000
+
+evaluation:
+  type: conformers
+  max_molecules: 300
+  timesteps: *timesteps
+  compute_3D_metrics: True
+  compute_energy_metrics: True
+  compute_stereo_metrics: True
+  scale_coords: *scale_coords
+  energy_metrics_args:
+    model_path: src/megalodon/metrics/aimnet2/cpcm_model/wb97m_cpcms_v2_0.jpt
+    batchsize: 100
+    opt_metrics: True
+    opt_params:
+      fmax: 2e-3
+      max_nstep: 3000
+
+optimizer:
+  type: adamw
+  lr: 1.e-4
+  weight_decay: 1.e-12
+  amsgrad: True
+
+# Linear warmup → linear decay. Same shape as the cold split-head config;
+# step counts assume ~12k grad-steps/epoch on 4-GPU DDP without
+# DistributedSampler. From-scratch needs the longer warmup that the
+# warm/restart variants don't.
+lr_scheduler:
+  type: linear_warmup_decay
+  initial_lr: 1.e-6
+  final_lr: 1.e-4
+  num_warmup_steps: 5000
+  milestone_steps: 5000
+  num_decay_steps: 2000000
+  min_lr_decay: 1.e-6
+  interval: step
+  frequency: 1
