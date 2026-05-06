@@ -98,6 +98,11 @@ def load_thermo_head_into(head: "SingleTargetHead", ckpt_path: str) -> int:
         "dynamics.ema_model.thermo_heads.mp.",
         "dynamics.online_model.thermo_heads.mp.",
         "dynamics.thermo_heads.mp.",
+        # combined_head ckpt: head lives under combined_heads, first 5
+        # outputs are the same thermo targets so weights transfer.
+        "dynamics.ema_model.combined_heads.mp.",
+        "dynamics.online_model.combined_heads.mp.",
+        "dynamics.combined_heads.mp.",
     ]
     chosen_prefix = None
     for p in candidates:

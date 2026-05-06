@@ -509,9 +509,18 @@ class Graph3DInterpolantModel(pl.LightningModule):
 
     @torch.no_grad()
     def sample(self, num_samples=None, timesteps=500, time_discretization="linear", batch=None,
-            num_atoms=None, pre_format=True):
+            num_atoms=None, pre_format=True, save_snapshots_at=None):
         """
-        Generates num_samples. Can supply a batch for inital starting points for conditional sampling for any interpolants set to None.
+        Generates num_samples. Can supply a batch for initial starting points
+        for conditional sampling for any interpolants set to None.
+
+        `save_snapshots_at`: optional list/tuple of integration step indices
+        (0-based, into the integration loop) at which to capture the current
+        sample state. When provided, the return becomes a dict
+            {"final": <samples_dict>, "snapshots": [<state_at_step_i>, ...]}
+        where each snapshot dict has the same shape as `final`. Use to
+        cheaply harvest multiple near-clean conformers from a single
+        flow trajectory (e.g. last 3 of 10 integration steps).
         """
         # Prefer explicit config; otherwise auto-enable for velocity prediction
         return_step_output = getattr(self.sampling_params, 'return_step_output', None)
@@ -598,6 +607,18 @@ class Graph3DInterpolantModel(pl.LightningModule):
                 data[f"{key}_t"] = prior[key] = interpolant.prior(batch_index, shape, self.device)
         # Iterate through time, query the dynamics, apply interpolant step update
 
+        # Validate snapshot indices once.
+        snapshot_set = set()
+        snapshots = []
+        if save_snapshots_at is not None:
+            for s in save_snapshots_at:
+                if not (0 <= int(s) < len(DT)):
+                    raise ValueError(
+                        f"save_snapshots_at index {s} out of range "
+                        f"[0, {len(DT)}); have {len(DT)} integration steps."
+                    )
+                snapshot_set.add(int(s))
+
         out = {}
         for idx in tqdm(list(range(len(DT))), total=len(DT)):
             t = timeline[idx]
@@ -643,6 +664,31 @@ class Graph3DInterpolantModel(pl.LightningModule):
                         dt=dt,
                     )
 
+            # Snapshot capture: build a samples-shaped dict at this step.
+            if idx in snapshot_set:
+                snap = {}
+                for ip in self.interpolant_params.variables:
+                    key = ip.variable_name
+                    if "discrete" in ip.interpolant_type:
+                        # Take argmax of model logits — same as the final
+                        # samples block below.
+                        if f"{key}_hat" in out:
+                            snap[key] = torch.argmax(out[f"{key}_hat"], dim=-1).clone()
+                        else:
+                            snap[key] = data[f"{key}_t"].clone()
+                    else:
+                        if return_step_output:
+                            snap[key] = data[f"{key}_t"].clone()
+                        else:
+                            snap[key] = out[f"{key}_hat"].clone()
+                snap["batch"] = batch_index.clone()
+                snap["edge_index"] = edge_index.clone()
+                for ip in self.interpolant_params.variables:
+                    if "offset" in ip:
+                        snap[ip.variable_name] = snap[ip.variable_name] - ip.offset
+                snap["_snapshot_step"] = idx
+                snapshots.append(snap)
+
         samples = {}
         for interp_param in self.interpolant_params.variables:
             key = interp_param.variable_name
@@ -661,6 +707,8 @@ class Graph3DInterpolantModel(pl.LightningModule):
             if "offset" in interp_params:
                 samples[interp_params.variable_name] -= interp_params.offset
 
+        if save_snapshots_at is not None:
+            return {"final": samples, "snapshots": snapshots}
         return samples
 
     def self_conditioning(self, batch, time, conditional_batch=None):
