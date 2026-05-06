@@ -10,9 +10,13 @@ from typing import Tuple, Optional
 from torch_geometric.typing import Adj, OptTensor
 from torch_scatter import scatter
 
-if torch.cuda.is_available():
-    disable_compile = torch.cuda.get_device_name(0).find('AMD') >= 0
-else:
+try:
+    disable_compile = torch.cuda.is_available() and \
+        torch.cuda.get_device_name(0).find('AMD') >= 0
+except Exception:
+    # CUDA driver not available at import time (e.g. Error 803
+    # driver/display mismatch before reboot). Default to False —
+    # safe for NVIDIA/no-GPU; AMD-specific path won't be needed.
     disable_compile = False
 
 @torch.compiler.disable
