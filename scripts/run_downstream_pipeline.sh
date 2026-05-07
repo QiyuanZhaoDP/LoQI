@@ -122,27 +122,54 @@ fi
 # and runs in parallel with the others, so by the time lipo finishes
 # everyone else has already cycled through. With alphabetical order
 # lipo_s used to start last, holding 1 GPU while the other 3 sat idle.
+# Auto-discover datasets from INPUT_DIR when the caller hasn't already
+# exported a DATASETS array. Discovers every *.csv (skips report files),
+# inspects the SMILES and TARGET column names, and registers each as a
+# flat dataset. Works for any clean directory (0403, 0506, …).
+#
+# Falls back to the hardcoded table below only when INPUT_DIR contains
+# none of the known flat CSVs (e.g. raw downstream_ft/ with presplit
+# subdirs — see the commented-out block at the bottom for that case).
+if [[ ${#DATASETS[@]} -eq 0 ]]; then
+    DATASETS=()
+    while IFS= read -r csv; do
+        name=$(basename "$csv" .csv)
+        [[ "$name" == *report* ]] && continue
+        # Detect SMILES column name (SMILES or smiles)
+        _smi=$(python3 -c "
+import pandas as pd, sys
+df = pd.read_csv('$csv', nrows=0, encoding='utf-8-sig')
+cols = [c for c in df.columns if c.lower() == 'smiles']
+print(cols[0] if cols else 'SMILES')" 2>/dev/null)
+        # Detect TARGET column name (TARGET or mean, etc.)
+        _tgt=$(python3 -c "
+import pandas as pd, sys
+df = pd.read_csv('$csv', nrows=0, encoding='utf-8-sig')
+skip = {c for c in df.columns if c.lower() in ('smiles','_split','split','n','std')}
+pref = ['TARGET','target','mean','y','value']
+tgt = next((c for c in pref if c in df.columns), None)
+if tgt is None:
+    tgt = next((c for c in df.columns if c not in skip), 'TARGET')
+print(tgt)" 2>/dev/null)
+        DATASETS+=("${name}|${name}.csv|${name}.pkl|${_smi}|${_tgt}|0")
+    done < <(find "$INPUT_DIR" -maxdepth 1 -name "*.csv" | sort)
+fi
+
+# Fallback hardcoded table (LPT-ordered for 0403 nine-dataset benchmark).
+# Only active when INPUT_DIR has no CSVs and caller didn't export DATASETS.
+if [[ ${#DATASETS[@]} -eq 0 ]]; then
 DATASETS=(
-    "lipo_s|lipo_s.csv|lipo_s.pkl|SMILES|TARGET|0"            # 4,199 mols (largest, schedule first)
-    "gas_Hf|gas_Hf.csv|gas_Hf.pkl|smiles|mean|0"              # 2,419
-    "liquid_Hf|liquid_Hf.csv|liquid_Hf.pkl|smiles|mean|0"     # 1,624
-    "Cp|Cp.csv|Cp.pkl|SMILES|TARGET|0"                        # 1,459
-    "delaney_s|delaney_s.csv|delaney_s.pkl|SMILES|TARGET|0"   # 1,117
-    "V_cp|V_cp.csv|V_cp.pkl|SMILES|TARGET|0"                  # 813
-    "de|de.csv|de.pkl|SMILES|TARGET|0"                        # 778
-    "k|k.csv|k.pkl|SMILES|TARGET|0"                           # 755
-    "freesolv_s|freesolv_s.csv|freesolv_s.pkl|SMILES|TARGET|0"  # 641
+    "lipo_s|lipo_s.csv|lipo_s.pkl|SMILES|TARGET|0"
+    "gas_Hf|gas_Hf.csv|gas_Hf.pkl|SMILES|TARGET|0"
+    "liquid_Hf|liquid_Hf.csv|liquid_Hf.pkl|SMILES|TARGET|0"
+    "Cp|Cp.csv|Cp.pkl|SMILES|TARGET|0"
+    "delaney_s|delaney_s.csv|delaney_s.pkl|SMILES|TARGET|0"
+    "V_cp|V_cp.csv|V_cp.pkl|SMILES|TARGET|0"
+    "de|de.csv|de.pkl|SMILES|TARGET|0"
+    "k|k.csv|k.pkl|SMILES|TARGET|0"
+    "freesolv_s|freesolv_s.csv|freesolv_s.pkl|SMILES|TARGET|0"
 )
-# --- Alt: raw downstream_ft/ (pre-split) ---
-# Restore IS_PRESPLIT=1 for the last three rows when running against the
-# raw input tree. Kept here for reference; not used by default.
-# DATASETS=(
-#     "Cp|Cp.csv|Cp.pkl|SMILES|TARGET|0"
-#     ...
-#     "delaney_s|delaney_s|delaney_s|SMILES|TARGET|1"
-#     "freesolv_s|freesolv_s|freesolv_s|SMILES|TARGET|1"
-#     "lipo_s|lipo_s|lipo_s|SMILES|TARGET|1"
-# )
+fi
 
 # ---- Helpers -----------------------------------------------------------
 

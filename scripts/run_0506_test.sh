@@ -178,20 +178,17 @@ _run_cv() {
     local label="$1" ckpt="$2" cfg="$3" pkl_dir="$4" pt_dir="$5" k_eff="$6" suffix="$7"
     mkdir -p "$pt_dir"
 
-    # Build DATASETS array dynamically from what's present
-    local ds_arr=()
-    for csv in "${DATASETS_CSV[@]}"; do
-        local name=$(basename "$csv" .csv)
-        # skip if no pickle for this ckpt+mode
-        [[ -f "$pkl_dir/$name.pkl" ]] || continue
-        ds_arr+=("${name}|${name}.csv|${name}.pkl|SMILES|TARGET|0")
-    done
-    if (( ${#ds_arr[@]} == 0 )); then
+    # Check at least one pickle exists for this ckpt+mode.
+    local n_pkls
+    n_pkls=$(find "$pkl_dir" -name "*.pkl" 2>/dev/null | wc -l)
+    if (( n_pkls == 0 )); then
         echo "  [WARN] no pickles found in $pkl_dir — skipping $suffix"
         return
     fi
-    export DATASETS=("${ds_arr[@]}")
 
+    # run_downstream_pipeline.sh auto-discovers DATASETS from INPUT_DIR
+    # and reads SMILES/TARGET column names directly from each CSV header,
+    # so no DATASETS export needed here.
     _hdr "CV: $suffix  (K=$k_eff, ckpt=$label)"
     SLEEP_HOURS=0 \
     K=$k_eff EPOCHS=$EPOCHS EARLY_STOP_PATIENCE=$EARLY_STOP_PATIENCE \
