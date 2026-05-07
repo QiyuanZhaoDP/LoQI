@@ -38,13 +38,14 @@ BATCH=${BATCH:-64}
 INPUT_DIR=${INPUT_DIR:-downstream_ft/0506/clean}
 
 # ---- Checkpoint definitions ------------------------------------------------
-# Format: "label|ckpt_path|config_path"
-# loqi_flow uses the warm (256-dim) config; all others use cold (384-dim).
+# Format: "label|ckpt_path|config_path|init_from_thermo"
+# init_from_thermo=1 → warm-start downstream head from ckpt's thermo_heads
+# init_from_thermo=0 → random-init head (loqi_flow has no thermo head)
 CKPT_DEFS=(
-    "loqi_flow|data/loqi_flow.ckpt|scripts/conf/loqi/loqi_flow.yaml"
-    "cold_warm|data/thermo_flow_warm.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml"
-    "cold_early|data/thermo_flow_cold_early.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml"
-    "cold_late|data/thermo_flow_cold_late.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml"
+    "loqi_flow|data/loqi_flow.ckpt|scripts/conf/loqi/loqi_flow.yaml|0"
+    "cold_warm|data/thermo_flow_warm.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml|1"
+    "cold_early|data/thermo_flow_cold_early.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml|1"
+    "cold_late|data/thermo_flow_cold_late.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml|1"
 )
 
 # ---- Sampling parameters ---------------------------------------------------
@@ -123,7 +124,7 @@ if [[ "$SKIP_SAMPLE" == "1" ]]; then
     _hdr "Sampling SKIPPED"
 else
     for def in "${CKPT_DEFS[@]}"; do
-        IFS='|' read -r label ckpt cfg <<< "$def"
+        IFS='|' read -r label ckpt cfg _init <<< "$def"
 
         # K=8 standard
         pkl_ss="data/0506_pkl_${label}_k8"
@@ -175,7 +176,7 @@ fi
 # Stage C — Downstream CV per (ckpt, sampling_mode)
 # -----------------------------------------------------------------------
 _run_cv() {
-    local label="$1" ckpt="$2" cfg="$3" pkl_dir="$4" pt_dir="$5" k_eff="$6" suffix="$7"
+    local label="$1" ckpt="$2" cfg="$3" init_thermo="$4" pkl_dir="$5" pt_dir="$6" k_eff="$7" suffix="$8"
     mkdir -p "$pt_dir"
 
     # Check at least one pickle exists for this ckpt+mode.
@@ -198,7 +199,7 @@ _run_cv() {
     PKL_DIR=$pkl_dir PT_DIR=$pt_dir \
     OUT_ROOT=$OUT_ROOT OUT_SUFFIX=$suffix \
     CKPT=$ckpt CONFIG=$cfg \
-    INIT_FROM_THERMO=1 \
+    INIT_FROM_THERMO=$init_thermo \
     HEAD_HIDDEN=$HEAD_HIDDEN N_MP_LAYERS=$N_MP_LAYERS MP_N_HEADS=$MP_N_HEADS \
     WANDB=$WANDB WANDB_PROJECT=$WANDB_PROJECT WANDB_GROUP=$suffix \
         bash scripts/run_downstream_pipeline.sh \
@@ -209,17 +210,17 @@ if [[ "$SKIP_CV" == "1" ]]; then
     _hdr "CV SKIPPED"
 else
     for def in "${CKPT_DEFS[@]}"; do
-        IFS='|' read -r label ckpt cfg <<< "$def"
+        IFS='|' read -r label ckpt cfg init_thermo <<< "$def"
 
         # M0: K=8
-        _run_cv "$label" "$ckpt" "$cfg" \
+        _run_cv "$label" "$ckpt" "$cfg" "$init_thermo" \
             "data/0506_pkl_${label}_k8" \
             "data/0506_pt_${label}_k8" \
             $K_SS \
             "${label}_K8"
 
         # M2: K=12 multi-snap
-        _run_cv "$label" "$ckpt" "$cfg" \
+        _run_cv "$label" "$ckpt" "$cfg" "$init_thermo" \
             "data/0506_pkl_${label}_k12ms" \
             "data/0506_pt_${label}_k12ms" \
             12 \
