@@ -1,0 +1,24 @@
+{
+  "name": "RI",
+  "n_raw": 8271,
+  "n_empty": 0,
+  "n_unparseable": 0,
+  "n_radical": 0,
+  "n_disconnected": 0,
+  "n_bad_elements": 0,
+  "n_bad_charge": 0,
+  "n_ha_cap": 0,
+  "bad_elements": {},
+  "n_after_smi": 8271,
+  "n_hard_removed": 0,
+  "hard_limits": {
+    "lo": 1.0,
+    "hi": 2.0
+  },
+  "inchikey_threshold_rel": 0.3,
+  "inchikey_threshold_abs": 0.018715,
+  "target_std": 0.062384,
+  "n_ik_groups_removed": 0,
+  "n_ik_groups_aggregated": 0,
+  "n_final": 8271
+}
