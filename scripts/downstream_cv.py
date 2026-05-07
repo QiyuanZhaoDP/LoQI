@@ -460,6 +460,12 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
     val_groups_local = (ensemble_groups[val_idx_arr_local]
                          if ensemble_groups is not None else None)
 
+    # Ring buffer for "last-stable" epoch selection: best val within the
+    # final `last_stable_window` epochs.  Separate from global best_state
+    # so we can report both without re-running training.
+    last_stable_window = int(getattr(args, "last_stable_window", 10))
+    last_k: list = []   # [(epoch, val_mae, cpu_state_dict)]
+
     inv_lambda = float(getattr(args, "invariance_lambda", 0.0) or 0.0)
     use_inv = inv_lambda > 0.0 and ensemble_groups is not None
     if use_inv and not getattr(args, "_inv_announced", False):
@@ -550,6 +556,14 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
         else:
             patience_counter += 1
 
+        # Ring buffer: keep last `last_stable_window` (epoch, val_mae, state)
+        # to enable "best epoch in last N" selection at training end.
+        last_k.append((ep, val_mae_ep,
+                        {k: v.detach().cpu().clone()
+                         for k, v in model.state_dict().items()}))
+        if len(last_k) > last_stable_window:
+            last_k.pop(0)
+
         if wandb_run is not None:
             train_loss_zspace = (epoch_loss_sum / max(epoch_loss_count, 1))
             train_mae_phys = (
@@ -579,38 +593,65 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
                   f"stopped at ep {ep+1}/{args.epochs}")
             break
 
-    # Restore best-val state for the comprehensive eval below.
-    if best_state is not None:
-        model.load_state_dict({k: v.to(device) for k, v in best_state.items()})
+    # ---- Helper: run eval on eval_idx with whatever model state is loaded --
+    def _eval_on_test(model_state):
+        """Load model_state, run preds on eval_idx, return (preds, y_true, mask)."""
+        model.load_state_dict({k: v.to(device) for k, v in model_state.items()})
+        model.eval()
+        _preds = []
+        with torch.no_grad():
+            for H_b, b_b, _, _ in batch_iter(H, offsets, tgt_norm,
+                                             eval_idx.tolist(),
+                                             args.batch_size, device, shuffle=False):
+                _preds.append(model(H_b, b_b).cpu().numpy())
+        return np.concatenate(_preds) * std + mean
 
     # Final evaluation: on test_idx when provided (UniMol-compatible mode),
-    # otherwise fall back to val_idx (legacy: same fold used for both).
+    # otherwise fall back to val_idx (legacy).
     eval_idx = test_idx if test_idx is not None else val_idx
-    model.eval()
-    preds = []
-    with torch.no_grad():
-        for H_b, b_b, _, _ in batch_iter(H, offsets, tgt_norm,
-                                       eval_idx.tolist(),
-                                       args.batch_size, device, shuffle=False):
-            pred = model(H_b, b_b)
-            preds.append(pred.cpu().numpy())
-    preds = np.concatenate(preds) * std + mean
     val_idx_arr = np.asarray(eval_idx)
     val_has = has_target[val_idx_arr].bool().numpy()
     y_true = targets[val_idx_arr].float().numpy()
     mask = val_has & ~np.isnan(y_true)
     n_train_total = int(tr_has.sum())
 
+    # --- Global best-val eval (existing) ---
+    if best_state is not None:
+        model.load_state_dict({k: v.to(device) for k, v in best_state.items()})
+    model.eval()
+    preds_best = []
+    with torch.no_grad():
+        for H_b, b_b, _, _ in batch_iter(H, offsets, tgt_norm,
+                                       eval_idx.tolist(),
+                                       args.batch_size, device, shuffle=False):
+            preds_best.append(model(H_b, b_b).cpu().numpy())
+    preds = np.concatenate(preds_best) * std + mean
+
+    # --- Last-stable eval: best val epoch within last `last_stable_window` ---
+    ls_ep, ls_mae_val, ls_state = min(last_k, key=lambda x: x[1]) if last_k else \
+                                   (best_epoch, best_val_mae, best_state)
+    preds_ls = _eval_on_test(ls_state) if ls_state is not None else preds
+
+    # Restore best state so the function leaves model in best-val config
+    if best_state is not None:
+        model.load_state_dict({k: v.to(device) for k, v in best_state.items()})
+
     if ensemble_groups is None:
         # Standard path: one prediction per Data.
         return {
             "n_train": n_train_total, "n_val": int(mask.sum()),
             "target_mean": mean, "target_std": std,
+            # Global best-val metrics
             "mae":  float(mean_absolute_error(y_true[mask], preds[mask])),
             "rmse": float(np.sqrt(mean_squared_error(y_true[mask], preds[mask]))),
             "r2":   float(r2_score(y_true[mask], preds[mask])),
             "best_epoch":   best_epoch + 1,
             "n_epochs_run": n_epochs_run,
+            # Last-stable (best in final window) metrics
+            "mae_last_stable":  float(mean_absolute_error(y_true[mask], preds_ls[mask])),
+            "rmse_last_stable": float(np.sqrt(mean_squared_error(y_true[mask], preds_ls[mask]))),
+            "r2_last_stable":   float(r2_score(y_true[mask], preds_ls[mask])),
+            "best_epoch_last_stable": ls_ep + 1,
         }
 
     # Ensemble path: aggregate K conformer preds per group_id, then metrics.
@@ -661,6 +702,14 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
         "ensemble_pred_std_over_target_std": float(np.mean(pred_std_per_group) / max(std, 1e-12)),
         "best_epoch":   best_epoch + 1,
         "n_epochs_run": n_epochs_run,
+        # Last-stable (best in last window) on ensemble test
+        "mae_last_stable":  float(mean_absolute_error(y_per_group,
+            np.bincount(inv, weights=preds_ls[mask], minlength=len(unique_groups)) / counts)),
+        "rmse_last_stable": float(np.sqrt(mean_squared_error(y_per_group,
+            np.bincount(inv, weights=preds_ls[mask], minlength=len(unique_groups)) / counts))),
+        "r2_last_stable": float(r2_score(y_per_group,
+            np.bincount(inv, weights=preds_ls[mask], minlength=len(unique_groups)) / counts)),
+        "best_epoch_last_stable": ls_ep + 1,
     }
 
 
@@ -966,6 +1015,11 @@ def main():
     p.add_argument("--val-seed", type=int, default=42,
                    help="RNG seed for the train/val split within each fold "
                         "(default 42, matching cv_split.py).")
+    p.add_argument("--last-stable-window", type=int, default=10,
+                   help="Number of final training epochs to consider for "
+                        "'last-stable' epoch selection. Reports the best "
+                        "test MAE achievable within those last N epochs "
+                        "(represents converged model, not a lucky dip).")
     p.add_argument("--weight-decay", type=float, default=1e-5)
     p.add_argument("--n-mp-layers", type=int, default=2)
     p.add_argument("--mp-n-heads", type=int, default=4)
@@ -1309,6 +1363,15 @@ def main():
             [r["rmse_per_conformer"] for r in fold_reports]))
         summary["r2_per_conformer_mean"]   = float(np.mean(
             [r["r2_per_conformer"]   for r in fold_reports]))
+    if "mae_last_stable" in fold_reports[0]:
+        summary["mae_last_stable_mean"]  = float(np.mean(
+            [r["mae_last_stable"]  for r in fold_reports]))
+        summary["mae_last_stable_std"]   = float(np.std(
+            [r["mae_last_stable"]  for r in fold_reports]))
+        summary["rmse_last_stable_mean"] = float(np.mean(
+            [r["rmse_last_stable"] for r in fold_reports]))
+        summary["r2_last_stable_mean"]   = float(np.mean(
+            [r["r2_last_stable"]   for r in fold_reports]))
     report_path = out_dir / "cv_report.json"
     with open(report_path, "w") as f:
         json.dump(summary, f, indent=2)
@@ -1317,9 +1380,12 @@ def main():
     print("\n" + "=" * 70)
     print(f"{args.n_folds}-fold CV summary  |  {args.dataset_pt}")
     print("-" * 70)
-    print(f"  MAE  = {summary['mae_mean']:.4f} ± {summary['mae_std']:.4f}")
-    print(f"  RMSE = {summary['rmse_mean']:.4f}")
-    print(f"  R²   = {summary['r2_mean']:.3f}")
+    print(f"  [best-val]       MAE = {summary['mae_mean']:.4f} ± {summary['mae_std']:.4f}  "
+          f"RMSE = {summary['rmse_mean']:.4f}  R² = {summary['r2_mean']:.3f}")
+    if "mae_last_stable_mean" in summary:
+        print(f"  [last-stable-{getattr(args,'last_stable_window',10)}]  "
+              f"MAE = {summary['mae_last_stable_mean']:.4f} ± {summary['mae_last_stable_std']:.4f}  "
+              f"RMSE = {summary['rmse_last_stable_mean']:.4f}  R² = {summary['r2_last_stable_mean']:.3f}")
     if "mae_per_conformer_mean" in summary:
         print(f"  ---- per-conformer (UniMol-style, no ensembling) ----")
         print(f"  MAE  = {summary['mae_per_conformer_mean']:.4f} "
