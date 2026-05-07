@@ -43,9 +43,9 @@ INPUT_DIR=${INPUT_DIR:-downstream_ft/0506/clean}
 # init_from_thermo=0 → random-init head (loqi_flow has no thermo head)
 CKPT_DEFS=(
     "loqi_flow|data/loqi_flow.ckpt|scripts/conf/loqi/loqi_flow.yaml|0"
-    "cold_warm|data/thermo_flow_warm.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml|1"
-    "cold_early|data/thermo_flow_cold_early.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml|1"
-    "cold_late|data/thermo_flow_cold_late.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml|1"
+    "cold_warm|data/thermo_flow_warm.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml|0"
+    "cold_early|data/thermo_flow_cold_early.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml|0"
+    "cold_late|data/thermo_flow_cold_late.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml|0"
 )
 
 # ---- Sampling parameters ---------------------------------------------------
