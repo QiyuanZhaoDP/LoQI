@@ -312,15 +312,21 @@ _run_one() {
             lora_args="$lora_args --lora-alpha $LORA_ALPHA"
         fi
     fi
+    # Adaptive epochs flag (set AUTO_EPOCHS=1 to enable)
+    local epoch_args="--epochs $EPOCHS"
+    if [[ "${AUTO_EPOCHS:-0}" == "1" ]]; then
+        epoch_args="--auto-epochs --epochs-large ${EPOCHS_LARGE:-200} --epochs-small ${EPOCHS_SMALL:-150}"
+    fi
+
     CUDA_VISIBLE_DEVICES=$gpu python scripts/downstream_cv.py \
         --ckpt   "$CKPT"   --config "$CONFIG" \
         --dataset-pt "$pt" \
         --ensemble-by input_id \
         --out-dir "$out_dir" \
-        --n-folds 5 --epochs "$EPOCHS" --lr "$LR" \
+        --n-folds 5 --lr "$LR" \
         --batch-size "$BATCH" \
         --device cuda \
-        $wandb_args $warm_args $stop_args $lora_args \
+        $epoch_args $wandb_args $warm_args $stop_args $lora_args \
         >> "$out_dir/cv.log" 2>&1 \
         || { echo "[$name] CV FAILED, see $out_dir/cv.log" >&2; return 1; }
 

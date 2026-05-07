@@ -532,17 +532,24 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
                 vp.append(model(H_b, b_b).cpu().numpy())
         vp_phys = np.concatenate(vp) * std + mean
         if val_groups_local is None:
-            err = vp_phys[val_mask_local] - y_true_local[val_mask_local]
-            val_mae_ep = float(np.mean(np.abs(err)))
+            _vp = vp_phys[val_mask_local]
+            _yt = y_true_local[val_mask_local]
         else:
             vp_m = vp_phys[val_mask_local]
             yt_m = y_true_local[val_mask_local]
             grps = val_groups_local[val_mask_local]
             _, inv = np.unique(grps, return_inverse=True)
             cnt = np.bincount(inv).clip(min=1)
-            pm = np.bincount(inv, weights=vp_m) / cnt
-            ym = np.bincount(inv, weights=yt_m) / cnt
-            val_mae_ep = float(np.mean(np.abs(pm - ym)))
+            _vp = np.bincount(inv, weights=vp_m) / cnt   # pm
+            _yt = np.bincount(inv, weights=yt_m) / cnt   # ym
+        val_mae_ep  = float(np.mean(np.abs(_vp - _yt)))
+        val_rmse_ep = float(np.sqrt(np.mean((_vp - _yt) ** 2)))
+        if len(_yt) >= 2:
+            _ss_res = np.sum((_yt - _vp) ** 2)
+            _ss_tot = np.sum((_yt - _yt.mean()) ** 2)
+            val_r2_ep = float(1.0 - _ss_res / max(_ss_tot, 1e-12))
+        else:
+            val_r2_ep = float("nan")
 
         # Best-val tracking. Snapshot model state on improvement so the
         # final eval uses val_min, not val_last.
@@ -577,8 +584,10 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
                 f"fold_{fold_i}/train_rmse_phys": train_rmse_phys,
                 f"fold_{fold_i}/lr":              current_lr,
                 f"fold_{fold_i}/epoch":           ep,
-                f"fold_{fold_i}/val_mae":         val_mae_ep,
-                f"fold_{fold_i}/best_val_mae":    best_val_mae,
+                f"fold_{fold_i}/val_mae":          val_mae_ep,
+                f"fold_{fold_i}/val_rmse":         val_rmse_ep,
+                f"fold_{fold_i}/val_r2":           val_r2_ep,
+                f"fold_{fold_i}/best_val_mae":     best_val_mae,
             }
             if use_inv and epoch_inv_count > 0:
                 log_dict[f"fold_{fold_i}/train_inv_var"] = (
@@ -899,8 +908,10 @@ def train_one_fold_lora(ds, model, train_idx, val_idx, args, device,
                 f"fold_{fold_i}/train_rmse_phys": train_rmse_phys,
                 f"fold_{fold_i}/lr":              float(opt.param_groups[0]["lr"]),
                 f"fold_{fold_i}/epoch":           ep,
-                f"fold_{fold_i}/val_mae":         val_mae_ep,
-                f"fold_{fold_i}/best_val_mae":    best_val_mae,
+                f"fold_{fold_i}/val_mae":          val_mae_ep,
+                f"fold_{fold_i}/val_rmse":         val_rmse_ep,
+                f"fold_{fold_i}/val_r2":           val_r2_ep,
+                f"fold_{fold_i}/best_val_mae":     best_val_mae,
             })
 
         if patience_n > 0 and patience_counter >= patience_n:
@@ -1015,6 +1026,15 @@ def main():
     p.add_argument("--val-seed", type=int, default=42,
                    help="RNG seed for the train/val split within each fold "
                         "(default 42, matching cv_split.py).")
+    p.add_argument("--auto-epochs", action="store_true",
+                   help="Override --epochs based on dataset size: "
+                        "datasets with n > --auto-epochs-threshold use "
+                        "--epochs-large; smaller ones use --epochs-small.")
+    p.add_argument("--auto-epochs-threshold", type=int, default=2000)
+    p.add_argument("--epochs-large", type=int, default=200,
+                   help="Epochs for datasets with n > threshold (default 200).")
+    p.add_argument("--epochs-small", type=int, default=150,
+                   help="Epochs for datasets with n ≤ threshold (default 150).")
     p.add_argument("--last-stable-window", type=int, default=10,
                    help="Number of final training epochs to consider for "
                         "'last-stable' epoch selection. Reports the best "
@@ -1116,6 +1136,18 @@ def main():
     ds = load_prepared_pt(args.dataset_pt)
     n = len(ds)
     print(f"  {n:,} molecules")
+
+    # Adaptive epochs: larger datasets benefit from more training steps.
+    # Override --epochs when --auto-epochs is set.
+    if getattr(args, "auto_epochs", False):
+        threshold = int(getattr(args, "auto_epochs_threshold", 2000))
+        ep_large  = int(getattr(args, "epochs_large", 200))
+        ep_small  = int(getattr(args, "epochs_small", 150))
+        orig_ep   = args.epochs
+        args.epochs = ep_large if n > threshold else ep_small
+        if args.epochs != orig_ep:
+            print(f"  [auto-epochs] n={n:,} {'>' if n > threshold else '<='} "
+                  f"{threshold} → epochs {orig_ep} → {args.epochs}")
 
     # Extract H for every molecule (one-pass cache)
     print(f"Loading backbone {args.ckpt}")
