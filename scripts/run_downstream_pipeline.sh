@@ -122,6 +122,10 @@ fi
 # and runs in parallel with the others, so by the time lipo finishes
 # everyone else has already cycled through. With alphabetical order
 # lipo_s used to start last, holding 1 GPU while the other 3 sat idle.
+# Ensure DATASETS is initialised so set -u doesn't fire on ${#DATASETS[@]}.
+# Callers can pre-populate it; if empty, auto-discovery below fills it in.
+DATASETS=("${DATASETS[@]+"${DATASETS[@]}"}")
+
 # Auto-discover datasets from INPUT_DIR when the caller hasn't already
 # exported a DATASETS array. Discovers every *.csv (skips report files),
 # inspects the SMILES and TARGET column names, and registers each as a
