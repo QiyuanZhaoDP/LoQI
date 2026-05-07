@@ -1,0 +1,2 @@
+n_csv_files,total_rows,converted_rows,invalid_or_unconverted_rows,datasets_with_within_inchikey_duplicates,within_duplicate_groups,within_duplicate_extra_rows,across_dataset_duplicate_groups
+13,29047,29047,0,0,0,0,6589
