@@ -136,6 +136,8 @@ DATASETS=("${DATASETS[@]+"${DATASETS[@]}"}")
 # subdirs — see the commented-out block at the bottom for that case).
 if [[ ${#DATASETS[@]} -eq 0 ]]; then
     DATASETS=()
+    # Sort CSVs by descending row count (LPT scheduling: largest job starts
+    # first so it overlaps with smaller ones and all GPUs stay busy).
     while IFS= read -r csv; do
         name=$(basename "$csv" .csv)
         [[ "$name" == *report* ]] && continue
@@ -156,7 +158,14 @@ if tgt is None:
     tgt = next((c for c in df.columns if c not in skip), 'TARGET')
 print(tgt)" 2>/dev/null)
         DATASETS+=("${name}|${name}.csv|${name}.pkl|${_smi}|${_tgt}|0")
-    done < <(find "$INPUT_DIR" -maxdepth 1 -name "*.csv" | sort)
+    done < <(
+        # Sort by descending row count for LPT scheduling
+        for f in "$INPUT_DIR"/*.csv; do
+            [[ "$(basename "$f")" == *report* ]] && continue
+            n=$(wc -l < "$f" 2>/dev/null || echo 0)
+            echo "$n $f"
+        done | sort -rn | awk '{print $2}'
+    )
 fi
 
 # Fallback hardcoded table (LPT-ordered for 0403 nine-dataset benchmark).

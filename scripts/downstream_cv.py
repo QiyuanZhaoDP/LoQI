@@ -398,14 +398,26 @@ def lora_parameters(module: nn.Module):
 
 def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
                     args, device, ensemble_groups=None,
-                    wandb_run=None, fold_i=0):
-    """Train head on train_idx Data points, evaluate on val_idx.
+                    wandb_run=None, fold_i=0, test_idx=None):
+    """Train head on train_idx, early-stop on val_idx, report on test_idx.
+
+    When `test_idx` is None (legacy behaviour) val_idx serves as both the
+    early-stopping monitor and the final evaluation set — i.e. the 5-fold
+    CV fold is reported on the same indices used for early stopping.
+
+    When `test_idx` is provided (UniMol-compatible mode):
+      * train_idx  — 90 % of the non-test fold (actual training data)
+      * val_idx    — 10 % of the non-test fold (early-stopping only)
+      * test_idx   — the held-out CV fold (final metric reporting)
+    This matches the methodology of cv_split.py (seed=2 folds, 10 % val
+    drawn with seed=42 from the train pool, test fold never touched during
+    training or selection).
 
     If `ensemble_groups` is provided (numpy array length n, one int per Data
-    pointing to a group id), val predictions are aggregated by group (mean)
-    before computing metrics. This is what makes K-conformer ensembling
-    work: K Data of the same input share a group_id, so we get one
-    prediction per input molecule even with K-augmented training data.
+    pointing to a group id), predictions are aggregated by group (mean)
+    before computing metrics. This makes K-conformer ensembling work: K Data
+    of the same input share a group_id, so we get one prediction per input
+    molecule even with K-augmented training data.
     """
     # z-score normalize on train only
     tr_has = has_target[train_idx].bool().numpy()
@@ -571,17 +583,19 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
     if best_state is not None:
         model.load_state_dict({k: v.to(device) for k, v in best_state.items()})
 
-    # Evaluate (preds in val_idx ORDER, then de-normalize to physical units).
+    # Final evaluation: on test_idx when provided (UniMol-compatible mode),
+    # otherwise fall back to val_idx (legacy: same fold used for both).
+    eval_idx = test_idx if test_idx is not None else val_idx
     model.eval()
     preds = []
     with torch.no_grad():
         for H_b, b_b, _, _ in batch_iter(H, offsets, tgt_norm,
-                                       val_idx.tolist(),
+                                       eval_idx.tolist(),
                                        args.batch_size, device, shuffle=False):
             pred = model(H_b, b_b)
             preds.append(pred.cpu().numpy())
     preds = np.concatenate(preds) * std + mean
-    val_idx_arr = np.asarray(val_idx)
+    val_idx_arr = np.asarray(eval_idx)
     val_has = has_target[val_idx_arr].bool().numpy()
     y_true = targets[val_idx_arr].float().numpy()
     mask = val_has & ~np.isnan(y_true)
@@ -938,12 +952,28 @@ def main():
                         "metrics always come from the val_min epoch "
                         "regardless of this flag (best model is restored "
                         "before final eval).")
+    # UniMol-benchmark-compatible split: KFold fold assignment uses --seed
+    # (default 2); within each fold, 10 % of the train pool is held out
+    # as a separate val set for early stopping, and the fold itself is the
+    # held-out test. This matches cv_split.py (seed=2, val_fraction=0.1,
+    # val_seed=42). Set --val-fraction 0 to disable (legacy: fold = val + test).
+    p.add_argument("--val-fraction", type=float, default=0.1,
+                   help="Fraction of non-test data held out as val (for "
+                        "early stopping). 0 = legacy mode where the fold "
+                        "itself is used for both early stopping and "
+                        "reporting. Default 0.1 matches the UniMol "
+                        "benchmark cv_split.py.")
+    p.add_argument("--val-seed", type=int, default=42,
+                   help="RNG seed for the train/val split within each fold "
+                        "(default 42, matching cv_split.py).")
     p.add_argument("--weight-decay", type=float, default=1e-5)
     p.add_argument("--n-mp-layers", type=int, default=2)
     p.add_argument("--mp-n-heads", type=int, default=4)
     p.add_argument("--head-hidden", type=int, default=256)
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
-    p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--seed", type=int, default=2,
+                   help="KFold fold-assignment seed. Default 2 matches "
+                        "the UniMol benchmark cv_split.py.")
     p.add_argument("--ensemble-by", default=None,
                    help="Data attribute that groups multiple Data into one "
                         "input molecule (e.g. 'input_id' for K-conformer "
@@ -1139,7 +1169,31 @@ def main():
     else:
         split_iter = kf.split(labeled)
 
-    for fold_i, (tr, vl) in enumerate(split_iter):
+    for fold_i, (tr_pool, test_fold) in enumerate(split_iter):
+        # test_fold = held-out CV fold (always kept unseen during training).
+        # tr_pool   = the remaining (n_folds-1)/n_folds of data.
+        # When val_fraction > 0: carve a val set out of tr_pool for early
+        # stopping, matching the UniMol benchmark cv_split.py methodology.
+        # When val_fraction == 0: legacy mode — val_fold IS the test fold.
+        tr, vl = tr_pool, test_fold  # keep legacy names for the block below
+
+        val_fraction = float(getattr(args, "val_fraction", 0.1))
+        val_seed     = int(getattr(args, "val_seed", 42))
+
+        if val_fraction > 0:
+            _ss = ShuffleSplit(n_splits=1, test_size=val_fraction,
+                               random_state=val_seed)
+            if args.ensemble_by is not None:
+                _tr_g, _vl_g = next(_ss.split(tr_pool))
+                tr = tr_pool[_tr_g]   # group indices for actual training
+                # vl stays as test_fold above; val comes from tr_pool[_vl_g]
+                _val_group_indices = tr_pool[_vl_g]
+            else:
+                _tr_d, _vl_d = next(_ss.split(tr_pool))
+                tr = tr_pool[_tr_d]   # data indices into labeled
+                _val_data_indices = tr_pool[_vl_d]
+            # test (vl) remains = test_fold
+
         if args.ensemble_by is not None:
             # Expand group indices → all Data indices in those groups.
             train_groups = labeled_groups[tr]
@@ -1150,10 +1204,19 @@ def main():
                 [i for i in labeled if int(ensemble_groups[i]) in train_set],
                 dtype=np.int64,
             )
-            val_idx = np.array(
+            test_idx = np.array(
                 [i for i in labeled if int(ensemble_groups[i]) in val_set],
                 dtype=np.int64,
             )
+            # Build val_idx from the 10% carved out of train pool
+            if val_fraction > 0:
+                val_train_set = set(labeled_groups[_val_group_indices].tolist())
+                val_idx = np.array(
+                    [i for i in labeled if int(ensemble_groups[i]) in val_train_set],
+                    dtype=np.int64,
+                )
+            else:
+                val_idx = test_idx  # legacy: val = test
 
             # K-cap on training side only (val keeps all K conformers).
             # First K_cap Data per group — deterministic; conformer order
@@ -1175,10 +1238,20 @@ def main():
                   f"train={len(train_idx)} ({len(train_groups)} grp)  "
                   f"val={len(val_idx)} ({len(val_groups)} grp) ===")
         else:
-            train_idx = labeled[tr]
-            val_idx   = labeled[vl]
+            # Non-ensemble mode: expand tr/vl from labeled-array positions.
+            test_idx  = labeled[vl]  # held-out test fold
+            if val_fraction > 0:
+                # val from 10% of train pool; actual train from remaining 90%
+                train_idx = labeled[tr][_tr_d]
+                val_idx   = labeled[tr][_vl_d]
+            else:
+                train_idx = labeled[tr]
+                val_idx   = test_idx   # legacy
             print(f"\n=== Fold {fold_i+1}/{args.n_folds} | "
-                  f"train={len(train_idx)}  val={len(val_idx)} ===")
+                  f"train={len(train_idx)}  val={len(val_idx)}  "
+                  f"test={len(test_idx)} ===")
+
+        test_idx_arg = test_idx if val_fraction > 0 else None
         if use_lora:
             t_type = str(cfg.interpolant.time_type)
             t_max = (cfg.interpolant.timesteps - 1
@@ -1193,7 +1266,8 @@ def main():
             rep = train_one_fold(H, offsets, targets, has_target,
                                   train_idx, val_idx, args, device,
                                   ensemble_groups=ensemble_groups,
-                                  wandb_run=wandb_run, fold_i=fold_i)
+                                  wandb_run=wandb_run, fold_i=fold_i,
+                                  test_idx=test_idx_arg)
         rep["fold"] = fold_i
         fold_reports.append(rep)
         # Compact per-fold summary; include conformer-spread when in ensemble mode.

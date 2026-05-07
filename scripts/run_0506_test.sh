@@ -30,22 +30,22 @@ fi
 # ============ CONFIG ============
 N_GPUS=${N_GPUS:-4}
 CUDA_DEVICES=${CUDA_DEVICES:-0,1,2,3}
-EPOCHS=${EPOCHS:-200}
-EARLY_STOP_PATIENCE=${EARLY_STOP_PATIENCE:-30}
+EPOCHS=${EPOCHS:-150}
+EARLY_STOP_PATIENCE=${EARLY_STOP_PATIENCE:-100}
 LR=${LR:-3e-4}
 BATCH=${BATCH:-64}
 
-INPUT_DIR=${INPUT_DIR:-downstream_ft/0506/clean}
+INPUT_DIR=${INPUT_DIR:-downstream_ft/0506/cleaned_by_CC/cleaned_by_codex}
 
 # ---- Checkpoint definitions ------------------------------------------------
 # Format: "label|ckpt_path|config_path|init_from_thermo"
 # init_from_thermo=1 → warm-start downstream head from ckpt's thermo_heads
 # init_from_thermo=0 → random-init head (loqi_flow has no thermo head)
 CKPT_DEFS=(
-    "loqi_flow|data/loqi_flow.ckpt|scripts/conf/loqi/loqi_flow.yaml|0"
-    "cold_warm|data/thermo_flow_warm.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml|0"
-    "cold_early|data/thermo_flow_cold_early.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml|0"
-    "cold_late|data/thermo_flow_cold_late.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml|0"
+    "loqi_flow|data/ft_ckpts/loqi_flow.ckpt|scripts/conf/loqi/loqi_flow.yaml|0"
+    "cold_warm|data/ft_ckpts/thermo_flow_warm.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml|0"
+    "cold_early|data/ft_ckpts/thermo_flow_cold_early.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml|0"
+    "cold_late|data/ft_ckpts/thermo_flow_cold_late.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml|0"
 )
 
 # ---- Sampling parameters ---------------------------------------------------
@@ -81,7 +81,7 @@ mkdir -p "$OUT_ROOT" "$LOG_DIR"
 
 # Pre-flight: verify all ckpts + configs exist
 for def in "${CKPT_DEFS[@]}"; do
-    IFS='|' read -r label ckpt cfg <<< "$def"
+    IFS='|' read -r label ckpt cfg _init <<< "$def"
     [[ -f "$ckpt" ]] || { echo "ERROR: ckpt not found: $ckpt ($label)" >&2; exit 1; }
     [[ -f "$cfg"  ]] || { echo "ERROR: config not found: $cfg ($label)" >&2; exit 1; }
 done
