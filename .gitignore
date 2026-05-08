@@ -32,8 +32,11 @@ data_processing/tcit_thermo.csv.stats.json
 # Downstream FT data CSVs — large, regenerable, tracked by path not git
 # Keep only scripts, configs, and summary reports; not raw/processed data
 downstream_ft/0403/
-downstream_ft/0506/
 downstream_ft/0301/
+# Keep cleaned_by_codex (canonical data), ignore everything else under 0506
+downstream_ft/0506/raw_data/
+downstream_ft/0506/cleaned_by_CC/
+downstream_ft/0506/screened/
 
 # Model checkpoints and large binaries
 *.ckpt
