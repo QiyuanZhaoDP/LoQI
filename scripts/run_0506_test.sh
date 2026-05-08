@@ -28,8 +28,8 @@ if (( BASH_VERSINFO[0] < 5 )) || { (( BASH_VERSINFO[0] == 5 )) && (( BASH_VERSIN
 fi
 
 # ============ CONFIG ============
-N_GPUS=${N_GPUS:-4}
-CUDA_DEVICES=${CUDA_DEVICES:-0,1,2,3}
+N_GPUS=${N_GPUS:-8}
+CUDA_DEVICES=${CUDA_DEVICES:-0,1,2,3,4,5,6,7}
 EPOCHS=${EPOCHS:-150}           # fallback if AUTO_EPOCHS=0
 AUTO_EPOCHS=${AUTO_EPOCHS:-1}   # 1=enable adaptive: >2000 → 200ep, ≤2000 → 150ep
 EPOCHS_LARGE=${EPOCHS_LARGE:-200}
@@ -49,6 +49,8 @@ CKPT_DEFS=(
     "cold_warm|data/ft_ckpts/thermo_flow_warm.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml|0"
     "cold_early|data/ft_ckpts/thermo_flow_cold_early.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml|0"
     "cold_late|data/ft_ckpts/thermo_flow_cold_late.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml|0"
+    # Add new ckpt here: "label|path/to/ckpt|config.yaml|0"
+    # "new_model|data/ft_ckpts/new_model.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml|0"
 )
 
 # ---- Sampling parameters ---------------------------------------------------
