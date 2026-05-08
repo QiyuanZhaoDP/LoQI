@@ -156,10 +156,10 @@ if [[ "$SKIP_SAMPLE" == "1" ]]; then
 else
     # Parse CUDA_DEVICES into an array of individual GPU IDs
     IFS=',' read -ra _GPU_IDS <<< "$CUDA_DEVICES"
-    local _N_POOL=${#_GPU_IDS[@]}
+    _N_POOL=${#_GPU_IDS[@]}
 
     # Build task queue: "mode|label|ckpt|cfg|smi|pkl|name"
-    declare -a _QUEUE=()
+    _QUEUE=()
     for def in "${CKPT_DEFS[@]}"; do
         IFS='|' read -r label ckpt cfg _init <<< "$def"
         pkl_ss="data/0506_pkl_${label}_k8"
@@ -182,8 +182,9 @@ else
     if (( total_tasks == 0 )); then
         echo "  all pickles already exist — skipping"
     else
-        declare -A _PID_GPU _PID_TAG
-        _done=0 _fail=0 _idx=0
+        declare -A _PID_GPU
+        declare -A _PID_TAG
+        _done=0; _fail=0; _idx=0
 
         # Seed pool
         for (( _gi=0; _gi < _N_POOL && _idx < total_tasks; _gi++, _idx++ )); do
