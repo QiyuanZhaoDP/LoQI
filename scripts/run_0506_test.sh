@@ -144,58 +144,115 @@ else
 fi
 
 # -----------------------------------------------------------------------
-# Stage B — Sampling per checkpoint
+# Stage B — Flat work-queue sampling across all ckpts + datasets + modes
+#
+# Old design: per-ckpt sequential → 1 GPU busy while 7 idle for K=12.
+# New design: collect ALL (ckpt × dataset × mode) tasks into a flat
+# queue, then dispatch using a N_GPUS worker pool (one task per GPU).
+# Each GPU runs one sampling job; as it finishes, the next task starts.
 # -----------------------------------------------------------------------
 if [[ "$SKIP_SAMPLE" == "1" ]]; then
     _hdr "Sampling SKIPPED"
 else
+    # Parse CUDA_DEVICES into an array of individual GPU IDs
+    IFS=',' read -ra _GPU_IDS <<< "$CUDA_DEVICES"
+    local _N_POOL=${#_GPU_IDS[@]}
+
+    # Build task queue: "mode|label|ckpt|cfg|smi|pkl|name"
+    declare -a _QUEUE=()
     for def in "${CKPT_DEFS[@]}"; do
         IFS='|' read -r label ckpt cfg _init <<< "$def"
-
-        # K=8 standard
         pkl_ss="data/0506_pkl_${label}_k8"
-        mkdir -p "$pkl_ss"
-        n_ss=$(find "$pkl_ss" -name "*.pkl" | wc -l)
-        if (( n_ss >= ${#DATASETS_CSV[@]} )); then
-            _hdr "[$label] K=8 sampling SKIPPED (${n_ss} pkls found)"
-        else
-            _hdr "[$label] K=8 standard sampling"
-            CUDA_VISIBLE_DEVICES=$CUDA_DEVICES \
-            K=$K_SS N_STEPS=$N_STEPS_SS \
-            OUTPUT_DIR=$pkl_ss \
-            INPUT_DIR=$INPUT_DIR \
-            FLOW_CKPT=$ckpt FLOW_CONFIG=$cfg \
-            N_GPUS=$N_GPUS \
-                bash scripts/sample_downstream_K5.sh \
-                2>&1 | tee -a "$LOG_DIR/0506_sample_${label}_k8.log"
-        fi
-
-        # K=12 multi-snapshot
         pkl_ms="data/0506_pkl_${label}_k12ms"
-        mkdir -p "$pkl_ms"
-        n_ms=$(find "$pkl_ms" -name "*.pkl" | wc -l)
-        if (( n_ms >= ${#DATASETS_CSV[@]} )); then
-            _hdr "[$label] K=12 multi-snap SKIPPED"
-        else
-            _hdr "[$label] K=12 multi-snapshot (4 traj × steps 7,8,9)"
-            for csv in "${DATASETS_CSV[@]}"; do
-                name=$(basename "$csv" .csv)
-                smi="$SMI_DIR/$name.smi"
-                pkl="$pkl_ms/$name.pkl"
-                [[ -f "$pkl" ]] && continue
-                [[ -f "$smi" ]] || { echo "  [WARN] no .smi for $name"; continue; }
-                CUDA_VISIBLE_DEVICES=$CUDA_DEVICES \
-                    python scripts/sample_conformers_multistep.py \
-                        --ckpt "$ckpt" --config "$cfg" \
-                        --input "$smi" --output "$pkl" \
+        mkdir -p "$pkl_ss" "$pkl_ms"
+        for csv in "${DATASETS_CSV[@]}"; do
+            name=$(basename "$csv" .csv)
+            smi="$SMI_DIR/$name.smi"
+            [[ -f "$smi" ]] || { echo "  [WARN] no .smi $name ($label)"; continue; }
+            pkl_k8="$pkl_ss/$name.pkl"
+            pkl_k12="$pkl_ms/$name.pkl"
+            [[ -f "$pkl_k8"  ]] || _QUEUE+=("k8|$label|$ckpt|$cfg|$smi|$pkl_k8|$name")
+            [[ -f "$pkl_k12" ]] || _QUEUE+=("k12|$label|$ckpt|$cfg|$smi|$pkl_k12|$name")
+        done
+    done
+
+    total_tasks=${#_QUEUE[@]}
+    _hdr "Stage B — dispatching $total_tasks sampling tasks across ${_N_POOL} GPUs"
+
+    if (( total_tasks == 0 )); then
+        echo "  all pickles already exist — skipping"
+    else
+        declare -A _PID_GPU _PID_TAG
+        _done=0 _fail=0 _idx=0
+
+        # Seed pool
+        for (( _gi=0; _gi < _N_POOL && _idx < total_tasks; _gi++, _idx++ )); do
+            IFS='|' read -r _mode _lbl _ckpt _cfg _smi _pkl _name <<< "${_QUEUE[$_idx]}"
+            _gpu="${_GPU_IDS[$_gi]}"
+            if [[ "$_mode" == "k8" ]]; then
+                CUDA_VISIBLE_DEVICES=$_gpu python scripts/sample_conformers.py \
+                    --ckpt "$_ckpt" --config "$_cfg" \
+                    --input "$_smi" --output "$_pkl" \
+                    --n_confs $K_SS --n_steps $N_STEPS_SS \
+                    --batch_size $BATCH --postprocess none \
+                    >> "$LOG_DIR/0506_${_lbl}_${_name}_k8.log" 2>&1 &
+            else
+                CUDA_VISIBLE_DEVICES=$_gpu python scripts/sample_conformers_multistep.py \
+                    --ckpt "$_ckpt" --config "$_cfg" \
+                    --input "$_smi" --output "$_pkl" \
+                    --n_traj $N_TRAJ --n_steps $N_STEPS_MS \
+                    --snapshot_steps $SNAPSHOT_STEPS \
+                    --batch_size $BATCH \
+                    >> "$LOG_DIR/0506_${_lbl}_${_name}_k12.log" 2>&1 &
+            fi
+            _pid=$!
+            _PID_GPU[$_pid]=$_gpu
+            _PID_TAG[$_pid]="${_mode}/${_lbl}/${_name}"
+            echo "[$(date +%T)] [$((_idx))/$total_tasks] launch ${_mode} ${_lbl}/${_name} → GPU $_gpu (pid=$_pid)"
+        done
+
+        # Drain queue
+        while (( ${#_PID_GPU[@]} > 0 )); do
+            _fpid=0
+            wait -n -p _fpid 2>/dev/null || true
+            [[ -z "${_PID_GPU[$_fpid]:-}" ]] && continue
+            _gpu="${_PID_GPU[$_fpid]}"
+            _tag="${_PID_TAG[$_fpid]}"
+            unset '_PID_GPU[$_fpid]' '_PID_TAG[$_fpid]'
+            _done=$((_done+1))
+            _wait=$?
+            (( _wait != 0 )) && { _fail=$((_fail+1)); echo "[$(date +%T)] FAIL $_tag (gpu=$_gpu)"; } \
+                             || echo "[$(date +%T)] done $_tag (gpu=$_gpu)"
+            # dispatch next
+            if (( _idx < total_tasks )); then
+                IFS='|' read -r _mode _lbl _ckpt _cfg _smi _pkl _name <<< "${_QUEUE[$_idx]}"
+                _idx=$((_idx+1))
+                if [[ "$_mode" == "k8" ]]; then
+                    CUDA_VISIBLE_DEVICES=$_gpu python scripts/sample_conformers.py \
+                        --ckpt "$_ckpt" --config "$_cfg" \
+                        --input "$_smi" --output "$_pkl" \
+                        --n_confs $K_SS --n_steps $N_STEPS_SS \
+                        --batch_size $BATCH --postprocess none \
+                        >> "$LOG_DIR/0506_${_lbl}_${_name}_k8.log" 2>&1 &
+                else
+                    CUDA_VISIBLE_DEVICES=$_gpu python scripts/sample_conformers_multistep.py \
+                        --ckpt "$_ckpt" --config "$_cfg" \
+                        --input "$_smi" --output "$_pkl" \
                         --n_traj $N_TRAJ --n_steps $N_STEPS_MS \
                         --snapshot_steps $SNAPSHOT_STEPS \
                         --batch_size $BATCH \
-                    >> "$LOG_DIR/0506_ms_${label}_${name}.log" 2>&1
-                echo "  [ok] $pkl"
-            done
-        fi
-    done
+                        >> "$LOG_DIR/0506_${_lbl}_${_name}_k12.log" 2>&1 &
+                fi
+                _pid=$!
+                _PID_GPU[$_pid]=$_gpu
+                _PID_TAG[$_pid]="${_mode}/${_lbl}/${_name}"
+                echo "[$(date +%T)] [$_idx/$total_tasks] launch ${_mode} ${_lbl}/${_name} → GPU $_gpu (pid=$_pid)"
+            fi
+        done
+
+        echo
+        echo "Sampling done: $_done total, $_fail failed"
+    fi
 fi
 
 # -----------------------------------------------------------------------
