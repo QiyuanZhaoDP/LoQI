@@ -44,13 +44,34 @@ INPUT_DIR=${INPUT_DIR:-downstream_ft/0506/cleaned_by_codex}
 # Format: "label|ckpt_path|config_path|init_from_thermo"
 # init_from_thermo=1 → warm-start downstream head from ckpt's thermo_heads
 # init_from_thermo=0 → random-init head (loqi_flow has no thermo head)
+# 9 combinations:
+#   loqi_flow            × cold init only  (no thermo head to load)
+#   thermo_flow_cold_early × cold + warm init
+#   thermo_flow_cold_late  × cold + warm init
+#   thermo_flow_warm_large × cold + warm init
+#   thermo_flow_warm_small × cold + warm init
+#
+# Format: "label|ckpt_path|config_path|init_from_thermo"
+# Run `python scripts/inspect_ckpt.py <path>` to verify config before
+# adjusting the yaml below (warm_small=256-dim, warm_large=384-dim assumed).
 CKPT_DEFS=(
+    # ---- loqi_flow: no thermo head, always random init ----
     "loqi_flow|data/ft_ckpts/loqi_flow.ckpt|scripts/conf/loqi/loqi_flow.yaml|0"
-    "cold_warm|data/ft_ckpts/thermo_flow_warm.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml|0"
-    "cold_early|data/ft_ckpts/thermo_flow_cold_early.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml|0"
-    "cold_late|data/ft_ckpts/thermo_flow_cold_late.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml|0"
-    # Add new ckpt here: "label|path/to/ckpt|config.yaml|0"
-    # "new_model|data/ft_ckpts/new_model.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml|0"
+
+    # ---- cold-start backbone (384/12) × 2 init modes ----
+    "cold_early_c|data/ft_ckpts/thermo_flow_cold_early.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml|0"
+    "cold_early_w|data/ft_ckpts/thermo_flow_cold_early.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml|1"
+    "cold_late_c|data/ft_ckpts/thermo_flow_cold_late.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml|0"
+    "cold_late_w|data/ft_ckpts/thermo_flow_cold_late.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml|1"
+
+    # ---- warm-start large backbone (384/12) × 2 init modes ----
+    "warm_large_c|data/ft_ckpts/thermo_flow_warm_large.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml|0"
+    "warm_large_w|data/ft_ckpts/thermo_flow_warm_large.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml|1"
+
+    # ---- warm-start small backbone (256/10) × 2 init modes ----
+    # If inspect_ckpt shows d=384, change yaml to loqi_thermo_flow_cold.yaml
+    "warm_small_c|data/ft_ckpts/thermo_flow_warm_small.ckpt|scripts/conf/loqi/loqi_thermo_flow_warm.yaml|0"
+    "warm_small_w|data/ft_ckpts/thermo_flow_warm_small.ckpt|scripts/conf/loqi/loqi_thermo_flow_warm.yaml|1"
 )
 
 # ---- Sampling parameters ---------------------------------------------------
