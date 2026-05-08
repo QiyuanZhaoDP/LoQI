@@ -26,3 +26,26 @@ data_processing/batch*.log
 data_processing/tcit_thermo_labels*
 data_processing/neutralization_mapping.json
 data_processing/chembl3d_neutralization_index.json*
+data_processing/tcit_thermo.csv
+data_processing/tcit_thermo.csv.stats.json
+
+# Downstream FT data CSVs — large, regenerable, tracked by path not git
+# Keep only scripts, configs, and summary reports; not raw/processed data
+downstream_ft/0403/
+downstream_ft/0506/
+downstream_ft/0301/
+
+# Model checkpoints and large binaries
+*.ckpt
+*.jpt
+*.pkl.gz
+property_table.parquet
+
+# PDFs and large assets
+docs/*.pdf
+assets/*.svg
+assets/*.png
+
+# Jupyter/IPython
+.ipynb_checkpoints/
+*.ipynb

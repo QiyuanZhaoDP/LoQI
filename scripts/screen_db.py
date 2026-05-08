@@ -19,7 +19,7 @@ Outputs (under <out_dir>/<name>/):
 
 Usage:
   python scripts/screen_db.py \\
-      --input-dir downstream_ft/0506/cleaned_by_CC/cleaned_by_codex \\
+      --input-dir downstream_ft/0506/cleaned_by_codex \\
       --output-dir downstream_ft/0506/screened
 """
 from __future__ import annotations
@@ -268,7 +268,7 @@ def screen_one(
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--input-dir",  default="downstream_ft/0506/cleaned_by_CC/cleaned_by_codex")
+    ap.add_argument("--input-dir",  default="downstream_ft/0506/cleaned_by_codex")
     ap.add_argument("--output-dir", default="downstream_ft/0506/screened")
     ap.add_argument("--outlier-rel", type=float, default=0.3,
                     help="Drop InChIKey group if target spread > this × σ_global "

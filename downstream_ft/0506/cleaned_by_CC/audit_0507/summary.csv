@@ -1,2 +1,0 @@
-n_csv_files,total_rows,converted_rows,invalid_or_unconverted_rows,datasets_with_within_inchikey_duplicates,within_duplicate_groups,within_duplicate_extra_rows,across_dataset_duplicate_groups,unique_inchikeys,iqr_outlier_rows,iqr_outlier_review_rows
-2,3364,3364,0,0,0,0,151,3213,30,10

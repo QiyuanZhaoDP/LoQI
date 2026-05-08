@@ -38,7 +38,7 @@ EARLY_STOP_PATIENCE=${EARLY_STOP_PATIENCE:-100}
 LR=${LR:-3e-4}
 BATCH=${BATCH:-64}
 
-INPUT_DIR=${INPUT_DIR:-downstream_ft/0506/cleaned_by_CC/cleaned_by_codex}
+INPUT_DIR=${INPUT_DIR:-downstream_ft/0506/cleaned_by_codex}
 
 # ---- Checkpoint definitions ------------------------------------------------
 # Format: "label|ckpt_path|config_path|init_from_thermo"
