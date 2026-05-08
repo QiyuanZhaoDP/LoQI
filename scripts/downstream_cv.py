@@ -37,7 +37,7 @@ import torch.nn.functional as F
 from omegaconf import OmegaConf
 from rdkit.Chem.rdchem import Mol
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-from sklearn.model_selection import KFold
+from sklearn.model_selection import KFold, ShuffleSplit
 from torch_geometric.data import InMemoryDataset
 from torch_geometric.data.data import DataEdgeAttr, DataTensorAttr
 from torch_geometric.data.storage import GlobalStorage
