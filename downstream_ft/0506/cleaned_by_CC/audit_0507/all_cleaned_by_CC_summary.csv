@@ -1,0 +1,2 @@
+n_csv_files,total_rows,converted_rows,invalid_or_unconverted_rows,unique_inchikeys_all_cleaned_by_CC,within_duplicate_groups_all_cleaned_by_CC,mp_st_rows_overlapping_other_tasks,mp_st_unique_inchikeys_overlapping_other_tasks
+15,32411,32411,0,17378,0,2053,1902
