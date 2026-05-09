@@ -317,6 +317,11 @@ _run_one() {
     if [[ "${AUTO_EPOCHS:-0}" == "1" ]]; then
         epoch_args="--auto-epochs --epochs-large ${EPOCHS_LARGE:-200} --epochs-small ${EPOCHS_SMALL:-150}"
     fi
+    # Cap K conformers on training side (e.g., MAX_K_PER_INPUT=5 for K=5-from-K=8)
+    local maxk_args=""
+    if [[ -n "${MAX_K_PER_INPUT:-}" ]] && (( MAX_K_PER_INPUT > 0 )); then
+        maxk_args="--max-k-per-input $MAX_K_PER_INPUT"
+    fi
 
     CUDA_VISIBLE_DEVICES=$gpu python scripts/downstream_cv.py \
         --ckpt   "$CKPT"   --config "$CONFIG" \
@@ -326,7 +331,7 @@ _run_one() {
         --n-folds 5 --lr "$LR" \
         --batch-size "$BATCH" \
         --device cuda \
-        $epoch_args $wandb_args $warm_args $stop_args $lora_args \
+        $epoch_args $wandb_args $warm_args $stop_args $lora_args $maxk_args \
         >> "$out_dir/cv.log" 2>&1 \
         || { echo "[$name] CV FAILED, see $out_dir/cv.log" >&2; return 1; }
 

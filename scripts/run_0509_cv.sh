@@ -128,9 +128,7 @@ else
             name=$(basename "$csv" .csv)
             smi="$SMI_DIR/$name.smi"
             [[ -f "$smi" ]] || continue
-            # K=5
-            pkl5="data/0509_pkl_${label}_k5"; mkdir -p "$pkl5"
-            [[ -f "$pkl5/$name.pkl" ]] || _QUEUE+=("k5|$label|$ckpt|$cfg|$smi|$pkl5/$name.pkl|$name")
+            # K=5: no separate sampling — reuse K=8 pickles with --max-k-per-input 5
             # K=8
             pkl8="data/0509_pkl_${label}_k8"; mkdir -p "$pkl8"
             [[ -f "$pkl8/$name.pkl" ]] || _QUEUE+=("k8|$label|$ckpt|$cfg|$smi|$pkl8/$name.pkl|$name")
@@ -222,11 +220,13 @@ else
     _CV_QUEUE=()
     for def in "${CKPT_DEFS[@]}"; do
         IFS='|' read -r label ckpt cfg init_thermo <<< "$def"
+        # K=5 reuses K=8 pkl/pt (no separate sampling) with max-k-per-input=5.
+        # Format: "tag:keff:pkl_dir:pt_dir:max_k_cap" (max_k_cap=0 means no cap)
         for _entry in \
-            "K5:${K_5}:data/0509_pkl_${label}_k5:data/0509_pt_${label}_k5" \
-            "K8:${K_8}:data/0509_pkl_${label}_k8:data/0509_pt_${label}_k8" \
-            "K9ms:9:data/0509_pkl_${label}_k9ms:data/0509_pt_${label}_k9ms"; do
-            IFS=':' read -r _mode_tag _keff _pkl_dir _pt_dir <<< "$_entry"
+            "K5:5:data/0509_pkl_${label}_k8:data/0509_pt_${label}_k8:5" \
+            "K8:${K_8}:data/0509_pkl_${label}_k8:data/0509_pt_${label}_k8:0" \
+            "K9ms:9:data/0509_pkl_${label}_k9ms:data/0509_pt_${label}_k9ms:0"; do
+            IFS=':' read -r _mode_tag _keff _pkl_dir _pt_dir _maxk <<< "$_entry"
             _suffix="${label}_${_mode_tag}"
             mkdir -p "$_pt_dir" "$OUT_ROOT"
             [[ -d "$_pkl_dir" ]] || continue
@@ -235,7 +235,7 @@ else
                 [[ -f "$_pkl_dir/$_ds.pkl" ]] || continue
                 [[ -f "$OUT_ROOT/${_ds}_${_suffix}/cv_report.json" ]] && \
                     { echo "  [skip CV] ${_suffix}/${_ds}"; continue; }
-                _CV_QUEUE+=("$_suffix|$ckpt|$cfg|$init_thermo|$_pkl_dir|$_pt_dir|$_keff|$_ds|$csv")
+                _CV_QUEUE+=("$_suffix|$ckpt|$cfg|$init_thermo|$_pkl_dir|$_pt_dir|$_keff|$_ds|$csv|$_maxk")
             done
         done
     done
@@ -252,7 +252,7 @@ else
 
         _launch_cv() {
             local _gpu="$1"
-            IFS='|' read -r _sfx _ck _cf _init _pkl _pt _k _ds _csv <<< "$2"
+            IFS='|' read -r _sfx _ck _cf _init _pkl _pt _k _ds _csv _maxk <<< "$2"
             CUDA_VISIBLE_DEVICES=$_gpu \
             SLEEP_HOURS=0 \
             K=$_k EPOCHS=$EPOCHS EARLY_STOP_PATIENCE=$EARLY_STOP_PATIENCE \
@@ -264,6 +264,7 @@ else
             CKPT=$_ck CONFIG=$_cf \
             INIT_FROM_THERMO=$_init \
             HEAD_HIDDEN=$HEAD_HIDDEN N_MP_LAYERS=$N_MP_LAYERS MP_N_HEADS=$MP_N_HEADS \
+            MAX_K_PER_INPUT=${_maxk:-0} \
             ONLY_DATASETS=$_ds \
             WANDB=$WANDB WANDB_PROJECT=$WANDB_PROJECT WANDB_GROUP=$_sfx \
                 bash scripts/run_downstream_pipeline.sh \
@@ -275,7 +276,7 @@ else
             _gpu="${_CV_GPU_IDS[$_gi]}"
             _pid=$(_launch_cv "$_gpu" "${_CV_QUEUE[$_cv_idx]}")
             _CV_PID_GPU[$_pid]=$_gpu
-            IFS='|' read -r _sfx _ck _cf _init _pkl _pt _k _ds _csv <<< "${_CV_QUEUE[$_cv_idx]}"
+            IFS='|' read -r _sfx _ck _cf _init _pkl _pt _k _ds _csv _maxk <<< "${_CV_QUEUE[$_cv_idx]}"
             _CV_PID_TAG[$_pid]="${_sfx}/${_ds}"
             echo "[$(date +%T)] [$_cv_idx/$_cv_total] CV ${_sfx}/${_ds} → GPU $_gpu"
         done
@@ -293,7 +294,7 @@ else
                 _cv_idx=$((_cv_idx+1))
                 _pid=$(_launch_cv "$_gpu" "$_entry")
                 _CV_PID_GPU[$_pid]=$_gpu
-                IFS='|' read -r _sfx _ck _cf _init _pkl _pt _k _ds _csv <<< "$_entry"
+                IFS='|' read -r _sfx _ck _cf _init _pkl _pt _k _ds _csv _maxk <<< "$_entry"
                 _CV_PID_TAG[$_pid]="${_sfx}/${_ds}"
                 echo "[$(date +%T)] [$_cv_idx/$_cv_total] CV ${_sfx}/${_ds} → GPU $_gpu"
             fi
