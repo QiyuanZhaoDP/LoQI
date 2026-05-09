@@ -257,60 +257,109 @@ else
 fi
 
 # -----------------------------------------------------------------------
-# Stage C — Downstream CV per (ckpt, sampling_mode)
+# Stage C — Flat work-queue CV: all (ckpt × mode × dataset) in parallel
+#
+# Old design: 18 configs run sequentially, each using all N_GPUS via
+# run_downstream_pipeline.sh — GPUs idle between config transitions.
+# New design: one task = one dataset's prepare + CV on ONE GPU.
+# All (9 ckpts × 2 modes × N_datasets) tasks enter a flat queue
+# dispatched across N_GPUS; GPUs stay fully busy throughout.
 # -----------------------------------------------------------------------
-_run_cv() {
-    local label="$1" ckpt="$2" cfg="$3" init_thermo="$4" pkl_dir="$5" pt_dir="$6" k_eff="$7" suffix="$8"
-    mkdir -p "$pt_dir"
-
-    # Check at least one pickle exists for this ckpt+mode.
-    local n_pkls
-    n_pkls=$(find "$pkl_dir" -name "*.pkl" 2>/dev/null | wc -l)
-    if (( n_pkls == 0 )); then
-        echo "  [WARN] no pickles found in $pkl_dir — skipping $suffix"
-        return
-    fi
-
-    # run_downstream_pipeline.sh auto-discovers DATASETS from INPUT_DIR
-    # and reads SMILES/TARGET column names directly from each CSV header,
-    # so no DATASETS export needed here.
-    _hdr "CV: $suffix  (K=$k_eff, ckpt=$label)"
-    SLEEP_HOURS=0 \
-    K=$k_eff EPOCHS=$EPOCHS EARLY_STOP_PATIENCE=$EARLY_STOP_PATIENCE \
-    AUTO_EPOCHS=$AUTO_EPOCHS EPOCHS_LARGE=$EPOCHS_LARGE EPOCHS_SMALL=$EPOCHS_SMALL \
-    LR=$LR BATCH=$BATCH N_GPUS=$N_GPUS \
-    CUDA_VISIBLE_DEVICES=$CUDA_DEVICES \
-    INPUT_DIR=$INPUT_DIR \
-    PKL_DIR=$pkl_dir PT_DIR=$pt_dir \
-    OUT_ROOT=$OUT_ROOT OUT_SUFFIX=$suffix \
-    CKPT=$ckpt CONFIG=$cfg \
-    INIT_FROM_THERMO=$init_thermo \
-    HEAD_HIDDEN=$HEAD_HIDDEN N_MP_LAYERS=$N_MP_LAYERS MP_N_HEADS=$MP_N_HEADS \
-    WANDB=$WANDB WANDB_PROJECT=$WANDB_PROJECT WANDB_GROUP=$suffix \
-        bash scripts/run_downstream_pipeline.sh \
-        2>&1 | tee -a "$LOG_DIR/0506_cv_${suffix}.log"
-}
-
 if [[ "$SKIP_CV" == "1" ]]; then
     _hdr "CV SKIPPED"
 else
+    IFS=',' read -ra _CV_GPU_IDS <<< "$CUDA_DEVICES"
+    _CV_N_POOL=${#_CV_GPU_IDS[@]}
+
+    # Build flat CV task queue: "suffix|ckpt|cfg|init|pkl_dir|pt_dir|k|ds_name|csv"
+    _CV_QUEUE=()
     for def in "${CKPT_DEFS[@]}"; do
         IFS='|' read -r label ckpt cfg init_thermo <<< "$def"
-
-        # M0: K=8
-        _run_cv "$label" "$ckpt" "$cfg" "$init_thermo" \
-            "data/0506_pkl_${label}_k8" \
-            "data/0506_pt_${label}_k8" \
-            $K_SS \
-            "${label}_K8"
-
-        # M2: K=12 multi-snap
-        _run_cv "$label" "$ckpt" "$cfg" "$init_thermo" \
-            "data/0506_pkl_${label}_k12ms" \
-            "data/0506_pt_${label}_k12ms" \
-            12 \
-            "${label}_K12ms"
+        for _mode_k in "K8:$K_SS:data/0506_pkl_${label}_k8:data/0506_pt_${label}_k8" \
+                        "K12ms:12:data/0506_pkl_${label}_k12ms:data/0506_pt_${label}_k12ms"; do
+            IFS=':' read -r _mode_tag _keff _pkl_dir _pt_dir <<< "$_mode_k"
+            _suffix="${label}_${_mode_tag}"
+            mkdir -p "$_pt_dir" "$OUT_ROOT"
+            [[ -d "$_pkl_dir" ]] || continue
+            for csv in "${DATASETS_CSV[@]}"; do
+                _ds=$(basename "$csv" .csv)
+                _ds_pkl=$(find "$_pkl_dir" -name "${_ds}.pkl" 2>/dev/null | head -1)
+                [[ -n "$_ds_pkl" ]] || continue   # no pickle for this ds+ckpt → skip
+                _CV_QUEUE+=("$_suffix|$ckpt|$cfg|$init_thermo|$_pkl_dir|$_pt_dir|$_keff|$_ds|$csv")
+            done
+        done
     done
+
+    _cv_total=${#_CV_QUEUE[@]}
+    _hdr "Stage C — dispatching $_cv_total CV tasks across ${_CV_N_POOL} GPUs"
+
+    if (( _cv_total == 0 )); then
+        echo "  no CV tasks — check that sampling completed"
+    else
+        declare -A _CV_PID_GPU
+        declare -A _CV_PID_TAG
+        _cv_done=0; _cv_fail=0; _cv_idx=0
+
+        _launch_cv_task() {
+            local _gpu="$1" _entry="$2"
+            IFS='|' read -r _sfx _ck _cf _init _pkl _pt _k _ds _csv <<< "$_entry"
+            local _out_ds="$OUT_ROOT/${_ds}_${_sfx}"
+            mkdir -p "$_out_ds"
+            # Build the .pt first (prepare), then run CV — all in one shot.
+            CUDA_VISIBLE_DEVICES=$_gpu \
+            SLEEP_HOURS=0 \
+            K=$_k EPOCHS=$EPOCHS EARLY_STOP_PATIENCE=$EARLY_STOP_PATIENCE \
+            AUTO_EPOCHS=$AUTO_EPOCHS EPOCHS_LARGE=$EPOCHS_LARGE EPOCHS_SMALL=$EPOCHS_SMALL \
+            LR=$LR BATCH=$BATCH N_GPUS=1 \
+            INPUT_DIR=$INPUT_DIR \
+            PKL_DIR=$_pkl PT_DIR=$_pt \
+            OUT_ROOT=$OUT_ROOT OUT_SUFFIX=$_sfx \
+            CKPT=$_ck CONFIG=$_cf \
+            INIT_FROM_THERMO=$_init \
+            HEAD_HIDDEN=$HEAD_HIDDEN N_MP_LAYERS=$N_MP_LAYERS MP_N_HEADS=$MP_N_HEADS \
+            ONLY_DATASETS=$_ds \
+            WANDB=$WANDB WANDB_PROJECT=$WANDB_PROJECT WANDB_GROUP=$_sfx \
+                bash scripts/run_downstream_pipeline.sh \
+                >> "$LOG_DIR/0506_cv_${_sfx}_${_ds}.log" 2>&1 &
+            echo $!
+        }
+
+        # Seed pool
+        for (( _gi=0; _gi < _CV_N_POOL && _cv_idx < _cv_total; _gi++, _cv_idx++ )); do
+            _gpu="${_CV_GPU_IDS[$_gi]}"
+            _pid=$(_launch_cv_task "$_gpu" "${_CV_QUEUE[$_cv_idx]}")
+            _CV_PID_GPU[$_pid]=$_gpu
+            IFS='|' read -r _sfx _ck _cf _init _pkl _pt _k _ds _csv <<< "${_CV_QUEUE[$((_cv_idx))]}"
+            _CV_PID_TAG[$_pid]="${_sfx}/${_ds}"
+            echo "[$(date +%T)] [$((_cv_idx))/$_cv_total] launch CV ${_sfx}/${_ds} → GPU $_gpu (pid=$_pid)"
+        done
+
+        # Drain
+        while (( ${#_CV_PID_GPU[@]} > 0 )); do
+            _fpid=0
+            wait -n -p _fpid 2>/dev/null || true
+            [[ -z "${_CV_PID_GPU[$_fpid]:-}" ]] && continue
+            _gpu="${_CV_PID_GPU[$_fpid]}"
+            _tag="${_CV_PID_TAG[$_fpid]}"
+            unset '_CV_PID_GPU[$_fpid]' '_CV_PID_TAG[$_fpid]'
+            _cv_done=$((_cv_done+1))
+            _wst=$?
+            (( _wst != 0 )) && { _cv_fail=$((_cv_fail+1)); echo "[$(date +%T)] FAIL $_tag (gpu=$_gpu)"; } \
+                             || echo "[$(date +%T)] done $_tag (gpu=$_gpu)"
+            if (( _cv_idx < _cv_total )); then
+                _entry="${_CV_QUEUE[$_cv_idx]}"
+                _cv_idx=$((_cv_idx+1))
+                _pid=$(_launch_cv_task "$_gpu" "$_entry")
+                _CV_PID_GPU[$_pid]=$_gpu
+                IFS='|' read -r _sfx _ck _cf _init _pkl _pt _k _ds _csv <<< "$_entry"
+                _CV_PID_TAG[$_pid]="${_sfx}/${_ds}"
+                echo "[$(date +%T)] [$_cv_idx/$_cv_total] launch CV ${_sfx}/${_ds} → GPU $_gpu (pid=$_pid)"
+            fi
+        done
+
+        echo
+        echo "CV done: $_cv_done total, $_cv_fail failed"
+    fi
 fi
 
 # -----------------------------------------------------------------------
@@ -322,20 +371,22 @@ import glob, json, os
 root = "$OUT_ROOT"
 from pathlib import Path
 
-print(f"\n{'dataset':<14s}  {'ckpt_mode':<26s}  {'ens_MAE':>9s}  {'1conf_MAE':>10s}  {'R²':>7s}  {'ep':>5s}")
-print("-" * 82)
+print(f"\n{'dataset':<14s}  {'ckpt_mode':<26s}  "
+      f"{'best_val MAE':>12s}  {'last_stab MAE':>13s}  {'R²':>7s}  {'ep':>5s}")
+print("-" * 90)
 for rep in sorted(glob.glob(os.path.join(root, "*/cv_report.json"))):
-    suffix = Path(rep).parent.name   # e.g. gas_Hf_cold_late_K8
-    # split suffix: last two parts are <label>_<mode>
+    suffix = Path(rep).parent.name
     parts = suffix.rsplit("_", 2)
-    ds = parts[0] if len(parts) == 3 else suffix
+    ds   = parts[0] if len(parts) == 3 else suffix
     mode = "_".join(parts[1:]) if len(parts) >= 2 else ""
     try:
         d = json.load(open(rep))
-        ens = d["mae_mean"]; pc = d.get("mae_per_conformer_mean", float("nan"))
-        r2  = d["r2_mean"]
-        ep  = sum(f.get("best_epoch",0) for f in d.get("folds",[])) / max(len(d.get("folds",[])),1)
-        print(f"{ds:<14s}  {mode:<26s}  {ens:>9.3f}  {pc:>10.3f}  {r2:>7.3f}  {ep:>5.0f}")
+        mae_bv = d["mae_mean"]
+        mae_ls = d.get("mae_last_stable_mean", float("nan"))
+        r2     = d["r2_mean"]
+        ep     = sum(f.get("best_epoch",0) for f in d.get("folds",[])) / max(len(d.get("folds",[])),1)
+        print(f"{ds:<14s}  {mode:<26s}  "
+              f"{mae_bv:>12.3f}  {mae_ls:>13.3f}  {r2:>7.3f}  {ep:>5.0f}")
     except Exception as e:
         print(f"{suffix}  (err: {e})")
 PY
