@@ -148,17 +148,11 @@ else
         declare -A _PID_TAG
         _done=0; _fail=0; _idx=0
 
-        _launch_sample() {
-            local _gpu="$1"
-            IFS='|' read -r _mode _lbl _ckpt _cfg _smi _pkl _name <<< "$2"
-            if [[ "$_mode" == "k5" ]]; then
-                CUDA_VISIBLE_DEVICES=$_gpu python scripts/sample_conformers.py \
-                    --ckpt "$_ckpt" --config "$_cfg" \
-                    --input "$_smi" --output "$_pkl" \
-                    --n_confs $K_5 --n_steps $N_STEPS_5 \
-                    --batch_size $BATCH --postprocess none \
-                    >> "$LOG_DIR/0509_${_lbl}_${_name}_k5.log" 2>&1 &
-            elif [[ "$_mode" == "k8" ]]; then
+        # Helper: launch one sampling job in the CURRENT shell (not subshell)
+        # so $! refers to a direct child visible to wait -n -p.
+        _do_sample() {
+            local _gpu="$1" _mode="$2" _lbl="$3" _ckpt="$4" _cfg="$5" _smi="$6" _pkl="$7" _name="$8"
+            if [[ "$_mode" == "k8" ]]; then
                 CUDA_VISIBLE_DEVICES=$_gpu python scripts/sample_conformers.py \
                     --ckpt "$_ckpt" --config "$_cfg" \
                     --input "$_smi" --output "$_pkl" \
@@ -174,16 +168,17 @@ else
                     --batch_size $BATCH \
                     >> "$LOG_DIR/0509_${_lbl}_${_name}_k9ms.log" 2>&1 &
             fi
-            echo $!
+            # Caller reads $! immediately after this returns
         }
 
         for (( _gi=0; _gi < _N_POOL && _idx < total_tasks; _gi++, _idx++ )); do
             _gpu="${_GPU_IDS[$_gi]}"
-            _pid=$(_launch_sample "$_gpu" "${_QUEUE[$_idx]}")
-            _PID_GPU[$_pid]=$_gpu
             IFS='|' read -r _mode _lbl _ck _cf _si _pk _nm <<< "${_QUEUE[$_idx]}"
+            _do_sample "$_gpu" "$_mode" "$_lbl" "$_ck" "$_cf" "$_si" "$_pk" "$_nm"
+            _pid=$!
+            _PID_GPU[$_pid]=$_gpu
             _PID_TAG[$_pid]="${_mode}/${_lbl}/${_nm}"
-            echo "[$(date +%T)] [$_idx/$total_tasks] launch ${_mode} ${_lbl}/${_nm} → GPU $_gpu"
+            echo "[$(date +%T)] [$_idx/$total_tasks] launch ${_mode} ${_lbl}/${_nm} → GPU $_gpu (pid=$_pid)"
         done
 
         while (( ${#_PID_GPU[@]} > 0 )); do
@@ -195,13 +190,13 @@ else
             (( _wst != 0 )) && { _fail=$((_fail+1)); echo "[$(date +%T)] FAIL $_tag (gpu=$_gpu)"; } \
                              || echo "[$(date +%T)] done $_tag (gpu=$_gpu)"
             if (( _idx < total_tasks )); then
-                _gpu_n=$_gpu
-                _pid=$(_launch_sample "$_gpu_n" "${_QUEUE[$_idx]}")
-                _PID_GPU[$_pid]=$_gpu_n
                 IFS='|' read -r _mode _lbl _ck _cf _si _pk _nm <<< "${_QUEUE[$_idx]}"
-                _PID_TAG[$_pid]="${_mode}/${_lbl}/${_nm}"
-                echo "[$(date +%T)] [$_idx/$total_tasks] launch ${_mode} ${_lbl}/${_nm} → GPU $_gpu_n"
                 _idx=$((_idx+1))
+                _do_sample "$_gpu" "$_mode" "$_lbl" "$_ck" "$_cf" "$_si" "$_pk" "$_nm"
+                _pid=$!
+                _PID_GPU[$_pid]=$_gpu
+                _PID_TAG[$_pid]="${_mode}/${_lbl}/${_nm}"
+                echo "[$(date +%T)] [$_idx/$total_tasks] launch ${_mode} ${_lbl}/${_nm} → GPU $_gpu (pid=$_pid)"
             fi
         done
         echo "Sampling done: $_done total, $_fail failed"
@@ -250,9 +245,8 @@ else
         declare -A _CV_PID_TAG
         _cv_done=0; _cv_fail=0; _cv_idx=0
 
-        _launch_cv() {
-            local _gpu="$1"
-            IFS='|' read -r _sfx _ck _cf _init _pkl _pt _k _ds _csv _maxk <<< "$2"
+        _do_cv() {
+            local _gpu="$1" _sfx="$2" _ck="$3" _cf="$4" _init="$5" _pkl="$6" _pt="$7" _k="$8" _ds="$9" _maxk="${10}"
             CUDA_VISIBLE_DEVICES=$_gpu \
             SLEEP_HOURS=0 \
             K=$_k EPOCHS=$EPOCHS EARLY_STOP_PATIENCE=$EARLY_STOP_PATIENCE \
@@ -269,16 +263,16 @@ else
             WANDB=$WANDB WANDB_PROJECT=$WANDB_PROJECT WANDB_GROUP=$_sfx \
                 bash scripts/run_downstream_pipeline.sh \
                 >> "$LOG_DIR/0509_cv_${_sfx}_${_ds}.log" 2>&1 &
-            echo $!
         }
 
         for (( _gi=0; _gi < _CV_N_POOL && _cv_idx < _cv_total; _gi++, _cv_idx++ )); do
             _gpu="${_CV_GPU_IDS[$_gi]}"
-            _pid=$(_launch_cv "$_gpu" "${_CV_QUEUE[$_cv_idx]}")
-            _CV_PID_GPU[$_pid]=$_gpu
             IFS='|' read -r _sfx _ck _cf _init _pkl _pt _k _ds _csv _maxk <<< "${_CV_QUEUE[$_cv_idx]}"
+            _do_cv "$_gpu" "$_sfx" "$_ck" "$_cf" "$_init" "$_pkl" "$_pt" "$_k" "$_ds" "${_maxk:-0}"
+            _pid=$!
+            _CV_PID_GPU[$_pid]=$_gpu
             _CV_PID_TAG[$_pid]="${_sfx}/${_ds}"
-            echo "[$(date +%T)] [$_cv_idx/$_cv_total] CV ${_sfx}/${_ds} → GPU $_gpu"
+            echo "[$(date +%T)] [$_cv_idx/$_cv_total] CV ${_sfx}/${_ds} → GPU $_gpu (pid=$_pid)"
         done
 
         while (( ${#_CV_PID_GPU[@]} > 0 )); do
@@ -290,13 +284,13 @@ else
             (( _wst != 0 )) && { _cv_fail=$((_cv_fail+1)); echo "[$(date +%T)] FAIL $_tag (gpu=$_gpu)"; } \
                              || echo "[$(date +%T)] done $_tag (gpu=$_gpu)"
             if (( _cv_idx < _cv_total )); then
-                _entry="${_CV_QUEUE[$_cv_idx]}"
+                IFS='|' read -r _sfx _ck _cf _init _pkl _pt _k _ds _csv _maxk <<< "${_CV_QUEUE[$_cv_idx]}"
                 _cv_idx=$((_cv_idx+1))
-                _pid=$(_launch_cv "$_gpu" "$_entry")
+                _do_cv "$_gpu" "$_sfx" "$_ck" "$_cf" "$_init" "$_pkl" "$_pt" "$_k" "$_ds" "${_maxk:-0}"
+                _pid=$!
                 _CV_PID_GPU[$_pid]=$_gpu
-                IFS='|' read -r _sfx _ck _cf _init _pkl _pt _k _ds _csv _maxk <<< "$_entry"
                 _CV_PID_TAG[$_pid]="${_sfx}/${_ds}"
-                echo "[$(date +%T)] [$_cv_idx/$_cv_total] CV ${_sfx}/${_ds} → GPU $_gpu"
+                echo "[$(date +%T)] [$_cv_idx/$_cv_total] CV ${_sfx}/${_ds} → GPU $_gpu (pid=$_pid)"
             fi
         done
         echo "CV done: $_cv_done total, $_cv_fail failed"

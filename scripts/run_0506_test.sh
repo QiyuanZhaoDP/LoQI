@@ -304,12 +304,10 @@ else
         declare -A _CV_PID_TAG
         _cv_done=0; _cv_fail=0; _cv_idx=0
 
-        _launch_cv_task() {
-            local _gpu="$1" _entry="$2"
-            IFS='|' read -r _sfx _ck _cf _init _pkl _pt _k _ds _csv <<< "$_entry"
+        _do_cv_task() {
+            local _gpu="$1" _sfx="$2" _ck="$3" _cf="$4" _init="$5" _pkl="$6" _pt="$7" _k="$8" _ds="$9"
             local _out_ds="$OUT_ROOT/${_ds}_${_sfx}"
             mkdir -p "$_out_ds"
-            # Build the .pt first (prepare), then run CV — all in one shot.
             CUDA_VISIBLE_DEVICES=$_gpu \
             SLEEP_HOURS=0 \
             K=$_k EPOCHS=$EPOCHS EARLY_STOP_PATIENCE=$EARLY_STOP_PATIENCE \
@@ -325,17 +323,17 @@ else
             WANDB=$WANDB WANDB_PROJECT=$WANDB_PROJECT WANDB_GROUP=$_sfx \
                 bash scripts/run_downstream_pipeline.sh \
                 >> "$LOG_DIR/0506_cv_${_sfx}_${_ds}.log" 2>&1 &
-            echo $!
         }
 
         # Seed pool
         for (( _gi=0; _gi < _CV_N_POOL && _cv_idx < _cv_total; _gi++, _cv_idx++ )); do
             _gpu="${_CV_GPU_IDS[$_gi]}"
-            _pid=$(_launch_cv_task "$_gpu" "${_CV_QUEUE[$_cv_idx]}")
+            IFS='|' read -r _sfx _ck _cf _init _pkl _pt _k _ds _csv <<< "${_CV_QUEUE[$_cv_idx]}"
+            _do_cv_task "$_gpu" "$_sfx" "$_ck" "$_cf" "$_init" "$_pkl" "$_pt" "$_k" "$_ds"
+            _pid=$!
             _CV_PID_GPU[$_pid]=$_gpu
-            IFS='|' read -r _sfx _ck _cf _init _pkl _pt _k _ds _csv <<< "${_CV_QUEUE[$((_cv_idx))]}"
             _CV_PID_TAG[$_pid]="${_sfx}/${_ds}"
-            echo "[$(date +%T)] [$((_cv_idx))/$_cv_total] launch CV ${_sfx}/${_ds} → GPU $_gpu (pid=$_pid)"
+            echo "[$(date +%T)] [$_cv_idx/$_cv_total] launch CV ${_sfx}/${_ds} → GPU $_gpu (pid=$_pid)"
         done
 
         # Drain
@@ -354,9 +352,10 @@ else
             if (( _cv_idx < _cv_total )); then
                 _entry="${_CV_QUEUE[$_cv_idx]}"
                 _cv_idx=$((_cv_idx+1))
-                _pid=$(_launch_cv_task "$_gpu" "$_entry")
-                _CV_PID_GPU[$_pid]=$_gpu
                 IFS='|' read -r _sfx _ck _cf _init _pkl _pt _k _ds _csv <<< "$_entry"
+                _do_cv_task "$_gpu" "$_sfx" "$_ck" "$_cf" "$_init" "$_pkl" "$_pt" "$_k" "$_ds"
+                _pid=$!
+                _CV_PID_GPU[$_pid]=$_gpu
                 _CV_PID_TAG[$_pid]="${_sfx}/${_ds}"
                 echo "[$(date +%T)] [$_cv_idx/$_cv_total] launch CV ${_sfx}/${_ds} → GPU $_gpu (pid=$_pid)"
             fi
