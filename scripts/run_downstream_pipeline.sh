@@ -53,6 +53,7 @@ OUT_ROOT=${OUT_ROOT:-outputs/downstream_cv}
 
 K=${K:-5}
 N_GPUS=${N_GPUS:-4}
+BASE_GPU=${BASE_GPU:-0}   # physical GPU offset; outer scripts set BASE_GPU=X instead of CUDA_VISIBLE_DEVICES
 EPOCHS=${EPOCHS:-100}
 LR=${LR:-3e-4}
 
@@ -378,14 +379,15 @@ n_started=0
 
 # Seed pool
 for ((gpu=0; gpu<N_GPUS && idx<n_total; gpu++)); do
+    phys_gpu=$(( BASE_GPU + gpu ))
     IFS='|' read -r name csv_rel pkl_rel smi_col tgt_col is_split <<< "${DATASETS[$idx]}"
-    ( _run_one "$name" "$csv_rel" "$pkl_rel" "$smi_col" "$tgt_col" "$is_split" "$gpu" ) &
+    ( _run_one "$name" "$csv_rel" "$pkl_rel" "$smi_col" "$tgt_col" "$is_split" "$phys_gpu" ) &
     pid=$!
-    GPU_OF_PID[$pid]=$gpu
+    GPU_OF_PID[$pid]=$phys_gpu
     NAME_OF_PID[$pid]="$name"
     n_started=$((n_started + 1))
     idx=$((idx + 1))
-    echo "[$(date +%T)] [${n_started}/${n_total}] launch $name on GPU $gpu  (pid=$pid)"
+    echo "[$(date +%T)] [${n_started}/${n_total}] launch $name on GPU $phys_gpu  (pid=$pid)"
 done
 
 # Drain
@@ -399,26 +401,26 @@ while (( ${#GPU_OF_PID[@]} > 0 )); do
     if [[ -z "${GPU_OF_PID[$finished_pid]:-}" ]]; then
         continue
     fi
-    gpu="${GPU_OF_PID[$finished_pid]}"
+    phys_gpu="${GPU_OF_PID[$finished_pid]}"
     name="${NAME_OF_PID[$finished_pid]}"
     unset 'GPU_OF_PID[$finished_pid]'
     unset 'NAME_OF_PID[$finished_pid]'
     n_done=$((n_done + 1))
     if (( status != 0 )); then
         n_failed=$((n_failed + 1))
-        echo "[$(date +%T)] [${n_done}/${n_total}] FAIL  $name  (gpu=$gpu status=$status)"
+        echo "[$(date +%T)] [${n_done}/${n_total}] FAIL  $name  (gpu=$phys_gpu status=$status)"
     else
-        echo "[$(date +%T)] [${n_done}/${n_total}] done  $name  (gpu=$gpu)"
+        echo "[$(date +%T)] [${n_done}/${n_total}] done  $name  (gpu=$phys_gpu)"
     fi
     if (( idx < n_total )); then
         IFS='|' read -r name csv_rel pkl_rel smi_col tgt_col is_split <<< "${DATASETS[$idx]}"
-        ( _run_one "$name" "$csv_rel" "$pkl_rel" "$smi_col" "$tgt_col" "$is_split" "$gpu" ) &
+        ( _run_one "$name" "$csv_rel" "$pkl_rel" "$smi_col" "$tgt_col" "$is_split" "$phys_gpu" ) &
         pid=$!
-        GPU_OF_PID[$pid]=$gpu
+        GPU_OF_PID[$pid]=$phys_gpu
         NAME_OF_PID[$pid]="$name"
         n_started=$((n_started + 1))
         idx=$((idx + 1))
-        echo "[$(date +%T)] [${n_started}/${n_total}] launch $name on GPU $gpu  (pid=$pid)"
+        echo "[$(date +%T)] [${n_started}/${n_total}] launch $name on GPU $phys_gpu  (pid=$pid)"
     fi
 done
 

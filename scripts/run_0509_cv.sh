@@ -247,7 +247,7 @@ else
 
         _do_cv() {
             local _gpu="$1" _sfx="$2" _ck="$3" _cf="$4" _init="$5" _pkl="$6" _pt="$7" _k="$8" _ds="$9" _maxk="${10}"
-            CUDA_VISIBLE_DEVICES=$_gpu \
+            BASE_GPU=$_gpu \
             SLEEP_HOURS=0 \
             K=$_k EPOCHS=$EPOCHS EARLY_STOP_PATIENCE=$EARLY_STOP_PATIENCE \
             AUTO_EPOCHS=$AUTO_EPOCHS EPOCHS_LARGE=$EPOCHS_LARGE EPOCHS_SMALL=$EPOCHS_SMALL \
