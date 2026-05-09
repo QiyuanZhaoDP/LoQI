@@ -70,6 +70,9 @@ LOG_DIR=${LOG_DIR:-/tmp}
 SKIP_SMI=${SKIP_SMI:-0}
 SKIP_SAMPLE=${SKIP_SAMPLE:-0}
 SKIP_CV=${SKIP_CV:-0}
+
+# Tasks per GPU for CV (memory: ~3-15GB per task; 4× safe on 80GB A100)
+TASKS_PER_GPU=${TASKS_PER_GPU:-1}
 # ================================
 
 mkdir -p "$OUT_ROOT" "$LOG_DIR"
@@ -209,7 +212,11 @@ fi
 if [[ "$SKIP_CV" == "1" ]]; then
     _hdr "CV SKIPPED"
 else
-    IFS=',' read -ra _CV_GPU_IDS <<< "$CUDA_DEVICES"
+    IFS=',' read -ra _BASE_GPU_IDS <<< "$CUDA_DEVICES"
+    _CV_GPU_IDS=()
+    for _g in "${_BASE_GPU_IDS[@]}"; do
+        for (( _t=0; _t<TASKS_PER_GPU; _t++ )); do _CV_GPU_IDS+=("$_g"); done
+    done
     _CV_N_POOL=${#_CV_GPU_IDS[@]}
 
     _CV_QUEUE=()
