@@ -284,7 +284,10 @@ else
             for csv in "${DATASETS_CSV[@]}"; do
                 _ds=$(basename "$csv" .csv)
                 _ds_pkl=$(find "$_pkl_dir" -name "${_ds}.pkl" 2>/dev/null | head -1)
-                [[ -n "$_ds_pkl" ]] || continue   # no pickle for this ds+ckpt → skip
+                [[ -n "$_ds_pkl" ]] || continue   # no pickle → skip
+                # Skip if cv_report already exists (safe to restart)
+                _cv_done_flag="$OUT_ROOT/${_ds}_${_suffix}/cv_report.json"
+                [[ -f "$_cv_done_flag" ]] && { echo "  [skip CV] ${_suffix}/${_ds}"; continue; }
                 _CV_QUEUE+=("$_suffix|$ckpt|$cfg|$init_thermo|$_pkl_dir|$_pt_dir|$_keff|$_ds|$csv")
             done
         done
