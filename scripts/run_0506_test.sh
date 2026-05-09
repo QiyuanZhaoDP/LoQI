@@ -216,6 +216,7 @@ else
         while (( ${#_PID_GPU[@]} > 0 )); do
             _fpid=0
             wait -n -p _fpid 2>/dev/null || true
+            _fpid=${_fpid:-0}
             [[ -z "${_PID_GPU[$_fpid]:-}" ]] && continue
             _gpu="${_PID_GPU[$_fpid]}"
             _tag="${_PID_TAG[$_fpid]}"
@@ -341,6 +342,7 @@ else
         while (( ${#_CV_PID_GPU[@]} > 0 )); do
             _fpid=0
             wait -n -p _fpid 2>/dev/null || true
+            _fpid=${_fpid:-0}
             [[ -z "${_CV_PID_GPU[$_fpid]:-}" ]] && continue
             _gpu="${_CV_PID_GPU[$_fpid]}"
             _tag="${_CV_PID_TAG[$_fpid]}"
