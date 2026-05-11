@@ -45,11 +45,11 @@ CKPT_DEFS=(
     "cold_last|data/ft_ckpts/thermo_flow_cold_last.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml|0"
 )
 
-# SAMPLING_MODES: see format at top of file. Default: 0509 setup.
+# SAMPLING_MODES: see format at top of file.
+# K8 + K12ms (4 traj × 3 snapshots = 12 conformers).
 SAMPLING_MODES=(
     "standard|K8|8|10"
-    "reuse|K5|5|K8"
-    "multistep|K9ms|9|3|10|7 8 9"
+    "multistep|K12ms|12|4|10|7 8 9"
 )
 
 # Run tag — used to namespace pkl/pt dirs: data/<RUN_TAG>_pkl_<label>_<mode>

@@ -1,0 +1,14 @@
+inchikey,canonical_smiles,target,knn_predicted,residual,residual_over_sigma,best_neighbour_tanimoto,reason
+QGZKDVFQNNGYKY-UHFFFAOYSA-N,N,11314.333333333334,3473.8691,7840.4643,9.68,0.125,physics_extreme: retained — follows known physical law
+VPKDCDLSJZCGKE-UHFFFAOYSA-N,N=C=N,10787.1257383,6211.2928,4575.833,5.65,0.5,physics_extreme: retained — follows known physical law
+OAKJQQAXSVQMHS-UHFFFAOYSA-N,NN,14348.0254701,5535.4714,8812.554,10.88,0.25,physics_extreme: retained — follows known physical law
+XLYOFNOQVPJJNP-UHFFFAOYSA-N,O,22010.263333333332,6073.4191,15936.8442,19.68,0.25,physics_extreme: retained — follows known physical law
+ZEIYBPGWHWECHV-UHFFFAOYSA-N,O=NF,10121.8386908,5211.2788,4910.5599,6.06,0.375,physics_extreme: retained — follows known physical law
+WFPZPJSADLPSON-UHFFFAOYSA-N,O=[N+]([O-])[N+](=O)[O-],10129.599343333331,4864.9665,5264.6328,6.5,0.5,physics_extreme: retained — follows known physical law
+JXBKZAYVMSNKHA-UHFFFAOYSA-N,O=c1[nH]nn[nH]1,11979.7043491,6840.0148,5139.6895,6.35,0.357,physics_extreme: retained — follows known physical law
+SPXGBDTUWODGLI-UHFFFAOYSA-N,O=c1c(O)c1O,10541.006624,4856.4967,5684.5099,7.02,0.7,physics_extreme: retained — follows known physical law
+MHAJPDPJQMAIIY-UHFFFAOYSA-N,OO,21925.0,5989.7813,15935.2187,19.68,0.4,physics_extreme: retained — follows known physical law
+XLYOFNOQVPJJNP-ZSJDYOACSA-N,[2H]O[2H],21799.0,6527.1793,15271.8207,18.86,0.25,physics_extreme: retained — follows known physical law
+QWENRTYMTSOGBR-UHFFFAOYSA-N,c1cn[nH]n1,10797.5500248,6933.4379,3864.1122,4.77,0.294,physics_extreme: retained — follows known physical law
+NSPMIYGKQJPBQR-UHFFFAOYSA-N,c1nc[nH]n1,10797.5500248,7320.6255,3476.9245,4.29,0.267,physics_extreme: retained — follows known physical law
+MTAYYBKXNAEQOK-UHFFFAOYSA-N,n1nc(-c2nn[nH]n2)n[nH]1,10461.5916645,6065.7017,4395.89,5.43,0.545,physics_extreme: retained — follows known physical law

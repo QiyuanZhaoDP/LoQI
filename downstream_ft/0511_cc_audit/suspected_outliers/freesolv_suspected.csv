@@ -1,0 +1,10 @@
+inchikey,canonical_smiles,target,knn_predicted,residual,residual_over_sigma,best_neighbour_tanimoto,reason
+NFACJZMKEDPNKN-GSVOUGTGSA-N,COP(=O)(OC)[C@@H](O)C(Cl)(Cl)Cl,-12.74,-3.6458,-9.0942,3.66,0.304,high_residual: |res|>3.0σ (k=20)
+VNWKTOKETHGBQD-UHFFFAOYSA-N,C,2.0,-5.646,7.646,3.07,0.0,high_residual: |res|>3.0σ (k=20)
+ZFTBZKVVGZNMJR-UHFFFAOYSA-N,O=c1[nH]cc(Cl)c(=O)[nH]1,-17.74,-9.9381,-7.8019,3.14,0.52,high_residual: |res|>3.0σ (k=20)
+WYKYKTKDBLFHCY-UHFFFAOYSA-N,Nc1cnn(-c2ccccc2)c(=O)c1Cl,-16.43,-5.8411,-10.5889,4.26,0.294,high_residual: |res|>3.0σ (k=20)
+RYYVLZVUVIJVGH-UHFFFAOYSA-N,Cn1c(=O)c2c(ncn2C)n(C)c1=O,-12.64,-6.8805,-5.7595,2.32,0.176,isolated: best_sim=0.176<0.2
+QGZKDVFQNNGYKY-UHFFFAOYSA-N,N,-4.29,-10.22,5.93,2.38,0.053,isolated: best_sim=0.053<0.2
+RWSOTUBLDIXVET-UHFFFAOYSA-N,S,-0.7,-5.9903,5.2903,2.13,0.077,isolated: best_sim=0.077<0.2
+BCCOBQSFUDVTJQ-UHFFFAOYSA-N,FC1(F)C(F)(F)C(F)(F)C1(F)F,3.43,-0.6361,4.0661,1.63,0.143,isolated: best_sim=0.143<0.2
+LDVVMCZRFWMZSG-PHDIDXHHSA-N,O=C1[C@@H]2CC=CC[C@H]2C(=O)N1SC(Cl)(Cl)Cl,-9.01,-7.4014,-1.6086,0.65,0.14,isolated: best_sim=0.140<0.2

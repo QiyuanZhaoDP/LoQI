@@ -1,0 +1,4 @@
+inchikey,canonical_smiles,target,knn_predicted,residual,residual_over_sigma,best_neighbour_tanimoto,reason
+FJBFPHVGVWTDIP-UHFFFAOYSA-N,BrCBr,2478.61,1494.9897,983.6203,6.64,0.5,physics_extreme: retained — follows known physical law
+PAAZPARNPHGIKF-UHFFFAOYSA-N,BrCCBr,2179.591,1549.9413,629.6497,4.25,0.5,physics_extreme: retained — follows known physical law
+XNNQFQFUQLJSQT-UHFFFAOYSA-N,ClC(Cl)(Cl)Br,2002.14,1376.3406,625.7994,4.22,0.429,physics_extreme: retained — follows known physical law

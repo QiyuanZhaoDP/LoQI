@@ -1,0 +1,5 @@
+SMILES,TARGET,reason
+CC(C)(C)c1cc2c(O)c(c1)Cc1cc(C(C)(C)C)cc(c1O)Cc1cc(C(C)(C)C)cc(c1O)Cc1cc(C(C)(C)C)cc(c1O)Cc1cc(C(C)(C)C)cc(c1O)Cc1cc(C(C)(C)C)cc(c1O)C2,2607.0,suspected QSPR extrapolation artifact: Tc > 2500 K exceeds reliable experimental range for macrocycles (calixarenes) — likely unphysical
+CC(C)(C)c1cc2c(O)c(c1)Cc1cc(C(C)(C)C)cc(c1O)Cc1cc(C(C)(C)C)cc(c1O)Cc1cc(C(C)(C)C)cc(c1O)Cc1cc(C(C)(C)C)cc(c1O)Cc1cc(C(C)(C)C)cc(c1O)Cc1cc(C(C)(C)C)cc(c1O)Cc1cc(C(C)(C)C)cc(c1O)C2,3225.0,suspected QSPR extrapolation artifact: Tc > 2500 K exceeds reliable experimental range for macrocycles (calixarenes) — likely unphysical
+CCCCCCCCCCCCCCCC(=O)OCC(COC(=O)CCCCCCCCCCCCCCC)OC(=O)Cc1ccccc1,2577.0,suspected QSPR extrapolation artifact: Tc > 2500 K exceeds reliable experimental range for macrocycles (calixarenes) — likely unphysical
+O=CC(O)C(O)C(OC1OC(CO)C(OC2OC(CO)C(OC3OC(CO)C(OC4OC(CO)C(O)C(O)C4O)C(O)C3O)C(O)C2O)C(O)C1O)C(O)CO,2789.0,suspected QSPR extrapolation artifact: Tc > 2500 K exceeds reliable experimental range for macrocycles (calixarenes) — likely unphysical

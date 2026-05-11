@@ -1,0 +1,4 @@
+inchikey,canonical_smiles,target,knn_predicted,residual,residual_over_sigma,best_neighbour_tanimoto,reason
+WQZGKKKJIJFFOK-VFUOTHLCSA-N,OC[C@H]1O[C@@H](O)[C@H](O)[C@@H](O)[C@@H]1O,-25.47,-7.7379,-17.7321,7.13,0.28,physics_extreme: retained — follows known physical law
+SRBFZHDQGSBBOR-LECHCGJUSA-N,O[C@@H]1[C@@H](O)[C@@H](O)OC[C@H]1O,-20.52,-6.041,-14.479,5.82,0.28,physics_extreme: retained — follows known physical law
+FBPFZTCFMRRESA-KVTDHHQDSA-N,OC[C@@H](O)[C@@H](O)[C@H](O)[C@H](O)CO,-23.62,-5.5668,-18.0532,7.26,0.429,physics_extreme: retained — follows known physical law

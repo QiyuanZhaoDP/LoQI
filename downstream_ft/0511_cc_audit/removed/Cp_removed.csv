@@ -1,0 +1,6 @@
+inchikey,canonical_smiles,target,group_spread,threshold,reason,SMILES,TARGET
+HNJBEVLQSNELDL-UHFFFAOYSA-N,O=C1CCCN1,169.411,34.654435,32.92755,inchikey_spread,,
+HNJBEVLQSNELDL-UHFFFAOYSA-N,OC1=NCCC1,204.065434977578,34.654435,32.92755,inchikey_spread,,
+,,,,,fatal: Cp ~4x too small — value in cal/(mol·K) not converted to J/(mol·K),CCCCCOCCOCCO,79.1230757222222
+,,,,,fatal: Cp ~4x too small — value in cal/(mol·K) not converted to J/(mol·K),CCCCCOCCOCCOCCO,91.2197779860632
+,,,,,fatal: Cp ~4x too small — value in cal/(mol·K) not converted to J/(mol·K),O[C@H]1[C@H](O)[C@H](O)OC[C@H]1O,81.3785217391304
