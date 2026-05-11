@@ -207,6 +207,90 @@ else
 fi
 
 # -----------------------------------------------------------------------
+# Stage B.5 — pre-extract backbone embeddings H
+# K5 and K8 share the same PT_DIR → one H extraction per dataset per ckpt.
+# -----------------------------------------------------------------------
+SKIP_EXTRACT=${SKIP_EXTRACT:-0}
+if [[ "$SKIP_EXTRACT" == "1" ]]; then
+    _hdr "Stage B.5 SKIPPED"
+else
+    IFS=',' read -ra _EX_GPU_IDS <<< "$CUDA_DEVICES"
+    _EX_N_POOL=${#_EX_GPU_IDS[@]}
+    _EX_QUEUE=()
+    # Track unique pt_dir × dataset combos (K5 and K8 share same pt_dir)
+    declare -A _EX_SEEN
+    for def in "${CKPT_DEFS[@]}"; do
+        IFS='|' read -r label ckpt cfg init_thermo <<< "$def"
+        for _entry in \
+            "K8:${K_8}:data/0509_pkl_${label}_k8:data/0509_pt_${label}_k8:0" \
+            "K9ms:9:data/0509_pkl_${label}_k9ms:data/0509_pt_${label}_k9ms:0"; do
+            IFS=':' read -r _mode_tag _keff _pkl_dir _pt_dir _maxk <<< "$_entry"
+            _suffix="${label}_${_mode_tag}"
+            [[ -d "$_pkl_dir" ]] || continue
+            for csv in "${DATASETS_CSV[@]}"; do
+                _ds=$(basename "$csv" .csv)
+                [[ -f "$_pkl_dir/$_ds.pkl" ]] || continue
+                _key="${_pt_dir}|${_ds}"
+                [[ -n "${_EX_SEEN[$_key]:-}" ]] && continue
+                _EX_SEEN[$_key]=1
+                [[ -f "$_pt_dir/${_ds}_H.pt" ]] && { echo "  [skip H] ${_suffix}/${_ds}"; continue; }
+                _EX_QUEUE+=("$_suffix|$ckpt|$cfg|$init_thermo|$_pkl_dir|$_pt_dir|$_keff|$_ds|$csv")
+            done
+        done
+    done
+
+    _ex_total=${#_EX_QUEUE[@]}
+    _hdr "Stage B.5 — $_ex_total H-extraction tasks across ${_EX_N_POOL} GPUs"
+
+    if (( _ex_total == 0 )); then
+        echo "  all H caches exist"
+    else
+        _do_extract() {
+            local _gpu="$1" _sfx="$2" _ck="$3" _cf="$4" _init="$5" _pkl="$6" _pt="$7" _k="$8" _ds="$9"
+            BASE_GPU=$_gpu SLEEP_HOURS=0 \
+            K=$_k N_GPUS=1 INPUT_DIR=$INPUT_DIR \
+            PKL_DIR=$_pkl PT_DIR=$_pt \
+            OUT_ROOT=$OUT_ROOT OUT_SUFFIX=$_sfx \
+            CKPT=$_ck CONFIG=$_cf INIT_FROM_THERMO=$_init \
+            HEAD_HIDDEN=$HEAD_HIDDEN N_MP_LAYERS=$N_MP_LAYERS MP_N_HEADS=$MP_N_HEADS \
+            ONLY_DATASETS=$_ds \
+            H_CACHE_DIR=$_pt EXTRACT_ONLY=1 \
+            WANDB=0 \
+                bash scripts/run_downstream_pipeline.sh \
+                >> "$LOG_DIR/0509_extract_${_sfx}_${_ds}.log" 2>&1 &
+        }
+
+        declare -A _EX_PID_GPU; declare -A _EX_PID_TAG
+        _ex_done=0; _ex_fail=0; _ex_idx=0
+
+        for (( _gi=0; _gi < _EX_N_POOL && _ex_idx < _ex_total; _gi++, _ex_idx++ )); do
+            _gpu="${_EX_GPU_IDS[$_gi]}"
+            IFS='|' read -r _sfx _ck _cf _init _pkl _pt _k _ds _csv <<< "${_EX_QUEUE[$_ex_idx]}"
+            _do_extract "$_gpu" "$_sfx" "$_ck" "$_cf" "$_init" "$_pkl" "$_pt" "$_k" "$_ds"
+            _pid=$!; _EX_PID_GPU[$_pid]=$_gpu; _EX_PID_TAG[$_pid]="${_sfx}/${_ds}"
+            echo "[$(date +%T)] [$_ex_idx/$_ex_total] extract H ${_sfx}/${_ds} → GPU $_gpu"
+        done
+        while (( ${#_EX_PID_GPU[@]} > 0 )); do
+            _fpid=0; wait -n -p _fpid 2>/dev/null || true; _fpid=${_fpid:-0}
+            [[ -z "${_EX_PID_GPU[$_fpid]:-}" ]] && continue
+            _gpu="${_EX_PID_GPU[$_fpid]}"; _tag="${_EX_PID_TAG[$_fpid]}"
+            unset '_EX_PID_GPU[$_fpid]' '_EX_PID_TAG[$_fpid]'
+            _ex_done=$((_ex_done+1)); _wst=$?
+            (( _wst != 0 )) && { _ex_fail=$((_ex_fail+1)); echo "[$(date +%T)] FAIL extract $_tag"; } \
+                             || echo "[$(date +%T)] done extract $_tag (gpu=$_gpu)"
+            if (( _ex_idx < _ex_total )); then
+                IFS='|' read -r _sfx _ck _cf _init _pkl _pt _k _ds _csv <<< "${_EX_QUEUE[$_ex_idx]}"
+                _ex_idx=$((_ex_idx+1))
+                _do_extract "$_gpu" "$_sfx" "$_ck" "$_cf" "$_init" "$_pkl" "$_pt" "$_k" "$_ds"
+                _pid=$!; _EX_PID_GPU[$_pid]=$_gpu; _EX_PID_TAG[$_pid]="${_sfx}/${_ds}"
+                echo "[$(date +%T)] [$_ex_idx/$_ex_total] extract H ${_sfx}/${_ds} → GPU $_gpu"
+            fi
+        done
+        echo "H extraction done: $_ex_done total, $_ex_fail failed"
+    fi
+fi
+
+# -----------------------------------------------------------------------
 # Stage C — flat work-queue CV
 # -----------------------------------------------------------------------
 if [[ "$SKIP_CV" == "1" ]]; then
@@ -267,6 +351,7 @@ else
             HEAD_HIDDEN=$HEAD_HIDDEN N_MP_LAYERS=$N_MP_LAYERS MP_N_HEADS=$MP_N_HEADS \
             MAX_K_PER_INPUT=${_maxk:-0} \
             ONLY_DATASETS=$_ds \
+            H_CACHE_DIR=$_pt \
             WANDB=$WANDB WANDB_PROJECT=$WANDB_PROJECT WANDB_GROUP=$_sfx \
                 bash scripts/run_downstream_pipeline.sh \
                 >> "$LOG_DIR/0509_cv_${_sfx}_${_ds}.log" 2>&1 &

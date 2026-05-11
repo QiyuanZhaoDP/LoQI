@@ -92,6 +92,16 @@ OUT_SUFFIX=${OUT_SUFFIX:-warm}
 # e.g. lipo_s alone on one box, the other 8 on another.
 ONLY_DATASETS=${ONLY_DATASETS:-}
 SKIP_DATASETS=${SKIP_DATASETS:-}
+
+# H-cache options.
+# H_CACHE_DIR: shared directory for backbone embedding caches. When set,
+# the cache path is H_CACHE_DIR/<dataset>_H.pt, which is shared across all
+# head-init variants that use the same backbone+conformers (e.g. cold_c and
+# cold_w). Defaults to per-run out_dir (current behaviour when unset).
+H_CACHE_DIR=${H_CACHE_DIR:-}
+# EXTRACT_ONLY=1: build PT files + extract H caches, then exit without CV.
+# Use as a pre-computation stage so subsequent CV runs skip H extraction.
+EXTRACT_ONLY=${EXTRACT_ONLY:-0}
 # ================================
 
 mkdir -p "$PT_DIR" "$OUT_ROOT"
@@ -323,6 +333,15 @@ _run_one() {
     if [[ -n "${MAX_K_PER_INPUT:-}" ]] && (( MAX_K_PER_INPUT > 0 )); then
         maxk_args="--max-k-per-input $MAX_K_PER_INPUT"
     fi
+    # Shared H cache: put cache in PT_DIR so same-backbone variants skip re-extraction
+    local h_cache_args=""
+    if [[ -n "${H_CACHE_DIR:-}" ]]; then
+        h_cache_args="--h-cache-path ${H_CACHE_DIR}/${name}_H.pt"
+    fi
+    local extract_args=""
+    if [[ "${EXTRACT_ONLY:-0}" == "1" ]]; then
+        extract_args="--extract-only"
+    fi
 
     CUDA_VISIBLE_DEVICES=$gpu python scripts/downstream_cv.py \
         --ckpt   "$CKPT"   --config "$CONFIG" \
@@ -333,6 +352,7 @@ _run_one() {
         --batch-size "$BATCH" \
         --device cuda \
         $epoch_args $wandb_args $warm_args $stop_args $lora_args $maxk_args \
+        $h_cache_args $extract_args \
         >> "$out_dir/cv.log" 2>&1 \
         || { echo "[$name] CV FAILED, see $out_dir/cv.log" >&2; return 1; }
 

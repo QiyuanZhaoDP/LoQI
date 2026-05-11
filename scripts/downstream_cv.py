@@ -1078,6 +1078,13 @@ def main():
                         "state_dict loads cleanly. The final Linear "
                         "(output 5→1) is always random-init.")
     # ---- wandb logging (opt-in) ----
+    p.add_argument("--h-cache-path", default=None,
+                   help="Path to save/load H cache. Defaults to <out-dir>/H_cache.pt. "
+                        "Set to a shared path (e.g. inside PT_DIR) so different "
+                        "head-init variants that use the same backbone skip re-extraction.")
+    p.add_argument("--extract-only", action="store_true",
+                   help="Build PT, extract H, save cache, then exit without running CV. "
+                        "Use as a pre-computation stage before head-only CV training.")
     p.add_argument("--wandb", action="store_true",
                    help="Log per-fold metrics + cross-fold summary to wandb.")
     p.add_argument("--wandb-project", default="downstream_cv")
@@ -1209,12 +1216,16 @@ def main():
             [bool(ds[i].has_target.item()) for i in range(n)], dtype=torch.bool)
         H = offsets = None  # not used in LoRA path
     else:
-        cache_path = out_dir / "H_cache.pt"
+        cache_path = Path(args.h_cache_path) if args.h_cache_path else out_dir / "H_cache.pt"
         H, offsets, targets, has_target = extract_H(
             model, cfg, ds, list(range(n)),
             args.extract_batch_size, device, cache_path,
         )
         del model  # free GPU memory
+
+        if args.extract_only:
+            print(f"[extract-only] H saved → {cache_path}. Exiting.")
+            return
 
     # K-fold split on indices where has_target==True.
     # In ensemble mode we split by GROUP (e.g. input_id), so all K conformers
