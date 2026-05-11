@@ -1261,12 +1261,22 @@ def main():
     fold_reports = []
     t0 = time.time()
 
+    fold_cache_dir = out_dir / "fold_cache"
+    fold_cache_dir.mkdir(parents=True, exist_ok=True)
+
     if args.ensemble_by is not None:
         split_iter = kf.split(labeled_groups)
     else:
         split_iter = kf.split(labeled)
 
     for fold_i, (tr_pool, test_fold) in enumerate(split_iter):
+        fold_cache_path = fold_cache_dir / f"fold_{fold_i}.json"
+        if fold_cache_path.exists():
+            import json as _json
+            rep = _json.loads(fold_cache_path.read_text())
+            print(f"  [skip fold {fold_i}] loaded from {fold_cache_path}")
+            fold_reports.append(rep)
+            continue
         # test_fold = held-out CV fold (always kept unseen during training).
         # tr_pool   = the remaining (n_folds-1)/n_folds of data.
         # When val_fraction > 0: carve a val set out of tr_pool for early
@@ -1367,6 +1377,7 @@ def main():
                                   test_idx=test_idx_arg)
         rep["fold"] = fold_i
         fold_reports.append(rep)
+        fold_cache_path.write_text(json.dumps(rep))
         # Compact per-fold summary; include conformer-spread when in ensemble mode.
         ens_str = ""
         if "ensemble_pred_std_mean" in rep:
