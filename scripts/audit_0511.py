@@ -73,6 +73,79 @@ SUPPORTED_ELEMENTS = {
     "As", "Br", "I", "Hg", "Bi", "Se",
 }
 
+# ---------------------------------------------------------------------------
+# Manual removals — applied AFTER the automated audit.
+# Each entry is a dict with exactly one of:
+#   "filter"  — pandas query string on TARGET column
+#   "smiles"  — list of SMILES to drop (matched via canonical form)
+# Plus a required "reason" string (written to removed CSV).
+# ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Physics-justified retain rules — kNN-flagged molecules matching these
+# conditions are moved to a separate "physics_extreme" category and NOT
+# counted as suspicious. All values are real ground-truth measurements that
+# follow known physical laws.
+#
+#   Vcp          > 40 cP     polyols / heavy plasticizers (DEHP) — naturally viscous
+#   de           > 100       secondary amides (NMF, NMA) — cooperative H-bond chain dipoles
+#   RI           > 1.70      I/Br-rich molecules — high electron-cloud polarisability
+#                < 1.35      perfluorocarbons — locked electron clouds
+#   AOH          < −14       fully halogenated (CCl4) — no abstractable H → log-drop in rate
+#   TPT/MP/BP/Tc extremes    O2/N2 low end; rigid polycyclics / super-long chains high end
+#   Pc           > 10 000    water (22 010 kPa) follows critical-pressure physics
+#   Density      > 2 000     heavy haloalkanes (CH2Br2 = 2 478 kg/m³)
+#   Solubility   < −12       long-chain hydrophobic esters — LogS bottoming
+#   freesolv     < −20       very hydrophobic chains — large +ΔG for transfer to water
+# ---------------------------------------------------------------------------
+PHYSICS_RETAIN: dict[str, callable] = {
+    "Vcp":                lambda tgt: tgt > 40.0,
+    "de":                 lambda tgt: tgt > 100.0,
+    "RI":                 lambda tgt: tgt > 1.70 or tgt < 1.35,
+    "AOH":                lambda tgt: tgt < -14.0,
+    "TPT":                lambda tgt: tgt < 100.0  or tgt > 1000.0,
+    "MP":                 lambda tgt: tgt < 150.0  or tgt > 600.0,
+    "BP":                 lambda tgt: tgt < 200.0  or tgt > 700.0,
+    "Tc":                 lambda tgt: (tgt < 200.0 or tgt > 1200.0) and tgt < 2500.0,
+    "Pc":                 lambda tgt: tgt > 10000.0,
+    "Density":            lambda tgt: tgt > 2000.0,
+    "Solubility_water":   lambda tgt: tgt < -12.0,
+    "Solubility_ethanol": lambda tgt: tgt < -4.0,
+    "freesolv":           lambda tgt: tgt < -20.0,
+}
+
+# ---------------------------------------------------------------------------
+# Manual removals — applied AFTER the automated audit.
+MANUAL_REMOVALS: dict[str, dict] = {
+    "SolvationFreeEnergy": {
+        "filter": "TARGET < -50.0",
+        "reason": "fatal: solvation FE < -50 kcal/mol — missing ionic charge in SMILES",
+    },
+    "Cp": {
+        "smiles": [
+            "CCCCCOCCOCCO",
+            "O[C@H]1[C@H](O)[C@H](O)OC[C@H]1O",
+            "CCCCCOCCOCCOCCO",
+        ],
+        "reason": "fatal: Cp ~4x too small — value in cal/(mol·K) not converted to J/(mol·K)",
+    },
+    "de": {
+        "smiles": [
+            "CNC(C)=O",
+            "OCC(O)C(O)C(O)C(O)CO",
+            "O=S(=O)(Cl)c1ccc(S(=O)(=O)C(F)(F)F)cc1",
+            "CN(C)C",
+            "N#CC#N",
+            "CNC",
+        ],
+        "reason": "fatal: numeric error or wrong phase at RT (solid/gas in liquid dielectric dataset)",
+    },
+    "Tc": {
+        "filter": "TARGET > 2500.0",
+        "reason": "suspected QSPR extrapolation artifact: Tc > 2500 K exceeds reliable "
+                  "experimental range for macrocycles (calixarenes) — likely unphysical",
+    },
+}
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -303,8 +376,17 @@ def audit_one(
     cleaned = pd.DataFrame(out_cols)
 
     # --- Step 4: Chemistry-aware k-NN outlier flagging ---
+    # Two flag types written to the same suspected CSV:
+    #   "high_residual"  — |actual - kNN_pred| > z_thresh × σ
+    #   "isolated"       — best neighbour Tanimoto < iso_thresh (no structural context)
+    iso_thresh = 0.2
     n_flagged = 0
+    n_isolated = 0
+    n_physics_extreme = 0
     flagged_rows = []
+    physics_extreme_rows: list[dict] = []
+    seen_isolated: set[int] = set()
+
     if len(cleaned) >= knn_k + 1:
         flag_mask, predicted, best_sim = flag_knn_outliers(
             cleaned["SMILES"].tolist(),
@@ -314,7 +396,30 @@ def audit_one(
         vals = cleaned["TARGET"].values.astype(float)
         sigma = float(np.std(vals[~np.isnan(predicted)] -
                               predicted[~np.isnan(predicted)])) or 1.0
+        # Apply physics retain rules: demote to "physics_extreme" category
+        retain_fn = PHYSICS_RETAIN.get(name)
+        physics_extreme_rows = []
+        if retain_fn is not None:
+            for i in np.where(flag_mask)[0]:
+                if retain_fn(float(vals[i])):
+                    flag_mask[i] = False
+                    physics_extreme_rows.append({
+                        "inchikey": cdf.iloc[i]["__ik"],
+                        "canonical_smiles": cleaned.iloc[i]["SMILES"],
+                        "target": float(cleaned.iloc[i]["TARGET"]),
+                        "knn_predicted": round(float(predicted[i]), 4),
+                        "residual": round(float(vals[i] - predicted[i]), 4),
+                        "residual_over_sigma": round(float(abs(vals[i] - predicted[i]) / sigma), 2),
+                        "best_neighbour_tanimoto": round(float(best_sim[i]), 3),
+                        "reason": "physics_extreme: retained — follows known physical law",
+                        **{ec: cleaned.iloc[i][ec] for ec in extra_cols
+                           if ec in cleaned.columns},
+                    })
+
         n_flagged = int(flag_mask.sum())
+        n_physics_extreme = len(physics_extreme_rows)
+
+        # high-residual flags
         for i in np.where(flag_mask)[0]:
             row_dict = {
                 "inchikey": cdf.iloc[i]["__ik"],
@@ -324,12 +429,34 @@ def audit_one(
                 "residual": round(float(vals[i] - predicted[i]), 4),
                 "residual_over_sigma": round(float(abs(vals[i] - predicted[i]) / sigma), 2),
                 "best_neighbour_tanimoto": round(float(best_sim[i]), 3),
-                "reason": f"|residual|>{knn_z}σ  (k={knn_k})",
+                "reason": f"high_residual: |res|>{knn_z}σ (k={knn_k})",
             }
             for ec in extra_cols:
                 if ec in cleaned.columns:
                     row_dict[ec] = cleaned.iloc[i][ec]
             flagged_rows.append(row_dict)
+            seen_isolated.add(i)
+
+        # isolated flags — not already flagged by residual
+        for i in range(len(cleaned)):
+            if np.isnan(predicted[i]) or i in seen_isolated:
+                continue
+            if best_sim[i] < iso_thresh:
+                n_isolated += 1
+                row_dict = {
+                    "inchikey": cdf.iloc[i]["__ik"],
+                    "canonical_smiles": cleaned.iloc[i]["SMILES"],
+                    "target": float(cleaned.iloc[i]["TARGET"]),
+                    "knn_predicted": round(float(predicted[i]), 4),
+                    "residual": round(float(vals[i] - predicted[i]), 4),
+                    "residual_over_sigma": round(float(abs(vals[i] - predicted[i]) / sigma), 2),
+                    "best_neighbour_tanimoto": round(float(best_sim[i]), 3),
+                    "reason": f"isolated: best_sim={best_sim[i]:.3f}<{iso_thresh}",
+                }
+                for ec in extra_cols:
+                    if ec in cleaned.columns:
+                        row_dict[ec] = cleaned.iloc[i][ec]
+                flagged_rows.append(row_dict)
 
     # --- Write outputs ---
     cleaned.to_csv(clean_dir / f"{name}.csv", index=False)
@@ -345,18 +472,25 @@ def audit_one(
     removed_all.extend(ik_removed)
     pd.DataFrame(removed_all).to_csv(removed_dir / f"{name}_removed.csv", index=False)
     pd.DataFrame(flagged_rows).to_csv(outlier_dir / f"{name}_suspected.csv", index=False)
+    if physics_extreme_rows:
+        pd.DataFrame(physics_extreme_rows).to_csv(
+            outlier_dir / f"{name}_physics_extreme.csv", index=False)
 
     n_smi_drop = n_empty + n_unparse + n_radical + n_disconnect + n_bad_elem + n_bad_charge
     print(f"  source: {csv_path.name}")
     print(f"  raw={n_raw:,}  smi_drop={n_smi_drop}  hard_drop={n_hard}  "
           f"ik_drop={n_ik_removed}  ik_agg={n_agg}  "
-          f"knn_flag={n_flagged}  → final={len(cleaned):,}")
+          f"knn_flag={n_flagged}  isolated={n_isolated}  → final={len(cleaned):,}")
     if bad_elem_counter:
         print(f"  bad elements: " +
               ", ".join(f"{e}:{c}" for e, c in
                         sorted(bad_elem_counter.items(), key=lambda x: -x[1])))
-    if n_flagged:
-        print(f"  ⚠  {n_flagged} chemistry outliers → suspected_outliers/{name}_suspected.csv")
+    if n_flagged or n_isolated:
+        print(f"  ⚠  {n_flagged} high-residual + {n_isolated} isolated "
+              f"→ suspected_outliers/{name}_suspected.csv")
+    if n_physics_extreme:
+        print(f"  ✓  {n_physics_extreme} physics-justified extremes retained "
+              f"→ suspected_outliers/{name}_physics_extreme.csv")
 
     return {
         "name": name,
@@ -375,8 +509,10 @@ def audit_one(
         "threshold_abs": round(thresh, 6),
         "n_ik_removed": n_ik_removed,
         "n_ik_aggregated": n_agg,
-        "knn_params": {"k": knn_k, "z_thresh": knn_z},
+        "knn_params": {"k": knn_k, "z_thresh": knn_z, "iso_thresh": iso_thresh},
         "n_knn_flagged": n_flagged,
+        "n_physics_extreme": n_physics_extreme,
+        "n_isolated": n_isolated,
         "n_final": len(cleaned),
     }
 
@@ -392,17 +528,20 @@ def run_cv_split(
     cv_split_script: Path,
     smiles_col: str = "SMILES",
     target_col: str = "TARGET",
+    overwrite: bool = False,
 ) -> bool:
     split_out_dir.mkdir(parents=True, exist_ok=True)
     cmd = [
         sys.executable, str(cv_split_script.resolve()),
-        "--input",      str(input_csv.resolve()),      # absolute paths avoid cwd confusion
+        "--input",      str(input_csv.resolve()),
         "--output",     str(split_out_dir.resolve()),
         "--splits",     split_name,
         "--split-name", split_name,
         "--smiles-col", smiles_col,
         "--target-col", target_col,
     ]
+    if overwrite:
+        cmd.append("--overwrite")
     result = subprocess.run(
         cmd,
         capture_output=True, text=True,
@@ -412,6 +551,59 @@ def run_cv_split(
         print(f"    [cv_split FAILED] {result.stderr.strip()[-400:]}")
         return False
     return True
+
+
+# ---------------------------------------------------------------------------
+# Manual removal application
+# ---------------------------------------------------------------------------
+
+def _canon(smi: str) -> str | None:
+    mol = Chem.MolFromSmiles(smi)
+    return Chem.MolToSmiles(mol, isomericSmiles=True) if mol else None
+
+
+def apply_manual_removals(
+    name: str,
+    clean_csv: Path,
+    removed_csv: Path,
+) -> int:
+    """Apply MANUAL_REMOVALS[name] to clean_csv in-place.
+
+    Appends removed rows to removed_csv and overwrites clean_csv.
+    Returns number of rows removed.
+    """
+    spec = MANUAL_REMOVALS.get(name)
+    if spec is None:
+        return 0
+
+    df = pd.read_csv(clean_csv)
+    reason = spec["reason"]
+
+    if "filter" in spec:
+        drop_mask = df.eval(spec["filter"])
+    else:
+        canon_set = {_canon(s) for s in spec["smiles"] if _canon(s)}
+        drop_mask = df["SMILES"].apply(_canon).isin(canon_set)
+
+    removed = df[drop_mask].copy()
+    kept    = df[~drop_mask].reset_index(drop=True)
+
+    if len(removed) == 0:
+        return 0
+
+    removed["reason"] = reason
+    # Append to existing removed CSV (create if absent or empty)
+    out_rows = removed[["SMILES", "TARGET", "reason"]]
+    if removed_csv.exists() and removed_csv.stat().st_size > 0:
+        try:
+            existing = pd.read_csv(removed_csv)
+            out_rows = pd.concat([existing, out_rows], ignore_index=True)
+        except Exception:
+            pass
+    out_rows.to_csv(removed_csv, index=False)
+
+    kept.to_csv(clean_csv, index=False)
+    return len(removed)
 
 
 # ---------------------------------------------------------------------------
@@ -478,35 +670,123 @@ def main():
             print(f"  FAILED: {e}")
             continue
 
-        # CV splits
+        # CV splits — always overwrite to guarantee reproducibility
         if not args.skip_split:
             input_csv = clean_dir / f"{name}.csv"
             ds_split_dir = split_dir / name
-            smiles_col = "SMILES"
-            target_col = "TARGET"
-            for split_name in ("random_cv5", "scaffold_cv3"):
-                sd = ds_split_dir / split_name
-                ok = run_cv_split(input_csv, sd, split_name,
-                                  cv_split_script, smiles_col, target_col)
+            for sn in ("random_cv5", "scaffold_cv3"):
+                sd = ds_split_dir / sn
+                ok = run_cv_split(input_csv, sd, sn, cv_split_script, overwrite=True)
                 if ok:
-                    n_files = len(list(sd.glob("*.csv")))
-                    print(f"  [split] {split_name}: {n_files} files → {sd}")
+                    print(f"  [split] {sn}: {len(list(sd.glob('*.csv')))} files")
                 else:
-                    print(f"  [split] {split_name}: FAILED")
+                    print(f"  [split] {sn}: FAILED")
 
-    # Summary table
-    print("\n" + "=" * 80)
-    print(f"{'name':<22s}  {'raw':>6s}  {'smi':>5s}  {'hard':>5s}  "
-          f"{'ik_rm':>6s}  {'ik_ag':>5s}  {'flag':>5s}  {'final':>7s}")
-    print("-" * 80)
+    # --- Manual removals (applied after automated audit) ---
+    if MANUAL_REMOVALS:
+        print("\n" + "=" * 72)
+        print("Manual removals")
+        print("=" * 72)
+        for mr_name, mr_spec in MANUAL_REMOVALS.items():
+            clean_csv   = clean_dir   / f"{mr_name}.csv"
+            removed_csv = removed_dir / f"{mr_name}_removed.csv"
+            if not clean_csv.exists():
+                print(f"  [{mr_name}] SKIP — Clean CSV not found")
+                continue
+            n_removed = apply_manual_removals(mr_name, clean_csv, removed_csv)
+            n_remaining = len(pd.read_csv(clean_csv))
+            print(f"  [{mr_name}] removed {n_removed} rows → {n_remaining} remaining")
+            # Update stats
+            for st in all_stats:
+                if st["name"] == mr_name:
+                    st["n_manual_removed"] = n_removed
+                    st["n_final"] = n_remaining
+            # Regenerate splits for this dataset
+            if not args.skip_split and cv_split_script.exists():
+                ds_split_dir = split_dir / mr_name
+                for split_name in ("random_cv5", "scaffold_cv3"):
+                    sd = ds_split_dir / split_name
+                    ok = run_cv_split(clean_csv, sd, split_name,
+                                      cv_split_script, overwrite=True)
+                    print(f"    [split] {split_name}: {'regenerated' if ok else 'FAILED'}")
+
+    # -----------------------------------------------------------------------
+    # Comprehensive exclusion summary
+    # -----------------------------------------------------------------------
+    W = 90
+    print("\n" + "=" * W)
+    print("EXCLUSION SUMMARY  (all rows permanently removed from Clean CSVs)")
+    print("=" * W)
+
+    total_removed = 0
+    for st in all_stats:
+        n_smi   = (st["n_empty"] + st["n_unparseable"] + st["n_radical"] +
+                   st["n_disconnected"] + st["n_bad_elements"] + st["n_bad_charge"])
+        n_hard  = st["n_hard_removed"]
+        n_ik    = st["n_ik_removed"]
+        n_man   = st.get("n_manual_removed", 0)
+        n_total = n_smi + n_hard + n_ik + n_man
+        total_removed += n_total
+        if n_total == 0:
+            continue
+        print(f"\n  [{st['name']}]  raw={st['n_raw']:,}  → final={st['n_final']:,}"
+              f"  (removed {n_total})")
+        if n_smi:
+            breakdown = []
+            if st["n_empty"]:      breakdown.append(f"empty={st['n_empty']}")
+            if st["n_unparseable"]:breakdown.append(f"unparseable={st['n_unparseable']}")
+            if st["n_radical"]:    breakdown.append(f"radical={st['n_radical']}")
+            if st["n_disconnected"]:breakdown.append(f"disconnected={st['n_disconnected']}")
+            if st["n_bad_elements"]:
+                be = ",".join(f"{e}:{c}" for e,c in
+                              sorted(st["bad_elements"].items(), key=lambda x:-x[1]))
+                breakdown.append(f"bad_elem={st['n_bad_elements']}({be})")
+            if st["n_bad_charge"]: breakdown.append(f"bad_charge={st['n_bad_charge']}")
+            print(f"    SMILES validation : {n_smi:4d}  — {', '.join(breakdown)}")
+        if n_hard:
+            lo, hi = st["hard_limits"]["lo"], st["hard_limits"]["hi"]
+            print(f"    Hard limits       : {n_hard:4d}  — target outside [{lo}, {hi}]")
+        if n_ik:
+            print(f"    InChIKey spread   : {n_ik:4d}  — duplicate SMILES, "
+                  f"|spread| > {st['threshold_abs']:.3g} ({st['outlier_rel']}×σ)")
+        if n_man:
+            spec = MANUAL_REMOVALS.get(st["name"], {})
+            print(f"    Manual removal    : {n_man:4d}  — {spec.get('reason','')}")
+
+    print(f"\n  TOTAL removed across all datasets: {total_removed:,}")
+
+    print("\n" + "=" * W)
+    print("AGGREGATED (same InChIKey, consistent values → averaged, kept)")
+    print("=" * W)
+    for st in all_stats:
+        if st["n_ik_aggregated"]:
+            print(f"  [{st['name']}]  {st['n_ik_aggregated']} groups averaged")
+
+    print("\n" + "=" * W)
+    print("SUSPECTED OUTLIERS  (kNN-flagged, NOT removed — for external review)")
+    print("=" * W)
+    for st in all_stats:
+        n_f = st.get("n_knn_flagged", 0)
+        n_i = st.get("n_isolated", 0)
+        n_p = st.get("n_physics_extreme", 0)
+        if n_f + n_i + n_p:
+            print(f"  [{st['name']}]  high_residual={n_f}  isolated={n_i}  "
+                  f"physics_extreme={n_p} (retained ground truth)")
+
+    print("\n" + "=" * W)
+    print("DATASET TABLE")
+    print("=" * W)
+    print(f"  {'name':<22s}  {'raw':>7s}  {'smi':>5s}  {'hard':>5s}  "
+          f"{'ik_rm':>6s}  {'ik_ag':>5s}  {'manual':>7s}  {'final':>7s}")
+    print("  " + "-" * 78)
     for st in all_stats:
         n_smi = (st["n_empty"] + st["n_unparseable"] + st["n_radical"] +
                  st["n_disconnected"] + st["n_bad_elements"] + st["n_bad_charge"])
-        print(f"{st['name']:<22s}  {st['n_raw']:>6,}  {n_smi:>5,}  "
+        print(f"  {st['name']:<22s}  {st['n_raw']:>7,}  {n_smi:>5,}  "
               f"{st['n_hard_removed']:>5,}  {st['n_ik_removed']:>6,}  "
-              f"{st['n_ik_aggregated']:>5,}  {st['n_knn_flagged']:>5,}  "
+              f"{st['n_ik_aggregated']:>5,}  {st.get('n_manual_removed',0):>7,}  "
               f"{st['n_final']:>7,}")
-    print("=" * 80)
+    print("  " + "=" * 78)
 
     report = {
         "generated": datetime.now().isoformat(timespec="seconds"),
@@ -521,11 +801,12 @@ def main():
     }
     (out / "audit_report.json").write_text(json.dumps(report, indent=2))
     print(f"\nOutputs:")
-    print(f"  {clean_dir}/             — cleaned CSVs (SMILES, TARGET)")
+    print(f"  {clean_dir}/             — 20 cleaned CSVs (SMILES, TARGET)")
     print(f"  {split_dir}/             — CV splits (random_cv5 + scaffold_cv3)")
-    print(f"  {outlier_dir}/           — flagged outliers for review")
-    print(f"  {removed_dir}/           — hard-limit + InChIKey removals")
-    print(f"  {out}/audit_report.json  — full statistics")
+    print(f"  {outlier_dir}/           — kNN-flagged rows for review")
+    print(f"  {removed_dir}/           — all permanently removed rows + reasons")
+    print(f"  {out}/audit_report.json  — full per-dataset statistics")
+    print(f"\nTo reproduce exactly: python scripts/audit_0511.py")
 
 
 if __name__ == "__main__":

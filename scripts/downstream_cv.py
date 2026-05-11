@@ -975,6 +975,34 @@ def train_one_fold_lora(ds, model, train_idx, val_idx, args, device,
     }
 
 
+def _indices_from_split_csv(
+    csv_path: Path,
+    ds,
+    smi_to_data_idx: dict,
+) -> np.ndarray:
+    """Return Data-level indices for all SMILES in csv_path.
+
+    smi_to_data_idx maps canonical SMILES (= data.input_id) → list[int].
+    Works for both single-conformer (1 Data per SMILES) and ensemble mode
+    (K Data per SMILES — all K indices are returned for train/val/test).
+    """
+    df = pd.read_csv(csv_path)
+    smi_col = next((c for c in df.columns if c.upper() == "SMILES"), None)
+    if smi_col is None:
+        raise ValueError(f"No SMILES column in {csv_path}")
+    idx: list[int] = []
+    missing = 0
+    for smi in df[smi_col].astype(str):
+        hits = smi_to_data_idx.get(smi, [])
+        if not hits:
+            missing += 1
+        idx.extend(hits)
+    if missing:
+        print(f"  [split-dir] {missing}/{len(df)} SMILES not found in PT dataset "
+              f"({csv_path.name})")
+    return np.array(idx, dtype=np.int64)
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--ckpt", required=True)
@@ -983,6 +1011,11 @@ def main():
                    help=".pt file from scripts/prepare_downstream_dataset.py")
     p.add_argument("--out-dir", required=True)
     p.add_argument("--n-folds", type=int, default=5)
+    p.add_argument("--split-dir", default=None,
+                   help="Directory containing pre-computed cv{i}_train/valid/test.csv "
+                        "(e.g. Split/pKa/random_cv5/). When set, KFold re-splitting is "
+                        "skipped and fold assignments come directly from these files, "
+                        "ensuring full reproducibility with the 0511 audit splits.")
     p.add_argument("--epochs", type=int, default=50)
     p.add_argument("--batch-size", type=int, default=64)
     p.add_argument("--extract-batch-size", type=int, default=64)
@@ -1264,6 +1297,15 @@ def main():
     fold_cache_dir = out_dir / "fold_cache"
     fold_cache_dir.mkdir(parents=True, exist_ok=True)
 
+    # Build SMILES → Data-index lookup once, used by --split-dir path.
+    smi_to_data_idx: dict[str, list[int]] = {}
+    if args.split_dir is not None:
+        for i in range(n):
+            d = ds[i]
+            key = str(getattr(d, "input_id", getattr(d, "smiles", i)))
+            smi_to_data_idx.setdefault(key, []).append(i)
+        print(f"[split-dir] loading fold assignments from {args.split_dir}")
+
     if args.ensemble_by is not None:
         split_iter = kf.split(labeled_groups)
     else:
@@ -1277,88 +1319,102 @@ def main():
             print(f"  [skip fold {fold_i}] loaded from {fold_cache_path}")
             fold_reports.append(rep)
             continue
-        # test_fold = held-out CV fold (always kept unseen during training).
-        # tr_pool   = the remaining (n_folds-1)/n_folds of data.
-        # When val_fraction > 0: carve a val set out of tr_pool for early
-        # stopping, matching the UniMol benchmark cv_split.py methodology.
-        # When val_fraction == 0: legacy mode — val_fold IS the test fold.
-        tr, vl = tr_pool, test_fold  # keep legacy names for the block below
-
-        val_fraction = float(getattr(args, "val_fraction", 0.1))
-        val_seed     = int(getattr(args, "val_seed", 42))
-
-        if val_fraction > 0:
-            _ss = ShuffleSplit(n_splits=1, test_size=val_fraction,
-                               random_state=val_seed)
-            if args.ensemble_by is not None:
-                _tr_g, _vl_g = next(_ss.split(tr_pool))
-                tr = tr_pool[_tr_g]   # group indices for actual training
-                # vl stays as test_fold above; val comes from tr_pool[_vl_g]
-                _val_group_indices = tr_pool[_vl_g]
-            else:
-                _tr_d, _vl_d = next(_ss.split(tr_pool))
-                tr = tr_pool[_tr_d]   # data indices into labeled
-                _val_data_indices = tr_pool[_vl_d]
-            # test (vl) remains = test_fold
-
-        if args.ensemble_by is not None:
-            # Expand group indices → all Data indices in those groups.
-            train_groups = labeled_groups[tr]
-            val_groups   = labeled_groups[vl]
-            train_set = set(train_groups.tolist())
-            val_set   = set(val_groups.tolist())
-            train_idx = np.array(
-                [i for i in labeled if int(ensemble_groups[i]) in train_set],
-                dtype=np.int64,
-            )
-            test_idx = np.array(
-                [i for i in labeled if int(ensemble_groups[i]) in val_set],
-                dtype=np.int64,
-            )
-            # Build val_idx from the 10% carved out of train pool
-            if val_fraction > 0:
-                val_train_set = set(labeled_groups[_val_group_indices].tolist())
-                val_idx = np.array(
-                    [i for i in labeled if int(ensemble_groups[i]) in val_train_set],
-                    dtype=np.int64,
-                )
-            else:
-                val_idx = test_idx  # legacy: val = test
-
-            # K-cap on training side only (val keeps all K conformers).
-            # First K_cap Data per group — deterministic; conformer order
-            # in the .pt is set by prepare_downstream_K_pt.py.
-            if args.max_k_per_input is not None:
-                n_before = len(train_idx)
-                seen: dict[int, int] = {}
-                kept = []
+        # ── Pre-split branch: load indices directly from cv{i}_train/valid/test.csv ──
+        if args.split_dir is not None:
+            sd = Path(args.split_dir)
+            fi = fold_i + 1  # split files are 1-indexed
+            train_idx = _indices_from_split_csv(sd / f"cv{fi}_train.csv",
+                                                ds, smi_to_data_idx)
+            val_idx   = _indices_from_split_csv(sd / f"cv{fi}_valid.csv",
+                                                ds, smi_to_data_idx)
+            test_idx  = _indices_from_split_csv(sd / f"cv{fi}_test.csv",
+                                                ds, smi_to_data_idx)
+            # Apply K-cap on training side if requested
+            if args.max_k_per_input is not None and ensemble_groups is not None:
+                seen_kc: dict[int, int] = {}
+                kept_kc = []
                 for i in train_idx:
                     g = int(ensemble_groups[i])
-                    if seen.get(g, 0) < args.max_k_per_input:
-                        kept.append(i)
-                        seen[g] = seen.get(g, 0) + 1
-                train_idx = np.array(kept, dtype=np.int64)
+                    if seen_kc.get(g, 0) < args.max_k_per_input:
+                        kept_kc.append(i)
+                        seen_kc[g] = seen_kc.get(g, 0) + 1
+                n_before = len(train_idx)
+                train_idx = np.array(kept_kc, dtype=np.int64)
                 print(f"  [K-cap] train Data: {n_before} -> {len(train_idx)}  "
                       f"(max_k_per_input={args.max_k_per_input})")
+            print(f"\n=== Fold {fold_i+1}/{args.n_folds} [pre-split] | "
+                  f"train={len(train_idx)}  val={len(val_idx)}  test={len(test_idx)} ===")
+            test_idx_arg = test_idx
 
-            print(f"\n=== Fold {fold_i+1}/{args.n_folds} | "
-                  f"train={len(train_idx)} ({len(train_groups)} grp)  "
-                  f"val={len(val_idx)} ({len(val_groups)} grp) ===")
-        else:
-            # Non-ensemble mode: expand tr/vl from labeled-array positions.
-            test_idx  = labeled[vl]  # held-out test fold
+        # ── KFold branch (original logic, skipped when --split-dir is set) ───────
+        if args.split_dir is None:
+            # test_fold = held-out CV fold (kept unseen during training).
+            # tr_pool   = remaining (n_folds-1)/n_folds of data.
+            tr, vl = tr_pool, test_fold
+
+            val_fraction = float(getattr(args, "val_fraction", 0.1))
+            val_seed     = int(getattr(args, "val_seed", 42))
+
             if val_fraction > 0:
-                # val from 10% of train pool; actual train from remaining 90%
-                train_idx = labeled[tr][_tr_d]
-                val_idx   = labeled[tr][_vl_d]
-            else:
-                train_idx = labeled[tr]
-                val_idx   = test_idx   # legacy
-            print(f"\n=== Fold {fold_i+1}/{args.n_folds} | "
-                  f"train={len(train_idx)}  val={len(val_idx)}  "
-                  f"test={len(test_idx)} ===")
+                _ss = ShuffleSplit(n_splits=1, test_size=val_fraction,
+                                   random_state=val_seed)
+                if args.ensemble_by is not None:
+                    _tr_g, _vl_g = next(_ss.split(tr_pool))
+                    tr = tr_pool[_tr_g]
+                    _val_group_indices = tr_pool[_vl_g]
+                else:
+                    _tr_d, _vl_d = next(_ss.split(tr_pool))
+                    tr = tr_pool[_tr_d]
+                    _val_data_indices = tr_pool[_vl_d]
 
-        test_idx_arg = test_idx if val_fraction > 0 else None
+            if args.ensemble_by is not None:
+                train_groups = labeled_groups[tr]
+                val_groups   = labeled_groups[vl]
+                train_set = set(train_groups.tolist())
+                val_set   = set(val_groups.tolist())
+                train_idx = np.array(
+                    [i for i in labeled if int(ensemble_groups[i]) in train_set],
+                    dtype=np.int64,
+                )
+                test_idx = np.array(
+                    [i for i in labeled if int(ensemble_groups[i]) in val_set],
+                    dtype=np.int64,
+                )
+                if val_fraction > 0:
+                    val_train_set = set(labeled_groups[_val_group_indices].tolist())
+                    val_idx = np.array(
+                        [i for i in labeled if int(ensemble_groups[i]) in val_train_set],
+                        dtype=np.int64,
+                    )
+                else:
+                    val_idx = test_idx
+                if args.max_k_per_input is not None:
+                    n_before = len(train_idx)
+                    seen: dict[int, int] = {}
+                    kept = []
+                    for i in train_idx:
+                        g = int(ensemble_groups[i])
+                        if seen.get(g, 0) < args.max_k_per_input:
+                            kept.append(i)
+                            seen[g] = seen.get(g, 0) + 1
+                    train_idx = np.array(kept, dtype=np.int64)
+                    print(f"  [K-cap] train Data: {n_before} -> {len(train_idx)}  "
+                          f"(max_k_per_input={args.max_k_per_input})")
+                print(f"\n=== Fold {fold_i+1}/{args.n_folds} | "
+                      f"train={len(train_idx)} ({len(train_groups)} grp)  "
+                      f"val={len(val_idx)} ({len(val_groups)} grp) ===")
+            else:
+                test_idx  = labeled[vl]
+                if val_fraction > 0:
+                    train_idx = labeled[tr][_tr_d]
+                    val_idx   = labeled[tr][_vl_d]
+                else:
+                    train_idx = labeled[tr]
+                    val_idx   = test_idx
+                print(f"\n=== Fold {fold_i+1}/{args.n_folds} | "
+                      f"train={len(train_idx)}  val={len(val_idx)}  "
+                      f"test={len(test_idx)} ===")
+            test_idx_arg = test_idx if val_fraction > 0 else None
         if use_lora:
             t_type = str(cfg.interpolant.time_type)
             t_max = (cfg.interpolant.timesteps - 1

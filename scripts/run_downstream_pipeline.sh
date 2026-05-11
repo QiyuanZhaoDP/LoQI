@@ -102,6 +102,11 @@ H_CACHE_DIR=${H_CACHE_DIR:-}
 # EXTRACT_ONLY=1: build PT files + extract H caches, then exit without CV.
 # Use as a pre-computation stage so subsequent CV runs skip H extraction.
 EXTRACT_ONLY=${EXTRACT_ONLY:-0}
+# SPLIT_DIR_ROOT: root dir containing pre-computed splits as
+# $SPLIT_DIR_ROOT/<dataset>/random_cv5/cv{i}_train/valid/test.csv.
+# When set, downstream_cv.py loads fold assignments directly from these
+# files instead of re-splitting internally — fully reproducible.
+SPLIT_DIR_ROOT=${SPLIT_DIR_ROOT:-}
 # ================================
 
 mkdir -p "$PT_DIR" "$OUT_ROOT"
@@ -342,6 +347,10 @@ _run_one() {
     if [[ "${EXTRACT_ONLY:-0}" == "1" ]]; then
         extract_args="--extract-only"
     fi
+    local split_dir_args=""
+    if [[ -n "${SPLIT_DIR_ROOT:-}" ]] && [[ -d "${SPLIT_DIR_ROOT}/${name}/random_cv5" ]]; then
+        split_dir_args="--split-dir ${SPLIT_DIR_ROOT}/${name}/random_cv5"
+    fi
 
     CUDA_VISIBLE_DEVICES=$gpu python scripts/downstream_cv.py \
         --ckpt   "$CKPT"   --config "$CONFIG" \
@@ -352,7 +361,7 @@ _run_one() {
         --batch-size "$BATCH" \
         --device cuda \
         $epoch_args $wandb_args $warm_args $stop_args $lora_args $maxk_args \
-        $h_cache_args $extract_args \
+        $h_cache_args $extract_args $split_dir_args \
         >> "$out_dir/cv.log" 2>&1 \
         || { echo "[$name] CV FAILED, see $out_dir/cv.log" >&2; return 1; }
 
