@@ -87,6 +87,10 @@ SKIP_SMI=${SKIP_SMI:-0}
 SKIP_SAMPLE=${SKIP_SAMPLE:-0}
 SKIP_EXTRACT=${SKIP_EXTRACT:-0}
 SKIP_CV=${SKIP_CV:-0}
+FORCE_CV=${FORCE_CV:-0}        # 1 = ignore existing cv_report.json (re-run CV)
+# Defensive: clear any inherited EXTRACT_ONLY env var so Stage C never
+# accidentally gets passed --extract-only via env-var leakage.
+unset EXTRACT_ONLY
 # ================================
 
 mkdir -p "$OUT_ROOT" "$LOG_DIR"
@@ -213,12 +217,16 @@ else
             echo "[$(date +%T)] [$_b_idx/${#_B_QUEUE[@]}] sample ${_lb}/${_nm}/${_tg} → GPU $_gpu"
         done
         while (( ${#_B_PID_GPU[@]} > 0 )); do
-            _fpid=0; wait -n -p _fpid 2>/dev/null || true; _fpid=${_fpid:-0}
+            _fpid=0
+            wait -n -p _fpid 2>/dev/null
+            _wst=$?
+            _fpid=${_fpid:-0}
+            (( _wst == 127 )) && break  # no more children
             [[ -z "${_B_PID_GPU[$_fpid]:-}" ]] && continue
             _gpu="${_B_PID_GPU[$_fpid]}"; _tag="${_B_PID_TAG[$_fpid]}"
             unset '_B_PID_GPU[$_fpid]' '_B_PID_TAG[$_fpid]'
-            _b_done=$((_b_done+1)); _wst=$?
-            (( _wst != 0 )) && { _b_fail=$((_b_fail+1)); echo "[$(date +%T)] FAIL $_tag"; } \
+            _b_done=$((_b_done+1))
+            (( _wst != 0 )) && { _b_fail=$((_b_fail+1)); echo "[$(date +%T)] FAIL $_tag (gpu=$_gpu) exit=$_wst — check $LOG_DIR/${RUN_TAG}_${_tag//\//_}.log"; } \
                              || echo "[$(date +%T)] done $_tag (gpu=$_gpu)"
             if (( _b_idx < ${#_B_QUEUE[@]} )); then
                 IFS='|' read -r _mt _tg _ke _rs _lb _ck _cf _si _pk _nm <<< "${_B_QUEUE[$_b_idx]}"
@@ -292,12 +300,16 @@ else
             echo "[$(date +%T)] [$_ex_idx/${#_EX_QUEUE[@]}] extract H ${_sfx}/${_ds} → GPU $_gpu"
         done
         while (( ${#_EX_PID_GPU[@]} > 0 )); do
-            _fpid=0; wait -n -p _fpid 2>/dev/null || true; _fpid=${_fpid:-0}
+            _fpid=0
+            wait -n -p _fpid 2>/dev/null
+            _wst=$?
+            _fpid=${_fpid:-0}
+            (( _wst == 127 )) && break
             [[ -z "${_EX_PID_GPU[$_fpid]:-}" ]] && continue
             _gpu="${_EX_PID_GPU[$_fpid]}"; _tag="${_EX_PID_TAG[$_fpid]}"
             unset '_EX_PID_GPU[$_fpid]' '_EX_PID_TAG[$_fpid]'
-            _ex_done=$((_ex_done+1)); _wst=$?
-            (( _wst != 0 )) && { _ex_fail=$((_ex_fail+1)); echo "[$(date +%T)] FAIL extract $_tag"; } \
+            _ex_done=$((_ex_done+1))
+            (( _wst != 0 )) && { _ex_fail=$((_ex_fail+1)); echo "[$(date +%T)] FAIL extract $_tag (gpu=$_gpu) exit=$_wst — check $LOG_DIR/${RUN_TAG}_extract_${_tag//\//_}.log"; } \
                              || echo "[$(date +%T)] done extract $_tag (gpu=$_gpu)"
             if (( _ex_idx < ${#_EX_QUEUE[@]} )); then
                 IFS='|' read -r _sfx _ck _cf _init _pkl _pt _k _ds _csv <<< "${_EX_QUEUE[$_ex_idx]}"
@@ -343,9 +355,11 @@ else
             [[ -d "$pkl_dir" ]] || continue
             for csv in "${DATASETS_CSV[@]}"; do
                 _ds=$(basename "$csv" .csv)
-                [[ -f "$pkl_dir/$_ds.pkl" ]] || continue
-                [[ -f "$OUT_ROOT/${_ds}_${_suffix}/cv_report.json" ]] && \
-                    { echo "  [skip CV] ${_suffix}/${_ds}"; continue; }
+                [[ -f "$pkl_dir/$_ds.pkl" ]] || { echo "  [skip CV] ${_suffix}/${_ds} — pkl missing ($pkl_dir/$_ds.pkl)"; continue; }
+                if [[ -f "$OUT_ROOT/${_ds}_${_suffix}/cv_report.json" && "$FORCE_CV" != "1" ]]; then
+                    echo "  [skip CV] ${_suffix}/${_ds} — cv_report.json exists (set FORCE_CV=1 to re-run)"
+                    continue
+                fi
                 _CV_QUEUE+=("$_suffix|$ckpt|$cfg|$init_thermo|$pkl_dir|$pt_dir|$keff|$_ds|$csv|$maxk")
             done
         done
@@ -387,12 +401,16 @@ else
             echo "[$(date +%T)] [$_cv_idx/$_cv_total] CV ${_sfx}/${_ds} → GPU $_gpu (pid=$_pid)"
         done
         while (( ${#_CV_PID_GPU[@]} > 0 )); do
-            _fpid=0; wait -n -p _fpid 2>/dev/null || true; _fpid=${_fpid:-0}
+            _fpid=0
+            wait -n -p _fpid 2>/dev/null
+            _wst=$?
+            _fpid=${_fpid:-0}
+            (( _wst == 127 )) && break
             [[ -z "${_CV_PID_GPU[$_fpid]:-}" ]] && continue
             _gpu="${_CV_PID_GPU[$_fpid]}"; _tag="${_CV_PID_TAG[$_fpid]}"
             unset '_CV_PID_GPU[$_fpid]' '_CV_PID_TAG[$_fpid]'
-            _cv_done=$((_cv_done+1)); _wst=$?
-            (( _wst != 0 )) && { _cv_fail=$((_cv_fail+1)); echo "[$(date +%T)] FAIL $_tag (gpu=$_gpu)"; } \
+            _cv_done=$((_cv_done+1))
+            (( _wst != 0 )) && { _cv_fail=$((_cv_fail+1)); echo "[$(date +%T)] FAIL $_tag (gpu=$_gpu) exit=$_wst — check $LOG_DIR/${RUN_TAG}_cv_${_tag//\//_}.log"; } \
                              || echo "[$(date +%T)] done $_tag (gpu=$_gpu)"
             if (( _cv_idx < _cv_total )); then
                 IFS='|' read -r _sfx _ck _cf _init _pkl _pt _k _ds _csv _maxk <<< "${_CV_QUEUE[$_cv_idx]}"
