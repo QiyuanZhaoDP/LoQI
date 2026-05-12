@@ -29,6 +29,12 @@
 set -uo pipefail        # NOTE: no -e — we want one dataset's failure not to kill the rest
 cd "$(dirname "$0")/.."
 
+# Parse --extract-only CLI flag (safer than EXTRACT_ONLY env var which can be inherited)
+_CLI_EXTRACT_ONLY=0
+for _arg in "$@"; do
+    [[ "$_arg" == "--extract-only" ]] && _CLI_EXTRACT_ONLY=1
+done
+
 # bash 5.1 needed for `wait -n -p`
 if (( BASH_VERSINFO[0] < 5 )) || { (( BASH_VERSINFO[0] == 5 )) && (( BASH_VERSINFO[1] < 1 )); }; then
     echo "ERROR: bash >= 5.1 required (you have $BASH_VERSION)" >&2
@@ -99,9 +105,9 @@ SKIP_DATASETS=${SKIP_DATASETS:-}
 # head-init variants that use the same backbone+conformers (e.g. cold_c and
 # cold_w). Defaults to per-run out_dir (current behaviour when unset).
 H_CACHE_DIR=${H_CACHE_DIR:-}
-# EXTRACT_ONLY=1: build PT files + extract H caches, then exit without CV.
-# Use as a pre-computation stage so subsequent CV runs skip H extraction.
-EXTRACT_ONLY=${EXTRACT_ONLY:-0}
+# EXTRACT_ONLY: use --extract-only CLI flag (not env var) to avoid inheritance bugs.
+# Kept for backwards compat but _CLI_EXTRACT_ONLY (from CLI flag) takes precedence.
+EXTRACT_ONLY=${_CLI_EXTRACT_ONLY:-0}
 # SPLIT_DIR_ROOT: root dir containing pre-computed splits as
 # $SPLIT_DIR_ROOT/<dataset>/random_cv5/cv{i}_train/valid/test.csv.
 # When set, downstream_cv.py loads fold assignments directly from these
