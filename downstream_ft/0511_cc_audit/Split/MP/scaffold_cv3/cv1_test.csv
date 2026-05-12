@@ -17,7 +17,6 @@ BrCC(Br)c1ccccc1,345.2
 BrCc1ccc(Br)cc1,335.2
 BrCc1ccc(CBr)cc1,415.2
 BrCc1cccc(CBr)c1,348.2
-BrCc1ccccc1,270.2
 BrCc1ccccc1CBr,367.2
 BrCCCCOc1ccccc1,315.2
 BrCCCOc1ccccc1,283.2
@@ -68,7 +67,6 @@ CC(=O)c1cc(C)ccc1O,320.2
 CC(=O)c1ccc([N+](=O)[O-])cc1,353.2
 CC(=O)c1ccc(Br)cc1,324.2
 CC(=O)c1ccc(C(=O)O)cc1,482.2
-CC(=O)c1ccc(C(F)(F)F)cc1,305.2
 CC(=O)c1ccc(C#N)cc1,331.2
 CC(=O)c1ccc(Cl)c(Cl)c1,346.2
 CC(=O)c1ccc(Cl)cc1,292.2
@@ -113,7 +111,6 @@ CC(=O)Nc1ccccc1[N+](=O)[O-],365.2
 CC(=O)Nc1ccccc1C,384.2
 CC(=O)Nc1ccccc1C(=O)O,457.2
 CC(=O)Nc1ccccc1Cl,360.2
-CC(=O)Nc1ccccc1O,478.2
 CC(=O)NNc1ccccc1,403.2
 CC(=O)NS(=O)(=O)c1ccc(N)cc1,455.2
 CC(=O)OC[C@H]1O[C@H](Br)[C@H](OC(C)=O)[C@@H](OC(C)=O)[C@@H]1OC(C)=O,362.7
@@ -162,7 +159,6 @@ CC(C)Cc1ccc(C(C)C(=O)O)cc1,349.2
 CC(C)NCC(O)COc1ccc(CC(N)=O)cc1,419.2
 CC(C)OC(=O)Nc1ccccc1,361.2
 CC(C=CC1=C(C)CCCC1(C)C)=CC=CC(C)=CCO,336.2
-CC(Oc1cccc(Cl)c1)C(=O)O,388.2
 CC(Oc1ccccc1)C(=O)O,391.2
 CC(Oc1ccccc1Cl)C(=O)O,387.2
 CC=Cc1ccccc1,244.2
@@ -224,7 +220,6 @@ Cc1cc(N)ccc1Cl,357.2
 Cc1cc(N)nc(C)n1,458.2
 Cc1cc(O)c(C(C)C)cc1Cl,332.2
 Cc1cc(O)cc(C)c1Cl,388.2
-Cc1cc(O)cc(O)c1,380.2
 Cc1cc(O)ccc1Br,332.2
 Cc1cc(O)ccc1Cl,340.2
 Cc1cc(O)ccc1O,402.2
@@ -289,7 +284,6 @@ Cc1ccc(O)cc1Cl,325.2
 Cc1ccc(OCC(=O)O)cc1,413.2
 Cc1ccc(S(=O)(=O)Cl)cc1,341.2
 Cc1ccc(S(=O)(=O)F)cc1,314.2
-Cc1ccc(S(N)(=O)=O)cc1,412.2
 Cc1ccc(S)c(S)c1,304.2
 Cc1ccc[n+]([O-])c1,311.2
 Cc1cccc([N+](=O)[O-])c1,288.7
@@ -505,7 +499,6 @@ Clc1ccccc1Br,260.2
 Clc1ccccc1C(Cl)(Cl)Cl,303.2
 Clc1ccccc1Cl,255.2
 Clc1ccccc1I,274.2
-Clc1ccccn1,227.2
 Clc1cccnc1Cl,340.2
 Clc1cncc(Cl)c1,338.2
 Clc1cncc(Cl)n1,327.2
@@ -601,7 +594,6 @@ COc1cc(Cl)ccc1C(=O)O,419.2
 COc1cc(Cl)ccc1N,324.2
 COc1cc(Cl)ccc1O,290.2
 COc1cc(CNC(=O)CCCC/C=C/C(C)C)ccc1O,339.2
-COc1cc(CO)ccc1O,387.2
 COc1cc(N)ccc1C,331.2
 COc1cc(O)ccc1O,362.2
 COc1cc(OC)c(C(=O)O)cc1OC,417.2
@@ -770,7 +762,6 @@ N#CSCc1ccccc1,315.2
 NC(=O)c1c(Cl)cccc1Cl,471.2
 NC(=O)c1c(F)c(F)c(F)c(F)c1F,421.2
 NC(=O)c1c(F)cccc1F,420.2
-NC(=O)c1cc([N+](=O)[O-])cc([N+](=O)[O-])c1,455.2
 NC(=O)c1ccc([N+](=O)[O-])cc1,475.7
 NC(=O)c1ccc([N+](=O)[O-])cc1Cl,443.2
 NC(=O)c1ccc(Br)cc1,464.2
@@ -828,10 +819,8 @@ Nc1ccc([N+](=O)[O-])cc1N,472.2
 Nc1ccc([N+](=O)[O-])cn1,461.2
 Nc1ccc(Br)cc1,339.2
 Nc1ccc(Br)cc1[N+](=O)[O-],385.2
-Nc1ccc(Br)cc1Br,351.2
 Nc1ccc(C(=O)NCC(=O)O)cc1,472.7
 Nc1ccc(C(=O)O)cc1,462.2
-Nc1ccc(Cl)c([N+](=O)[O-])c1,373.2
 Nc1ccc(Cl)cc1,345.7
 Nc1ccc(Cl)cc1[N+](=O)[O-],389.7
 Nc1ccc(Cl)cc1Cl,334.2
@@ -863,7 +852,6 @@ Nc1ccccc1C(F)(F)F,239.2
 Nc1ccccc1C=O,311.2
 Nc1ccccc1I,331.2
 Nc1ccccc1N,374.7
-Nc1ccccc1O,449.2
 Nc1ccccn1,331.2
 Nc1cccnc1,334.2
 Nc1ccncc1,432.2
@@ -915,7 +903,6 @@ O=[N+]([O-])c1cc(F)ccc1O,348.2
 O=[N+]([O-])c1cc(I)c(O)c(I)c1,430.2
 O=[N+]([O-])c1ccc([N+](=O)[O-])cc1,446.2
 O=[N+]([O-])c1ccc(Br)cc1,399.2
-O=[N+]([O-])c1ccc(C(F)(F)F)cc1,312.2
 O=[N+]([O-])c1ccc(C=NO)cc1,403.2
 O=[N+]([O-])c1ccc(CCl)cc1,344.2
 O=[N+]([O-])c1ccc(Cl)c([N+](=O)[O-])c1,326.2

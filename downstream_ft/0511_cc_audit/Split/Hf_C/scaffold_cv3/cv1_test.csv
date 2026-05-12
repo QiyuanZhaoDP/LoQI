@@ -8,28 +8,23 @@ O=C(O)Cc1ccc(Cl)cc1,-442.797254487
 O=[N+]([O-])C(c1ccccc1)[N+](=O)[O-],-33.9
 CC1=CCC(C(C)(C)O)CC1,-369.150494768
 O=C(O)C(O)c1ccccc1,-580.61
-CC(=O)OCC1OC(OC(C)=O)C(OC(C)=O)C(OC(C)=O)C1OC(C)=O,-2232.6387
 OCC1OC(O)C(O)C(O)C1O,-1274.434
 Cc1cc(C(=O)O)cc(C)c1C,-500.9149
 COC1OC(CO)C(O)C(O)C1O,-1237.47
 N#CC(=O)c1ccccc1,39.1356729567
 O=[N+]([O-])C=Cc1ccccc1,30.495
-N#CCC(=O)c1ccccc1,153.06741409
 CC=CCN1CCCCC1,-55.0712035367
-CC(=O)c1cc(C)c(C)cc1C,-248.950198984
 CC(=O)c1cccc(N)c1,-173.329
 CC(=O)c1cccc([N+](=O)[O-])c1,-198.5
 CC(=O)c1ccc([N+](=O)[O-])cc1,-196.1
 Nc1c([N+](=O)[O-])cc([N+](=O)[O-])cc1[N+](=O)[O-],-115.8462
 Nc1cc([N+](=O)[O-])cc([N+](=O)[O-])c1O,-243.5816
 [N-]=[N+]=Nc1ccc([N+](=O)[O-])cc1,308.694800346
-CC(=O)CC(=O)c1ccccc1,-335.13638026
 O=[N+]([O-])c1ccccc1Br,26.9
 O=[N+]([O-])c1ccc(Br)cc1,0.5
 O=[N+]([O-])c1ccccc1Cl,-18.3911435701
 O=[N+]([O-])c1cccc(Cl)c1,-42.1186253701
 O=[N+]([O-])c1ccc(Cl)cc1,-36.2576537701
-CCOc1ccc([N+](=O)[O-])cc1[N+](=O)[O-],-225.514
 COc1ccc([N+](=O)[O-])cc1,-171.486808606
 Cc1c([N+](=O)[O-])ccc([N+](=O)[O-])c1[N+](=O)[O-],-74.475
 CC(C)OC(=O)Nc1ccccc1,-442.077
@@ -39,7 +34,6 @@ O=C(O)c1ccccc1C(=O)O,-781.714
 Oc1ccccc1O,-354.200318487
 COc1cccc(O)c1O,-510.117653487
 N#Cc1ccccc1C#N,275.394
-O=C(O)C1CCCCC1C(=O)O,-961.06
 COc1cccc(Cl)c1Cl,-200.731681687
 Cc1ccc(O)c(O)c1,-393.325711173
 O=[N+]([O-])c1ccccc1[N+](=O)[O-],-1.83
@@ -65,7 +59,6 @@ O=C(CC(=O)C(F)(F)F)c1ccccc1,-955.721190426
 c1cncnc1,143.2
 Ic1cccc(I)c1,187.373604502
 COc1cccc(OC)c1O,-480.1
-O=[N+]([O-])c1cccc([N+](=O)[O-])c1,-19.2251
 C1CSCSC1,-66.213500066
 O=C(O)c1cc(C(=O)O)cc(C(=O)O)c1,-1190.11443974
 CC(C)(C)c1cc(C(C)(C)C)cc(C(C)(C)C)c1,-321.94
@@ -157,7 +150,6 @@ Cc1c([N+](=O)[O-])cc([N+](=O)[O-])c(C)c1[N+](=O)[O-],-83.1307
 Cc1ccc(C(=O)O)c(C)c1,-458.5052
 Cc1ccc([N+](=O)[O-])c(C)c1[N+](=O)[O-],-85.643
 Nc1ccc([N+](=O)[O-])cc1[N+](=O)[O-],-67.9289
-COc1ccc([N+](=O)[O-])cc1[N+](=O)[O-],-186.661
 O=[N+]([O-])c1ccc(O)c([N+](=O)[O-])c1,-235.797
 O=[N+]([O-])c1ccc(O)c([N+](=O)[O-])c1O,-415.626
 Cc1ccc([N+](=O)[O-])cc1[N+](=O)[O-],-71.81
@@ -175,7 +167,6 @@ Cc1cc(C)c(C#[N+][O-])c(C)c1,55.9384708969
 O=[N+]([O-])c1cc([N+](=O)[O-])c(O)c([N+](=O)[O-])c1O,-531.265
 Cc1c([N+](=O)[O-])cc([N+](=O)[O-])c(O)c1[N+](=O)[O-],-255.247
 COc1c([N+](=O)[O-])cc([N+](=O)[O-])cc1[N+](=O)[O-],-159.015
-CCc1c([N+](=O)[O-])cc([N+](=O)[O-])cc1[N+](=O)[O-],-73.227
 CCOc1c([N+](=O)[O-])cc([N+](=O)[O-])cc1[N+](=O)[O-],-204.396
 O=[N+]([O-])c1cc([N+](=O)[O-])c(O)c([N+](=O)[O-])c1,-224.9251
 O=[N+]([O-])c1cc([N+](=O)[O-])nc([N+](=O)[O-])c1,34.22
@@ -202,7 +193,6 @@ Cc1c(O)cccc1O,-396.094010873
 COc1cccc(OC)c1C(=O)O,-693.800520087
 Cc1cccc(C)c1O,-237.376
 O=[N+]([O-])c1cccc([N+](=O)[O-])c1O,-209.898
-Cc1c([N+](=O)[O-])cccc1[N+](=O)[O-],-56.6784047402
 O=C(O)c1cccc(C(=O)O)n1,-745.146115783
 NC(Cc1ccc(O)cc1)C(=O)O,-685.1002
 Nc1cccc(C(=O)O)c1,-417.335260043
@@ -262,7 +252,6 @@ COc1cc(O)cc(OC)c1,-500.5
 Cc1cc(C)cc(C(=O)O)c1,-466.4548
 O=C(O)c1cc([N+](=O)[O-])cc([N+](=O)[O-])c1,-432.58
 CC(=O)c1ccc(Cl)c(Cl)c1,-227.0
-CC(=O)c1ccc(N)cc1,293.605
 Nc1ccc(C(=O)O)cc1,-413.215
 O=C(O)c1ccc(Br)cc1,-379.586898443
 COc1ccc(Br)cc1,-104.104836573
@@ -279,7 +268,6 @@ CCOc1ccc(C(=O)O)cc1,-605.5
 CCc1ccc(C(=O)O)cc1,-461.09583456
 O=C(O)c1ccc(F)cc1,-587.92378111
 O=Cc1ccc(O)cc1,-320.3
-O=C(O)c1ccc(I)cc1,-315.743920713
 Oc1ccc(I)cc1,-103.053909561
 COc1ccc(O)c([N+](=O)[O-])c1,-364.25359107
 COc1ccc(C(=O)O)cc1[N+](=O)[O-],-577.543580383
@@ -315,12 +303,10 @@ Nc1cc(Cl)c(Cl)cc1Cl,-60.5026494567
 CC(C)(C)c1cc(C(C)(C)C)c(N)c(C(C)(C)C)c1,-286.794832956
 Nc1c(Cl)cc(Cl)cc1Cl,-79.4212659567
 CC(=O)OC(OC(C)=O)c1ccccc1,-773.094353044
-O=Cc1c([N+](=O)[O-])cc([N+](=O)[O-])cc1[N+](=O)[O-],-132.7355
 NC(=O)c1ccccc1,-202.592
 CC(=Cc1ccccc1)[N+](=O)[O-],-15.388
 O=[N+]([O-])C(Cc1ccccc1)([N+](=O)[O-])[N+](=O)[O-],-7.995
 CC(C)(C)c1ccc(O)c(O)c1,-473.989894433
-COc1cccc(OC)c1OC,-436.95956666
 NS(=O)(=O)c1ccccc1Cl,-317.395300216
 O=C(O)c1ccccc1,-385.192
 O=C(O)c1cc(O)ccc1O,-786.427510013
@@ -333,7 +319,6 @@ CCCCOC(=O)Nc1ccccc1,-395.493
 Cc1ccc(C(C)C)c(O)c1O,-475.718582433
 COc1ccccc1C=CC(=O)O,-505.569454373
 OC1COC(O)C(O)C1O,-1050.2897053
-Nc1c([N+](=O)[O-])cc([N+](=O)[O-])c(N)c1[N+](=O)[O-],153.155
 CCOC(=O)c1cc(C(=O)O)c(C(=O)OCC)cc1C(=O)O,-1589.75
 COC(=O)c1cccc(C(=O)OC)c1,-731.344303887
 COC(=O)c1ccc(C(=O)OC)cc1,-733.053140687
@@ -350,7 +335,6 @@ COC(=O)c1c(C(=O)OC)c(C(=O)OC)c(C(=O)OC)c(C(=O)OC)c1C(=O)OC,-2111.45158774
 O=[N+]([O-])OCc1c(CO[N+](=O)[O-])c(CO[N+](=O)[O-])c(CO[N+](=O)[O-])c(CO[N+](=O)[O-])c1CO[N+](=O)[O-],-595.707788041
 O=Nc1c(N=O)c(N=O)c(N=O)c(N=O)c1N=O,479.398703239
 NNc1ccc([N+](=O)[O-])cc1[N+](=O)[O-],49.949
-NNc1c([N+](=O)[O-])cc([N+](=O)[O-])cc1[N+](=O)[O-],36.633
 O=C(O)c1ccc(C(=O)O)nc1,-744.243667783
 N#Cc1cc[n+]([O-])cc1,162.790366487
 O=C(O)c1cc[n+]([O-])cc1,-381.16682287
@@ -372,7 +356,6 @@ CNc1ccc([N+](=O)[O-])cc1[N+](=O)[O-],-67.532
 CN(c1c([N+](=O)[O-])cc([N+](=O)[O-])cc1[N+](=O)[O-])[N+](=O)[O-],30.7124
 CNC(=O)c1ccccc1C,-241.613220533
 CC(=O)Nc1ccccc1,-209.435
-CCCN1CCCCC1,-146.991078463
 CC(C)(C)[N+]([O-])=Cc1ccccc1,-753.552114977
 CN(C)C(=O)c1ccccc1,-193.99767642
 NC(=O)c1ccc[n+]([O-])c1,-199.175523873
@@ -382,7 +365,6 @@ Nc1ccccc1S(=O)(=O)O,-532.385377216
 Nc1ccccc1Br,30.0594948701
 O=C(O)Cc1ccccc1Cl,-447.829718487
 O=Ic1ccccc1C(=O)O,-336.868771243
-N#Cc1ccccc1[N+](=O)[O-],130.049699073
 O=Nc1ccccc1[N+](=O)[O-],108.42
 O=[N+]([O-])c1cc(Cl)ccc1O,-236.550410183
 CN(C)c1ccc(C=O)cc1,-137.624
@@ -413,7 +395,6 @@ Brc1cccc(Br)n1,102.427280843
 Clc1ncccn1,85.2929792866
 Nc1c([N+](=O)[O-])c(N)c([N+](=O)[O-])c(N)c1[N+](=O)[O-],-139.54
 N#Cc1ccc(C#N)cc1,268.3
-CCOC(=O)c1cc(C(=O)OCC)c(C(=O)OCC)cc1C(=O)OCC,-1579.61
 COC(=O)c1cc(C(=O)OC)c(C(=O)OC)cc1C(=O)OC,-1432.98705351
 NC(=S)c1ccccc1,26.901
 COc1cccc(C=CC(=O)O)c1OC,-660.418640923
@@ -421,7 +402,6 @@ COc1ccc(C=CC(=O)O)c(OC)c1,-683.034736983
 COc1cccc(C=CC(=O)O)c1,-504.429057573
 COc1ccc(C=CC(=O)O)cc1OC,-664.037382863
 COc1cc(C=CC(=O)O)cc(OC)c1,-666.294411783
-NCC1CCC(C(=O)O)CC1,-499.82724723
 COc1ccc(C=CC(=O)O)cc1,-512.661296973
 COC(=O)c1cc(C(=O)OC)cc(C(=O)OC)c1,-1101.6714786
 CC(C)C(N)C(=O)NC(Cc1ccccc1)C(=O)O,-765.7814

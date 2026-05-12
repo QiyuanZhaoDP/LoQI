@@ -203,7 +203,6 @@ CC(=O)OCC=Cc1ccccc1,538.15
 CC(=O)OCc1ccccc1,486.2
 CC(=O)OCCc1ccccc1,509.0
 CC(Br)C(=O)c1ccccc1,520.65
-CC(C(=O)[O-])c1ccccc1,534.15
 CC(C)(C)C(=O)c1ccccc1,493.15
 CC(C)(C)c1cc(C(C)(C)C)c(O)c(C(C)(C)C)c1,551.2
 CC(C)(C)c1cc(O)ccc1O,546.15
@@ -305,7 +304,6 @@ CC(N)Cc1ccccc1,476.25
 CC(O)C1CCCCC1,462.15
 CC(O)c1ccccc1,477.7
 CC(O)COc1ccccc1,514.916666666667
-CC(Oc1cccc(Cl)c1)C(=O)O,373.25
 CC(Oc1ccccc1)C(=O)Cl,420.15
 CC[C@@H](C(=O)O)c1ccccc1,544.15
 CC[C@@H](O)[C@@H]1CCCCN1,499.15
@@ -1316,7 +1314,6 @@ FC(F)(F)c1nc(C(F)(F)F)nc(C(F)(F)F)n1,368.65
 FC(F)(F)N1C(F)(F)C(F)(F)OC(F)(F)C1(F)F,324.15
 FC(F)(F)Oc1ccccc1,375.15
 FC1(F)C(Cl)=C(Cl)C(F)(F)C(F)(F)C1(F)F,386.15
-FC1(F)C(F)(F)C(F)(F)C(F)(F)C(F)(F)C1(F)F,323.75
 FC1=C(F)C(F)(F)C(F)(F)C(F)(F)C1(F)F,325.15
 Fc1c(Cl)c(F)c(Cl)c(F)c1Cl,471.55
 FC1C(F)(F)C(F)(F)C(F)(F)C(F)(F)C1(F)F,335.15
@@ -1451,7 +1448,6 @@ Nc1ccccc1Cl,482.0
 Nc1ccccc1CO,546.15
 Nc1ccccc1F,448.15
 Nc1ccccc1N,530.15
-Nc1ccccc1O,426.25
 Nc1ccccc1S,507.15
 Nc1ccccn1,483.8
 Nc1cccnc1,525.15
@@ -1624,7 +1620,6 @@ OC(c1ccccc1)(C(F)(F)F)C(F)(F)F,433.15
 Oc1c(Br)cc(Br)cc1Br,559.15
 Oc1c(Br)cccc1Br,528.15
 Oc1c(Cl)c(Cl)c(Cl)c(Cl)c1Cl,582.95
-Oc1c(Cl)cc(Cl)c(Cl)c1Cl,337.25
 Oc1c(Cl)cc(Cl)cc1Cl,520.7
 Oc1c(Cl)cccc1Cl,493.216666666667
 Oc1c(F)c(F)c(C(F)(F)F)c(F)c1F,436.65
