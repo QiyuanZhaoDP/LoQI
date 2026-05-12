@@ -561,8 +561,21 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
             best_state = {k: v.detach().cpu().clone()
                           for k, v in model.state_dict().items()}
             patience_counter = 0
+            _improved = "*"
         else:
             patience_counter += 1
+            _improved = " "
+
+        # Per-epoch progress line (was previously only wandb-logged; cv.log
+        # stayed silent during training, making it impossible to tell if a
+        # run was alive or hung mid-fold).
+        _train_loss_z = epoch_loss_sum / max(epoch_loss_count, 1)
+        _train_mae_phys = epoch_abs_err_sum / max(epoch_loss_count, 1) * std
+        print(f"  fold {fold_i+1} ep {ep+1:3d}/{args.epochs}  "
+              f"train_loss={_train_loss_z:.4f}  train_mae={_train_mae_phys:.4f}  "
+              f"val_mae={val_mae_ep:.4f}{_improved}  val_rmse={val_rmse_ep:.4f}  "
+              f"val_r2={val_r2_ep:.4f}  lr={float(opt.param_groups[0]['lr']):.2e}",
+              flush=True)
 
         # Ring buffer: keep last `last_stable_window` (epoch, val_mae, state)
         # to enable "best epoch in last N" selection at training end.

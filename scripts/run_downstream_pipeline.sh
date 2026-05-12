@@ -359,7 +359,7 @@ _run_one() {
         split_dir_args="--split-dir ${SPLIT_DIR_ROOT}/${name}/random_cv5"
     fi
 
-    CUDA_VISIBLE_DEVICES=$gpu python scripts/downstream_cv.py \
+    CUDA_VISIBLE_DEVICES=$gpu python -u scripts/downstream_cv.py \
         --ckpt   "$CKPT"   --config "$CONFIG" \
         --dataset-pt "$pt" \
         --ensemble-by input_id \
