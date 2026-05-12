@@ -392,7 +392,7 @@ else
             HEAD_HIDDEN=$HEAD_HIDDEN N_MP_LAYERS=$N_MP_LAYERS MP_N_HEADS=$MP_N_HEADS \
             MAX_K_PER_INPUT=${_maxk:-0} \
             ONLY_DATASETS=$_ds H_CACHE_DIR=$_pt \
-            ${SPLIT_DIR_ROOT:+SPLIT_DIR_ROOT=$SPLIT_DIR_ROOT} \
+            SPLIT_DIR_ROOT="${SPLIT_DIR_ROOT:-}" \
             WANDB=$WANDB WANDB_PROJECT=$WANDB_PROJECT WANDB_GROUP=$_sfx \
                 bash scripts/run_downstream_pipeline.sh \
                 >> "$LOG_DIR/${RUN_TAG}_cv_${_sfx}_${_ds}.log" 2>&1 &
