@@ -49,6 +49,7 @@ export OUT_ROOT=outputs/cv_0511
 export LOG_DIR=/tmp/cv_0511
 export WANDB=1
 export WANDB_PROJECT=downstream_cv_0511
+export SWANLAB_SYNC=1    # mirror every wandb run to swanlab (requires `pip install swanlab && swanlab login`)
 
 # Bash arrays don't survive `exec bash` / subprocess — must `source`.
 CKPT_DEFS=(
