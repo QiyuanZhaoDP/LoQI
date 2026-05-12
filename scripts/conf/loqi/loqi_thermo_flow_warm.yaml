@@ -187,17 +187,17 @@ optimizer:
   weight_decay: 1.e-12
   amsgrad: True
 
-# Linear warmup → linear decay. Constant LR produced a noisy plateau
-# (last-10-epoch x_loss σ ~0.013, gibbs MAE σ ~1.5 kJ/mol) — optimizer
-# kept stepping out of the minimum. Decay to 1% of peak over the run.
-# Step counts assume ~10k grad-steps/epoch (4-GPU DDP, no DistributedSampler).
+# Cosine warmup → cosine decay, anchored to epoch count (resolved against
+# trainer.estimated_stepping_batches at runtime). Linear+long step-counts
+# stayed effectively flat at the peak for most of the run; cosine over
+# the full epoch budget makes the decay actually bite without retuning
+# step counts every time DDP/batch-size/dataset changes.
 lr_scheduler:
-  type: linear_warmup_decay
+  type: cosine_warmup_decay   # or linear_warmup_decay
   initial_lr: 1.e-7
   final_lr: 5.e-5             # peak LR after warmup
-  num_warmup_steps: 2000      # gentle ramp protects pretrained weights
-  milestone_steps: 2000       # decay starts here
-  num_decay_steps: 498000     # ~50 epoch × 10k step − warmup
-  min_lr_decay: 5.e-7         # 1% of peak — floor
+  warmup_epochs: 1            # gentle ramp protects pretrained weights
+  decay_epochs: 49            # train.n_epochs − warmup_epochs
+  min_lr_decay: 5.e-7         # 1% of peak — floor (eta_min for cosine)
   interval: step
   frequency: 1

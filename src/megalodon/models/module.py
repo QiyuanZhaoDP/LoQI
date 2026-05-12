@@ -151,6 +151,49 @@ class Graph3DInterpolantModel(pl.LightningModule):
         }
         return interpolants
 
+    def _resolve_schedule_lengths(self):
+        """Resolve (num_warmup_steps, num_decay_steps) for the LR scheduler.
+
+        If `warmup_epochs` / `decay_epochs` are present in the scheduler
+        config, derive step counts from the trainer's actual schedule
+        (`estimated_stepping_batches`, `max_epochs`). Otherwise fall back to
+        the legacy `num_warmup_steps` / `num_decay_steps` fields.
+        """
+        s = self.lr_scheduler_params
+        warmup_epochs = getattr(s, "warmup_epochs", None)
+        decay_epochs = getattr(s, "decay_epochs", None)
+
+        if warmup_epochs is None and decay_epochs is None:
+            return int(s.num_warmup_steps), int(s.num_decay_steps)
+
+        if self.trainer is None or self.trainer.max_epochs in (None, -1):
+            raise RuntimeError(
+                "epoch-based lr_scheduler requires trainer.max_epochs to be set "
+                "(got max_epochs=%r)" % getattr(self.trainer, "max_epochs", None)
+            )
+        total_steps = int(self.trainer.estimated_stepping_batches)
+        max_epochs = int(self.trainer.max_epochs)
+        steps_per_epoch = max(1, total_steps // max_epochs)
+
+        if warmup_epochs is None:
+            n_warmup = int(s.num_warmup_steps)
+        else:
+            n_warmup = max(1, int(round(float(warmup_epochs) * steps_per_epoch)))
+        if decay_epochs is None:
+            n_decay = int(s.num_decay_steps)
+        else:
+            n_decay = max(1, int(round(float(decay_epochs) * steps_per_epoch)))
+
+        if getattr(self.trainer, "global_rank", 0) == 0:
+            print(
+                f"[lr_scheduler] epoch-based resolve: "
+                f"total_steps={total_steps}, max_epochs={max_epochs}, "
+                f"steps_per_epoch≈{steps_per_epoch} → "
+                f"warmup={n_warmup} steps ({warmup_epochs} ep), "
+                f"decay={n_decay} steps ({decay_epochs} ep)"
+            )
+        return n_warmup, n_decay
+
     def configure_optimizers(self):
         if self.optimizer_params.type == "adamw":
             optimizer = torch.optim.AdamW(
@@ -181,28 +224,41 @@ class Graph3DInterpolantModel(pl.LightningModule):
                     total_iters=self.lr_scheduler_params.num_warmup_steps,
                     # Number of iterations to go from start_factor to end_factor
                 )
-            elif self.lr_scheduler_params.type == "linear_warmup_decay":
-                # Warm-up phase using LinearLR
+            elif self.lr_scheduler_params.type in ("linear_warmup_decay", "cosine_warmup_decay"):
+                # Resolve schedule lengths. Prefer epoch-based fields
+                # (warmup_epochs / decay_epochs) when present so the schedule
+                # tracks `trainer.max_epochs` instead of hand-tuned step counts
+                # that go stale across DDP / dataset / resume changes.
+                n_warmup, n_decay = self._resolve_schedule_lengths()
+                final_lr = self.lr_scheduler_params.final_lr
+                initial_lr = self.lr_scheduler_params.initial_lr
+                min_lr_decay = self.lr_scheduler_params.min_lr_decay
+
                 warmup_scheduler = torch.optim.lr_scheduler.LinearLR(
                     optimizer,
-                    start_factor=self.lr_scheduler_params.initial_lr / self.lr_scheduler_params.final_lr,
+                    start_factor=initial_lr / final_lr,
                     end_factor=1.0,
-                    total_iters=self.lr_scheduler_params.num_warmup_steps,  # Steps
+                    total_iters=max(1, n_warmup),
                 )
 
-                # Decay phase using LinearLR (kicks in after milestone)
-                decay_scheduler = torch.optim.lr_scheduler.LinearLR(
-                    optimizer,
-                    start_factor=1.0,
-                    end_factor=self.lr_scheduler_params.min_lr_decay / self.lr_scheduler_params.final_lr,
-                    total_iters=self.lr_scheduler_params.num_decay_steps,  # Steps
-                )
+                if self.lr_scheduler_params.type == "linear_warmup_decay":
+                    decay_scheduler = torch.optim.lr_scheduler.LinearLR(
+                        optimizer,
+                        start_factor=1.0,
+                        end_factor=min_lr_decay / final_lr,
+                        total_iters=max(1, n_decay),
+                    )
+                else:  # cosine_warmup_decay
+                    decay_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+                        optimizer,
+                        T_max=max(1, n_decay),
+                        eta_min=min_lr_decay,
+                    )
 
-                # SequentialLR to combine both schedulers
                 scheduler = torch.optim.lr_scheduler.SequentialLR(
                     optimizer,
                     schedulers=[warmup_scheduler, decay_scheduler],
-                    milestones=[self.lr_scheduler_params.milestone_steps],  # Milestone in steps
+                    milestones=[max(1, n_warmup)],
                 )
             else:
                 raise NotImplementedError(

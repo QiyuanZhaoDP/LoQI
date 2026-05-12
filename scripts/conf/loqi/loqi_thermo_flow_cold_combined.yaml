@@ -171,17 +171,15 @@ optimizer:
   weight_decay: 1.e-12
   amsgrad: True
 
-# Linear warmup → linear decay. Same shape as the cold split-head config;
-# step counts assume ~12k grad-steps/epoch on 4-GPU DDP without
-# DistributedSampler. From-scratch needs the longer warmup that the
-# warm/restart variants don't.
+# Cosine warmup → cosine decay, anchored to epoch count (resolved against
+# trainer.estimated_stepping_batches at runtime). From-scratch needs the
+# longer warmup that the warm/restart variants don't.
 lr_scheduler:
-  type: linear_warmup_decay
+  type: cosine_warmup_decay   # or linear_warmup_decay
   initial_lr: 1.e-6
   final_lr: 1.e-4
-  num_warmup_steps: 5000
-  milestone_steps: 5000
-  num_decay_steps: 2000000
+  warmup_epochs: 5
+  decay_epochs: 245           # train.n_epochs − warmup_epochs
   min_lr_decay: 1.e-6
   interval: step
   frequency: 1

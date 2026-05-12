@@ -171,16 +171,15 @@ optimizer:
   weight_decay: 1.e-12
   amsgrad: True
 
-# WARM-FROM-SCRATCH: no resume ckpt, so the LR schedule starts from a
-# proper warmup. Same shape as the warm-restart variant; lengths assume
-# ~10k grad-steps/epoch (4-GPU DDP, no DistributedSampler).
+# WARM-FROM-SCRATCH: cosine warmup → cosine decay, anchored to epoch
+# count (resolved against trainer.estimated_stepping_batches at runtime).
+# Same shape as the warm-restart variant.
 lr_scheduler:
-  type: linear_warmup_decay
+  type: cosine_warmup_decay   # or linear_warmup_decay
   initial_lr: 1.e-7
   final_lr: 5.e-5
-  num_warmup_steps: 2000
-  milestone_steps: 2000
-  num_decay_steps: 498000
+  warmup_epochs: 1
+  decay_epochs: 49            # train.n_epochs − warmup_epochs
   min_lr_decay: 5.e-7
   interval: step
   frequency: 1
