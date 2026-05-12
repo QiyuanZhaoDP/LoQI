@@ -31,6 +31,7 @@ import time
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -1127,6 +1128,14 @@ def main():
                    help="wandb run name (default: <dataset basename>_<group>).")
     args = p.parse_args()
     torch.manual_seed(args.seed); np.random.seed(args.seed)
+
+    # Confirm CUDA memory tuning is actually reaching this Python process —
+    # `PYTORCH_CUDA_ALLOC_CONF` is read by CUDA caching allocator at first
+    # touch and silently ignored if missing, so we surface it explicitly.
+    import os
+    print(f"[env] PYTORCH_CUDA_ALLOC_CONF = "
+          f"{os.environ.get('PYTORCH_CUDA_ALLOC_CONF', '(unset — fragmentation likely)')}",
+          flush=True)
 
     if args.max_k_per_input is not None and args.ensemble_by is None:
         raise SystemExit("--max-k-per-input requires --ensemble-by "
