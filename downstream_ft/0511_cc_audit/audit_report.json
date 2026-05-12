@@ -1,5 +1,5 @@
 {
-  "generated": "2026-05-11T20:18:41",
+  "generated": "2026-05-12T09:41:49",
   "src": "downstream_ft/0511",
   "out": "downstream_ft/0511_cc_audit",
   "params": {
@@ -424,40 +424,6 @@
       "n_final": 925
     },
     {
-      "name": "SolvationFreeEnergy",
-      "source": "downstream_ft/0511/SolvationFreeEnergy/Clean/Data_20260508_SolvationFreeEnergy.csv",
-      "log10_transform": false,
-      "n_raw": 2580,
-      "n_empty": 0,
-      "n_unparseable": 0,
-      "n_radical": 1,
-      "n_disconnected": 0,
-      "n_bad_elements": 0,
-      "n_bad_charge": 0,
-      "bad_elements": {},
-      "n_after_smi": 2579,
-      "hard_limits": {
-        "lo": -100.0,
-        "hi": 20.0
-      },
-      "n_hard_removed": 0,
-      "outlier_rel": 0.3,
-      "sigma_global": 16.71305,
-      "threshold_abs": 5.013915,
-      "n_ik_removed": 0,
-      "n_ik_aggregated": 0,
-      "knn_params": {
-        "k": 20,
-        "z_thresh": 3.0,
-        "iso_thresh": 0.2
-      },
-      "n_knn_flagged": 119,
-      "n_physics_extreme": 0,
-      "n_isolated": 2,
-      "n_final": 2385,
-      "n_manual_removed": 194
-    },
-    {
       "name": "TPT",
       "source": "downstream_ft/0511/TriplePointTemp/Clean/Data_20260511_TPT.csv",
       "log10_transform": false,
@@ -693,6 +659,171 @@
       "n_physics_extreme": 7,
       "n_isolated": 11,
       "n_final": 3038
+    },
+    {
+      "name": "AcuteToxicity",
+      "source": "downstream_ft/0511/AcuteToxicity/Clean/Data_20260511_AcuteToxicity.csv",
+      "log10_transform": false,
+      "n_raw": 7328,
+      "n_empty": 0,
+      "n_unparseable": 0,
+      "n_radical": 0,
+      "n_disconnected": 0,
+      "n_bad_elements": 0,
+      "n_bad_charge": 0,
+      "bad_elements": {},
+      "n_after_smi": 7328,
+      "hard_limits": {
+        "lo": 0.0,
+        "hi": 8.0
+      },
+      "n_hard_removed": 0,
+      "outlier_rel": 0.3,
+      "sigma_global": 0.945373,
+      "threshold_abs": 0.283612,
+      "n_ik_removed": 0,
+      "n_ik_aggregated": 0,
+      "knn_params": {
+        "k": 20,
+        "z_thresh": 3.0,
+        "iso_thresh": 0.2
+      },
+      "n_knn_flagged": 85,
+      "n_physics_extreme": 21,
+      "n_isolated": 5,
+      "n_final": 7328
+    },
+    {
+      "name": "CEP",
+      "source": "downstream_ft/0511/CellEffectivePermeability/Clean/Data_20260511_CEP.csv",
+      "log10_transform": false,
+      "n_raw": 892,
+      "n_empty": 0,
+      "n_unparseable": 0,
+      "n_radical": 0,
+      "n_disconnected": 0,
+      "n_bad_elements": 0,
+      "n_bad_charge": 0,
+      "bad_elements": {},
+      "n_after_smi": 892,
+      "hard_limits": {
+        "lo": -10.0,
+        "hi": -2.0
+      },
+      "n_hard_removed": 0,
+      "outlier_rel": 0.3,
+      "sigma_global": 0.775674,
+      "threshold_abs": 0.232702,
+      "n_ik_removed": 4,
+      "n_ik_aggregated": 6,
+      "knn_params": {
+        "k": 20,
+        "z_thresh": 3.0,
+        "iso_thresh": 0.2
+      },
+      "n_knn_flagged": 3,
+      "n_physics_extreme": 4,
+      "n_isolated": 17,
+      "n_final": 882
+    },
+    {
+      "name": "Clearance",
+      "source": "downstream_ft/0511/Clearance/Clean/Data_20260511_Clearance.csv",
+      "log10_transform": false,
+      "n_raw": 492,
+      "n_empty": 0,
+      "n_unparseable": 0,
+      "n_radical": 0,
+      "n_disconnected": 0,
+      "n_bad_elements": 0,
+      "n_bad_charge": 0,
+      "bad_elements": {},
+      "n_after_smi": 492,
+      "hard_limits": {
+        "lo": 0.0,
+        "hi": null
+      },
+      "n_hard_removed": 0,
+      "outlier_rel": 0.3,
+      "sigma_global": 37.230006,
+      "threshold_abs": 11.169002,
+      "n_ik_removed": 0,
+      "n_ik_aggregated": 0,
+      "knn_params": {
+        "k": 20,
+        "z_thresh": 3.0,
+        "iso_thresh": 0.2
+      },
+      "n_knn_flagged": 0,
+      "n_physics_extreme": 8,
+      "n_isolated": 6,
+      "n_final": 492
+    },
+    {
+      "name": "HalfLife",
+      "source": "downstream_ft/0511/HalfLife/Clean/Data_20260511_HalfLife.csv",
+      "log10_transform": false,
+      "n_raw": 490,
+      "n_empty": 0,
+      "n_unparseable": 0,
+      "n_radical": 0,
+      "n_disconnected": 0,
+      "n_bad_elements": 0,
+      "n_bad_charge": 0,
+      "bad_elements": {},
+      "n_after_smi": 490,
+      "hard_limits": {
+        "lo": 0.0,
+        "hi": null
+      },
+      "n_hard_removed": 0,
+      "outlier_rel": 0.3,
+      "sigma_global": 83.609588,
+      "threshold_abs": 25.082876,
+      "n_ik_removed": 0,
+      "n_ik_aggregated": 0,
+      "knn_params": {
+        "k": 20,
+        "z_thresh": 3.0,
+        "iso_thresh": 0.2
+      },
+      "n_knn_flagged": 0,
+      "n_physics_extreme": 4,
+      "n_isolated": 24,
+      "n_final": 490
+    },
+    {
+      "name": "PPBR",
+      "source": "downstream_ft/0511/PlasmaProteinBindingRate/Clean/Data_20260511_PPBR.csv",
+      "log10_transform": false,
+      "n_raw": 1412,
+      "n_empty": 0,
+      "n_unparseable": 0,
+      "n_radical": 0,
+      "n_disconnected": 0,
+      "n_bad_elements": 0,
+      "n_bad_charge": 0,
+      "bad_elements": {},
+      "n_after_smi": 1412,
+      "hard_limits": {
+        "lo": 0.0,
+        "hi": 100.0
+      },
+      "n_hard_removed": 0,
+      "outlier_rel": 0.3,
+      "sigma_global": 15.959427,
+      "threshold_abs": 4.787828,
+      "n_ik_removed": 0,
+      "n_ik_aggregated": 0,
+      "knn_params": {
+        "k": 20,
+        "z_thresh": 3.0,
+        "iso_thresh": 0.2
+      },
+      "n_knn_flagged": 41,
+      "n_physics_extreme": 0,
+      "n_isolated": 10,
+      "n_final": 1412
     }
   ]
 }

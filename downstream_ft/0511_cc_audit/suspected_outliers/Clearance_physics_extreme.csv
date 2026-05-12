@@ -1,0 +1,9 @@
+inchikey,canonical_smiles,target,knn_predicted,residual,residual_over_sigma,best_neighbour_tanimoto,reason
+OBEJTRHPRSRHSZ-JSGCOSHPSA-N,CC(C)[C@H]1C(=O)N[C@H](CO)Cc2ccccc2N1C,144.54,26.0027,118.5373,3.5,0.236,physics_extreme: retained — follows known physical law
+BYVPYJYHCMIHMK-AUUYWEPGSA-N,CC1(C)[C@@H]2CC[C@@]1(CS(=O)(=O)N1CCN(c3ccc(C(F)(F)F)cn3)CC1)C(=O)C2,141.0,23.3595,117.6405,3.47,0.316,physics_extreme: retained — follows known physical law
+MAEIEVLCKWDQJH-UHFFFAOYSA-N,CCCCNc1cc(C(=O)O)cc(S(N)(=O)=O)c1Oc1ccccc1,144.54,38.1772,106.3628,3.14,0.274,physics_extreme: retained — follows known physical law
+GKTWGGQPFAXNFI-HNNXBMFYSA-N,COC(=O)[C@H](c1ccccc1Cl)N1CCc2sccc2C1,137.0,23.6436,113.3564,3.34,0.236,physics_extreme: retained — follows known physical law
+OFEARPZEWOLQGZ-UHFFFAOYSA-N,COc1ccc(-c2nc3c(NCCCN(C)C(=O)C4CCC4)c(Br)cnc3[nH]2)cc1,138.04,27.2381,110.8019,3.27,0.241,physics_extreme: retained — follows known physical law
+PLGWYGPUULYMBF-UHFFFAOYSA-N,COc1ccc2ncc(F)c(CCN3CCC(NCc4cc5c(cn4)OCCO5)CC3)c2n1,138.04,30.9984,107.0416,3.16,0.667,physics_extreme: retained — follows known physical law
+DVRRHBYHAIRKEY-OAQYLSRUSA-N,C[C@@](C(=O)OC1CC[N+](C)(C)CC1)(c1ccccc1)C1CCCC1,128.0,26.0899,101.9101,3.01,0.227,physics_extreme: retained — follows known physical law
+MEWOMDUCJFJDGL-UHFFFAOYSA-N,O=C(Nc1ccc(F)cc1)c1ccc(Cl)[n+]([O-])c1,149.0,40.2713,108.7287,3.21,0.267,physics_extreme: retained — follows known physical law

@@ -1,0 +1,7 @@
+inchikey,canonical_smiles,target,knn_predicted,residual,residual_over_sigma,best_neighbour_tanimoto,reason
+XWLXKKNPFMNSFA-HGQWONQESA-N,CCC(C)(C)C(=O)O[C@H]1C[C@@H](C)C=C2C=C[C@H](C)[C@H](CC[C@@H](O)C[C@@H](O)CC(=O)O)[C@H]21,46.28,32.4692,13.8108,0.41,0.191,isolated: best_sim=0.191<0.2
+HZQHAAFWVRDHMZ-JKSUJKDBSA-N,COc1ccccc1SC[C@@H](C)CN[C@@H]1COc2ccccc2SC1,51.29,43.4518,7.8382,0.23,0.198,isolated: best_sim=0.198<0.2
+GYXWUBHCYWWAOK-UHFFFAOYSA-N,CSc1ccc(N2C(N)=NC(N)=NC2(C)C)cc1,70.79,19.4019,51.3881,1.52,0.176,isolated: best_sim=0.176<0.2
+GXXLUDOKHXEFBQ-YJFSRANCSA-N,C[C@@H](O)[C@H]1C(=O)N2C(C(=O)O)=C(SC3CN(C4=NCCS4)C3)[C@H](C)[C@H]12,4.79,30.2039,-25.4139,0.75,0.183,isolated: best_sim=0.183<0.2
+CMWRPDHVGMHLSZ-GFCCVEGCSA-N,Cc1ccc(-c2ccc3c(ccc4sc5c(c43)NC[C@@H](C)NC5=O)n2)cn1,6.92,23.608,-16.688,0.49,0.196,isolated: best_sim=0.196<0.2
+WQXVKEDUCPMRRI-JTQLQIEISA-N,Cc1cccc([C@H](C)c2c[nH]c(=S)[nH]2)c1C,25.7,31.517,-5.817,0.17,0.183,isolated: best_sim=0.183<0.2

@@ -1,0 +1,5 @@
+inchikey,canonical_smiles,target,group_spread,threshold,reason
+XSDQTOBWRPYKKA-UHFFFAOYSA-N,N=C(N)NC(=O)c1nc(Cl)c(N)nc1N,-6.251812,0.687577,0.232702,inchikey_spread
+XSDQTOBWRPYKKA-UHFFFAOYSA-N,NC(N)=NC(=O)c1nc(Cl)c(N)nc1N,-5.5642352,0.687577,0.232702,inchikey_spread
+IRSCQMHQWWYFCW-UHFFFAOYSA-N,Nc1nc(=O)c2ncn(COC(CO)CO)c2[nH]1,-6.369999900000002,0.268772,0.232702,inchikey_spread
+IRSCQMHQWWYFCW-UHFFFAOYSA-N,Nc1nc2c(ncn2COC(CO)CO)c(=O)[nH]1,-6.1012278,0.268772,0.232702,inchikey_spread

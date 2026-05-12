@@ -58,7 +58,7 @@ DATASETS = [
     ("RI/Clean",                                 "RI",                   None,        1.0,     2.0,    None,     [],         False),
     ("Solubility/Clean",                         "Solubility_water",     "water",    -20.0,    5.0,    None,     [],         False),
     ("Solubility/Clean",                         "Solubility_ethanol",   "ethanol",  -10.0,    5.0,    None,     [],         False),
-    ("SolvationFreeEnergy/Clean",                "SolvationFreeEnergy",  None,       -100.0,   20.0,   None,     ["Solvent"], False),
+    # SolvationFreeEnergy removed from db
     ("TriplePointTemp/Clean",                    "TPT",                  None,        0.0,     None,   None,     [],         False),
     ("Vcp/Clean",                                "Vcp",                  None,        0.0,     None,   None,     [],         False),
     ("bp/Clean",                                 "BP",                   None,        50.0,    2000.0, None,     [],         False),
@@ -66,6 +66,17 @@ DATASETS = [
     ("freesolv/Clean",                           "freesolv",             None,       -40.0,    10.0,   None,     [],         False),
     ("k/Clean",                                  "k",                    None,        0.0,     None,   None,     [],         False),
     ("mp/Clean",                                 "MP",                   None,        20.0,    2000.0, None,     [],         False),
+    # ── New ADMET datasets (added 2026-05-12) ──────────────────────────────────
+    # AcuteToxicity: −log10(LD50 mol/kg); higher = more toxic
+    ("AcuteToxicity/Clean",                      "AcuteToxicity",        None,        0.0,     8.0,    None,     [],         False),
+    # CellEffectivePermeability: log10(Peff cm/s); typical −9 to −3
+    ("CellEffectivePermeability/Clean",          "CEP",                  None,       -10.0,   -2.0,   None,     [],         False),
+    # Clearance: mL/min/kg in vitro hepatic clearance; must be positive
+    ("Clearance/Clean",                          "Clearance",            None,        0.0,     None,   None,     [],         False),
+    # HalfLife: hours; must be positive
+    ("HalfLife/Clean",                           "HalfLife",             None,        0.0,     None,   None,     [],         False),
+    # PlasmaProteinBindingRate: % bound (0–100)
+    ("PlasmaProteinBindingRate/Clean",           "PPBR",                 None,        0.0,     100.0,  None,     [],         False),
 ]
 
 SUPPORTED_ELEMENTS = {
@@ -111,6 +122,12 @@ PHYSICS_RETAIN: dict[str, callable] = {
     "Solubility_water":   lambda tgt: tgt < -12.0,
     "Solubility_ethanol": lambda tgt: tgt < -4.0,
     "freesolv":           lambda tgt: tgt < -20.0,
+    # ADMET extremes — all physically justified
+    "AcuteToxicity":      lambda tgt: tgt > 5.5,          # extremely toxic (LD50 < 3 μmol/kg)
+    "CEP":                lambda tgt: tgt < -7.0 or tgt > -4.0,  # very low/high permeability
+    "Clearance":          lambda tgt: tgt > 100.0,         # ultra-rapid hepatic extraction
+    "HalfLife":           lambda tgt: tgt > 200.0,         # unusually persistent compounds
+    "PPBR":               lambda tgt: tgt > 98.0,          # near-total protein binding (e.g. warfarin)
 }
 
 # ---------------------------------------------------------------------------
