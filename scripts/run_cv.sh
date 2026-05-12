@@ -39,20 +39,28 @@ INPUT_DIR=${INPUT_DIR:-downstream_ft/0506/cleaned_by_codex}
 
 # CKPT_DEFS: "label|ckpt_path|config_path|init_from_thermo"
 # init_from_thermo=1 → warm-start downstream head from ckpt's thermo_heads
-CKPT_DEFS=(
-    # Override this array before sourcing. Default: 0509 setup.
-    "warm_last|data/ft_ckpts/thermo_flow_warm_last.ckpt|scripts/conf/loqi/loqi_thermo_flow_warm.yaml|0"
-    "cold_last|data/ft_ckpts/thermo_flow_cold_last.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml|0"
-)
+#
+# Bash arrays do NOT survive `exec bash` / subprocess boundaries, so the
+# canonical way to override these is to `source scripts/run_cv.sh` from
+# a wrapper after defining CKPT_DEFS / SAMPLING_MODES. We guard the
+# defaults below so they only apply when the array is unset / empty.
+if ! declare -p CKPT_DEFS &>/dev/null || (( ${#CKPT_DEFS[@]} == 0 )); then
+    CKPT_DEFS=(
+        "warm_last|data/ft_ckpts/thermo_flow_warm_last.ckpt|scripts/conf/loqi/loqi_thermo_flow_warm.yaml|0"
+        "cold_last|data/ft_ckpts/thermo_flow_cold_last.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml|0"
+    )
+fi
 
 # SAMPLING_MODES: see format at top of file.
 # K8 + K12ms (4 traj × 3 snapshots = 12 conformers).
 # NOTE: multistep rest uses ':' as internal separator (not '|') to avoid
 # clashing with the '|' field separator used in the task queue.
-SAMPLING_MODES=(
-    "standard|K8|8|10"
-    "multistep|K12ms|12|4:10:7 8 9"
-)
+if ! declare -p SAMPLING_MODES &>/dev/null || (( ${#SAMPLING_MODES[@]} == 0 )); then
+    SAMPLING_MODES=(
+        "standard|K8|8|10"
+        "multistep|K12ms|12|4:10:7 8 9"
+    )
+fi
 
 # Run tag — used to namespace pkl/pt dirs: data/<RUN_TAG>_pkl_<label>_<mode>
 # Set to match the dataset / experiment name (e.g. "0509", "0506", "0511").

@@ -37,15 +37,16 @@ export LOG_DIR=/tmp/cv_0511
 export WANDB=1
 export WANDB_PROJECT=downstream_cv_0511
 
-export CKPT_DEFS=(
+# Bash arrays don't survive `exec bash` / subprocess — must `source`.
+CKPT_DEFS=(
     "loqi_flow|data/ft_ckpts/loqi_flow.ckpt|scripts/conf/loqi/loqi_flow.yaml|0"
     "cold_early|data/ft_ckpts/thermo_flow_cold_early.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml|0"
     "cold_last|data/ft_ckpts/thermo_flow_cold_last.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml|0"
 )
 
-export SAMPLING_MODES=(
+SAMPLING_MODES=(
     "standard|K8|8|10"
     "multistep|K12ms|12|4:10:7 8 9"
 )
 
-exec bash scripts/run_cv.sh
+source scripts/run_cv.sh

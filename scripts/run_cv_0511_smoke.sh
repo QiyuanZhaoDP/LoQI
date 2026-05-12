@@ -53,10 +53,13 @@ export WANDB=0                        # no wandb noise during smoke
 # Just one ckpt + K-mode. cold_early uses the smaller thermo_flow_cold ckpt
 # (faster to load than loqi_flow). K8 standard sampling is faster than K12ms
 # multistep (no snapshot logic), good enough to verify the pipeline.
-export CKPT_DEFS=(
+# Bash arrays don't survive subprocess boundaries — `source` keeps them
+# in the current shell so run_cv.sh sees these overrides instead of its
+# own defaults.
+CKPT_DEFS=(
     "cold_early|data/ft_ckpts/thermo_flow_cold_early.ckpt|scripts/conf/loqi/loqi_thermo_flow_cold.yaml|0"
 )
-export SAMPLING_MODES=(
+SAMPLING_MODES=(
     "standard|K8|8|10"
 )
 
@@ -71,7 +74,7 @@ echo "  out:        $OUT_ROOT/"
 echo "  expected:   $OUT_ROOT/ST_cold_early_c_K8/cv_report.json"
 echo "============================================================"
 
-bash scripts/run_cv.sh
+source scripts/run_cv.sh
 
 # ---- Verify ----
 echo ""
