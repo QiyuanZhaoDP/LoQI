@@ -413,7 +413,21 @@ else
             wait -n -p _fpid 2>/dev/null
             _wst=$?
             _fpid=${_fpid:-0}
-            (( _wst == 127 )) && break
+            if (( _wst == 127 )); then
+                # No more waitable children. Could mean (a) all done, or
+                # (b) all children died before wait could see them and bash
+                # auto-reaped. Either way, if PID_GPU is non-empty, mark
+                # all remaining as FAILED so we don't silently drop them.
+                if (( ${#_CV_PID_GPU[@]} > 0 )); then
+                    echo "[$(date +%T)] WARN  wait returned 127 with ${#_CV_PID_GPU[@]} tracked pids — children gone before wait could see them. Marking as FAIL:"
+                    for _orphan in "${!_CV_PID_GPU[@]}"; do
+                        echo "[$(date +%T)] FAIL ${_CV_PID_TAG[$_orphan]} (gpu=${_CV_PID_GPU[$_orphan]}, pid=$_orphan) — check $LOG_DIR/${RUN_TAG}_cv_${_CV_PID_TAG[$_orphan]//\//_}.log"
+                        _cv_fail=$((_cv_fail+1))
+                        _cv_done=$((_cv_done+1))
+                    done
+                fi
+                break
+            fi
             [[ -z "${_CV_PID_GPU[$_fpid]:-}" ]] && continue
             _gpu="${_CV_PID_GPU[$_fpid]}"; _tag="${_CV_PID_TAG[$_fpid]}"
             unset '_CV_PID_GPU[$_fpid]' '_CV_PID_TAG[$_fpid]'

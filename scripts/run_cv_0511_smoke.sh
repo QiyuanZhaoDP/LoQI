@@ -6,7 +6,7 @@
 # Reduced epochs so the whole pipeline finishes in ~5 minutes.
 #
 # Success criterion:
-#   outputs/cv_0511_smoke/ST_cold_early_c_K8/cv_report.json exists and
+#   outputs/cv_0511_smoke/ST_cold_early_K8/cv_report.json exists and
 #   contains finite mae_mean, rmse_mean, r2_mean.
 #
 # Outputs are namespaced to `cv_0511_smoke` so they don't collide with the
@@ -71,7 +71,7 @@ echo "  K-mode:     K8 standard"
 echo "  GPU:        $CUDA_DEVICES"
 echo "  epochs:     $EPOCHS (5 folds = ~2-3 min total CV time)"
 echo "  out:        $OUT_ROOT/"
-echo "  expected:   $OUT_ROOT/ST_cold_early_c_K8/cv_report.json"
+echo "  expected:   $OUT_ROOT/ST_cold_early_K8/cv_report.json"
 echo "============================================================"
 
 source scripts/run_cv.sh
@@ -81,7 +81,7 @@ echo ""
 echo "============================================================"
 echo "SMOKE TEST RESULTS"
 echo "============================================================"
-_report="$OUT_ROOT/ST_cold_early_c_K8/cv_report.json"
+_report="$OUT_ROOT/ST_cold_early_K8/cv_report.json"
 if [[ -f "$_report" ]]; then
     echo "✅ cv_report.json produced at $_report"
     python3 - <<PY
@@ -101,7 +101,7 @@ PY
 else
     echo "❌ cv_report.json NOT produced — check logs:"
     echo "   - per-stage logs: $LOG_DIR/"
-    echo "   - python output:  $OUT_ROOT/ST_cold_early_c_K8/cv.log"
-    echo "   - prep step:      $OUT_ROOT/ST_cold_early_c_K8/prep.log"
+    echo "   - python output:  $OUT_ROOT/ST_cold_early_K8/cv.log"
+    echo "   - prep step:      $OUT_ROOT/ST_cold_early_K8/prep.log"
     exit 1
 fi
