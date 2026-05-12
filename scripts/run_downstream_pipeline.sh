@@ -77,6 +77,7 @@ HEAD_HIDDEN=${HEAD_HIDDEN:-256}        # ignored when INIT_FROM_THERMO=1
 N_MP_LAYERS=${N_MP_LAYERS:-4}          # ignored when INIT_FROM_THERMO=1
 MP_N_HEADS=${MP_N_HEADS:-4}            # ignored when INIT_FROM_THERMO=1
 BATCH=${BATCH:-64}
+EXTRACT_BATCH=${EXTRACT_BATCH:-$BATCH}  # H-cache extraction batch; lower for big datasets to avoid OOM
 
 EARLY_STOP_PATIENCE=${EARLY_STOP_PATIENCE:-0}   # 0 = disabled
 
@@ -365,6 +366,7 @@ _run_one() {
         --out-dir "$out_dir" \
         --n-folds 5 --lr "$LR" \
         --batch-size "$BATCH" \
+        --extract-batch-size "$EXTRACT_BATCH" \
         --device cuda \
         $epoch_args $wandb_args $warm_args $stop_args $lora_args $maxk_args \
         $h_cache_args $extract_args $split_dir_args \

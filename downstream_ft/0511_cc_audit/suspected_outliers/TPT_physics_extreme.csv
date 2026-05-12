@@ -1,5 +1,5 @@
 inchikey,canonical_smiles,target,knn_predicted,residual,residual_over_sigma,best_neighbour_tanimoto,reason
 UGFAIRIUMAVXCW-UHFFFAOYSA-N,[C-]#[O+],68.0926666666667,304.1531,-236.0605,4.0,0.125,physics_extreme: retained — follows known physical law
 VNWKTOKETHGBQD-UHFFFAOYSA-N,C,90.5755396,291.1852,-200.6096,3.4,0.167,physics_extreme: retained — follows known physical law
-IJGRMHOSHXDMSA-UHFFFAOYSA-N,N#N,63.148,274.5106,-211.3626,3.58,0.25,physics_extreme: retained — follows known physical law
-MYMOFIZGZYHOMD-UHFFFAOYSA-N,O=O,54.3607876666667,244.1114,-189.7506,3.22,0.25,physics_extreme: retained — follows known physical law
+IJGRMHOSHXDMSA-UHFFFAOYSA-N,N#N,63.148,274.5106,-211.3626,3.59,0.25,physics_extreme: retained — follows known physical law
+MYMOFIZGZYHOMD-UHFFFAOYSA-N,O=O,54.3607876666667,232.6445,-178.2837,3.02,0.25,physics_extreme: retained — follows known physical law

@@ -1,5 +1,25 @@
-SMILES,TARGET,reason
-CC(C)(C)c1cc2c(O)c(c1)Cc1cc(C(C)(C)C)cc(c1O)Cc1cc(C(C)(C)C)cc(c1O)Cc1cc(C(C)(C)C)cc(c1O)Cc1cc(C(C)(C)C)cc(c1O)Cc1cc(C(C)(C)C)cc(c1O)C2,2607.0,suspected QSPR extrapolation artifact: Tc > 2500 K exceeds reliable experimental range for macrocycles (calixarenes) — likely unphysical
-CC(C)(C)c1cc2c(O)c(c1)Cc1cc(C(C)(C)C)cc(c1O)Cc1cc(C(C)(C)C)cc(c1O)Cc1cc(C(C)(C)C)cc(c1O)Cc1cc(C(C)(C)C)cc(c1O)Cc1cc(C(C)(C)C)cc(c1O)Cc1cc(C(C)(C)C)cc(c1O)Cc1cc(C(C)(C)C)cc(c1O)C2,3225.0,suspected QSPR extrapolation artifact: Tc > 2500 K exceeds reliable experimental range for macrocycles (calixarenes) — likely unphysical
-CCCCCCCCCCCCCCCC(=O)OCC(COC(=O)CCCCCCCCCCCCCCC)OC(=O)Cc1ccccc1,2577.0,suspected QSPR extrapolation artifact: Tc > 2500 K exceeds reliable experimental range for macrocycles (calixarenes) — likely unphysical
-O=CC(O)C(O)C(OC1OC(CO)C(OC2OC(CO)C(OC3OC(CO)C(OC4OC(CO)C(O)C(O)C4O)C(O)C3O)C(O)C2O)C(O)C1O)C(O)CO,2789.0,suspected QSPR extrapolation artifact: Tc > 2500 K exceeds reliable experimental range for macrocycles (calixarenes) — likely unphysical
+inchikey,canonical_smiles,target,reason,SMILES,TARGET
+ZWTOPWUHOVGYRH-UHFFFAOYSA-N,C=CC1=[C+]CCC1,599.0,anomaly_xlsx [DQ_NET_CHARGE_BULK],,
+UBMJSQAFNUWJEG-UHFFFAOYSA-N,C=CCCCCCCCCCCCCCCCCCCCCCCCCCCC,829.0,anomaly_xlsx [CROSS_TC_LE_BP],,
+AQUWSCLUQRAMPO-UHFFFAOYSA-N,C=CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC,859.0,anomaly_xlsx [CROSS_TC_LE_BP],,
+IMROMDMJAWUWLK-UHFFFAOYSA-N,C=CO,501.0,anomaly_xlsx [CROSS_TC_LE_BP],,
+VJDJSJSGMRWTIK-UHFFFAOYSA-N,CC(CCC(CCC(C)CC(C)(C)C)CCC(C)CC(C)(C)C)CC(C)(C)C,778.0,anomaly_xlsx [CROSS_TC_LE_BP],,
+ZMRQKNNNZMSHKH-UHFFFAOYSA-N,CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC(C)C,910.0,anomaly_xlsx [CROSS_TC_LE_BP],,
+GGSUDEKGRQXJSB-UHFFFAOYSA-N,CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC(C)CC,855.0,anomaly_xlsx [CROSS_TC_LE_BP],,
+HRSSMXMUGSEGEK-UHFFFAOYSA-N,CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC(C)C,920.0,anomaly_xlsx [CROSS_TC_LE_BP],,
+IRHTZOCLLONTOC-UHFFFAOYSA-N,CCCCCCCCCCCCCCCCCCCCCCCCCCO,832.0,anomaly_xlsx [CROSS_TC_LE_BP],,
+VFLWKHBYVIUAMP-UHFFFAOYSA-N,CCCCCCCCCCCCCCCCCCN(C)CCCCCCCCCCCCCCCCCC,954.0,anomaly_xlsx [CROSS_TC_LE_BP],,
+PZFYOFFTIYJCEW-UHFFFAOYSA-N,CCCCCCCCCCCCCNCCCCCCCCCCCCC,820.0,anomaly_xlsx [CROSS_TC_LE_BP],,
+MVPBDIVGGSONRL-UHFFFAOYSA-N,CCCCCCCCCCCC[C+](CCCCCCCCCCCC)CCCCCCCCCCCC,947.0,anomaly_xlsx [DQ_NET_CHARGE_BULK],,
+UZZYXUGECOQHPU-UHFFFAOYSA-M,CCCCCCCCOS(=O)(=O)[O-],813.0,anomaly_xlsx [DQ_NET_CHARGE_BULK],,
+WMZNGTSLFSJHMZ-UHFFFAOYSA-M,COC(=O)c1cccc(C(=O)[O-])c1,798.0,anomaly_xlsx [DQ_NET_CHARGE_BULK],,
+AENJTSIUESOIDF-UHFFFAOYSA-N,COC([O-])([O-])[O-],550.0,anomaly_xlsx [DQ_NET_CHARGE_BULK],,
+PXGOKWXKJXAPGV-UHFFFAOYSA-N,FF,144.0993825,anomaly_xlsx [CROSS_TC_LE_BP],,
+UJMWVICAENGCRF-UHFFFAOYSA-N,FOF,213.5,anomaly_xlsx [CROSS_TC_LE_BP],,
+HULXUCFFUOXQPW-UHFFFAOYSA-N,F[C-]1C(F)(F)C(F)(F)C(F)(F)C1(F)F,460.0,anomaly_xlsx [DQ_NET_CHARGE_BULK],,
+WDXYVJKNSMILOQ-UHFFFAOYSA-N,O=S1OCCO1,442.1,anomaly_xlsx [CROSS_TC_LE_BP],,
+HYZJCKYKOHLVJF-UHFFFAOYSA-N,c1ccc2[nH]cnc2c1,497.0,anomaly_xlsx [CROSS_TC_LE_BP],,
+,,,suspected QSPR extrapolation artifact: Tc > 2500 K exceeds reliable experimental range for macrocycles (calixarenes) — likely unphysical,CC(C)(C)c1cc2c(O)c(c1)Cc1cc(C(C)(C)C)cc(c1O)Cc1cc(C(C)(C)C)cc(c1O)Cc1cc(C(C)(C)C)cc(c1O)Cc1cc(C(C)(C)C)cc(c1O)Cc1cc(C(C)(C)C)cc(c1O)C2,2607.0
+,,,suspected QSPR extrapolation artifact: Tc > 2500 K exceeds reliable experimental range for macrocycles (calixarenes) — likely unphysical,CC(C)(C)c1cc2c(O)c(c1)Cc1cc(C(C)(C)C)cc(c1O)Cc1cc(C(C)(C)C)cc(c1O)Cc1cc(C(C)(C)C)cc(c1O)Cc1cc(C(C)(C)C)cc(c1O)Cc1cc(C(C)(C)C)cc(c1O)Cc1cc(C(C)(C)C)cc(c1O)Cc1cc(C(C)(C)C)cc(c1O)C2,3225.0
+,,,suspected QSPR extrapolation artifact: Tc > 2500 K exceeds reliable experimental range for macrocycles (calixarenes) — likely unphysical,CCCCCCCCCCCCCCCC(=O)OCC(COC(=O)CCCCCCCCCCCCCCC)OC(=O)Cc1ccccc1,2577.0
+,,,suspected QSPR extrapolation artifact: Tc > 2500 K exceeds reliable experimental range for macrocycles (calixarenes) — likely unphysical,O=CC(O)C(O)C(OC1OC(CO)C(OC2OC(CO)C(OC3OC(CO)C(OC4OC(CO)C(O)C(O)C4O)C(O)C3O)C(O)C2O)C(O)C1O)C(O)CO,2789.0

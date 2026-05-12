@@ -1,1 +1,2 @@
-
+inchikey,canonical_smiles,target,reason
+YPGCWEMNNLXISK-UHFFFAOYSA-M,CC(C(=O)[O-])c1ccccc1,534.15,anomaly_xlsx [DQ_NET_CHARGE_BULK]

@@ -68,7 +68,9 @@ EPOCHS_LARGE=${EPOCHS_LARGE:-200}
 EPOCHS_SMALL=${EPOCHS_SMALL:-150}
 EARLY_STOP_PATIENCE=${EARLY_STOP_PATIENCE:-100}
 LR=${LR:-3e-4}
-BATCH=${BATCH:-64}
+BATCH=${BATCH:-64}                              # CV training batch
+SAMPLE_BATCH=${SAMPLE_BATCH:-$BATCH}            # conformer-sampling batch (Stage B)
+EXTRACT_BATCH=${EXTRACT_BATCH:-$BATCH}          # H-cache extraction batch (Stage B.5 / C)
 
 # Pre-computed CV split directory (for 0511 audited data). When set,
 # downstream_cv.py loads fold assignments directly from
@@ -97,10 +99,18 @@ done
 
 _hdr() { echo; echo "============================================================"; echo "[$(date +'%F %T')]  $1"; echo "============================================================"; }
 
-# Discover datasets
+# Discover datasets — optional comma-separated whitelist via DATASETS_FILTER
+DATASETS_FILTER=${DATASETS_FILTER:-}
 DATASETS_CSV=()
 for f in "$INPUT_DIR"/*.csv; do
-    [[ "$(basename "$f")" == *report* ]] && continue
+    _bn=$(basename "$f" .csv)
+    [[ "$_bn" == *report* ]] && continue
+    if [[ -n "$DATASETS_FILTER" ]]; then
+        case ",$DATASETS_FILTER," in
+            *",$_bn,"*) ;;
+            *) continue ;;
+        esac
+    fi
     DATASETS_CSV+=("$f")
 done
 echo "Datasets (${#DATASETS_CSV[@]}):"
@@ -178,7 +188,7 @@ else
                     --ckpt "$_ck" --config "$_cf" \
                     --input "$_smi" --output "$_pkl" \
                     --n_confs "$_keff" --n_steps "$_steps" \
-                    --batch_size $BATCH --postprocess none \
+                    --batch_size $SAMPLE_BATCH --postprocess none \
                     >> "$LOG_DIR/${RUN_TAG}_${_lbl}_${_name}_${_tag}.log" 2>&1 &
             else  # multistep — rest uses ':' internally: "n_traj:n_steps:snap1 snap2 ..."
                 IFS=':' read -r _n_traj _n_steps _snaps <<< "$_rest"
@@ -187,7 +197,7 @@ else
                     --input "$_smi" --output "$_pkl" \
                     --n_traj "$_n_traj" --n_steps "$_n_steps" \
                     --snapshot_steps $_snaps \
-                    --batch_size $BATCH \
+                    --batch_size $SAMPLE_BATCH \
                     >> "$LOG_DIR/${RUN_TAG}_${_lbl}_${_name}_${_tag}.log" 2>&1 &
             fi
         }
@@ -267,6 +277,7 @@ else
             OUT_ROOT=$OUT_ROOT OUT_SUFFIX=$_sfx \
             CKPT=$_ck CONFIG=$_cf INIT_FROM_THERMO=$_init \
             HEAD_HIDDEN=$HEAD_HIDDEN N_MP_LAYERS=$N_MP_LAYERS MP_N_HEADS=$MP_N_HEADS \
+            BATCH=$BATCH EXTRACT_BATCH=$EXTRACT_BATCH \
             ONLY_DATASETS=$_ds H_CACHE_DIR=$_pt WANDB=0 \
                 bash scripts/run_downstream_pipeline.sh --extract-only \
                 >> "$LOG_DIR/${RUN_TAG}_extract_${_sfx}_${_ds}.log" 2>&1 &
@@ -352,7 +363,7 @@ else
             BASE_GPU=$_gpu SLEEP_HOURS=0 \
             K=$_k EPOCHS=$EPOCHS EARLY_STOP_PATIENCE=$EARLY_STOP_PATIENCE \
             AUTO_EPOCHS=$AUTO_EPOCHS EPOCHS_LARGE=$EPOCHS_LARGE EPOCHS_SMALL=$EPOCHS_SMALL \
-            LR=$LR BATCH=$BATCH N_GPUS=1 \
+            LR=$LR BATCH=$BATCH EXTRACT_BATCH=$EXTRACT_BATCH N_GPUS=1 \
             INPUT_DIR=$INPUT_DIR PKL_DIR=$_pkl PT_DIR=$_pt \
             OUT_ROOT=$OUT_ROOT OUT_SUFFIX=$_sfx \
             CKPT=$_ck CONFIG=$_cf INIT_FROM_THERMO=$_init \

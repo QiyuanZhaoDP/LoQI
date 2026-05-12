@@ -1,7 +1,8 @@
-SMILES,TARGET,reason
-CN(C)C,2.44,fatal: numeric error or wrong phase at RT (solid/gas in liquid dielectric dataset)
-CNC,5.26,fatal: numeric error or wrong phase at RT (solid/gas in liquid dielectric dataset)
-CNC(C)=O,3.97,fatal: numeric error or wrong phase at RT (solid/gas in liquid dielectric dataset)
-N#CC#N,2.6,fatal: numeric error or wrong phase at RT (solid/gas in liquid dielectric dataset)
-O=S(=O)(Cl)c1ccc(S(=O)(=O)C(F)(F)F)cc1,4.72,fatal: numeric error or wrong phase at RT (solid/gas in liquid dielectric dataset)
-OCC(O)C(O)C(O)C(O)CO,3.0,fatal: numeric error or wrong phase at RT (solid/gas in liquid dielectric dataset)
+inchikey,canonical_smiles,target,reason,SMILES,TARGET
+RBRFCXLDKIAJKD-UHFFFAOYSA-O,CCCCn1cc(O)o[n+]1=O,52.8,anomaly_xlsx [DQ_NET_CHARGE_BULK],,
+,,,fatal: numeric error or wrong phase at RT (solid/gas in liquid dielectric dataset),CN(C)C,2.44
+,,,fatal: numeric error or wrong phase at RT (solid/gas in liquid dielectric dataset),CNC,5.26
+,,,fatal: numeric error or wrong phase at RT (solid/gas in liquid dielectric dataset),CNC(C)=O,3.97
+,,,fatal: numeric error or wrong phase at RT (solid/gas in liquid dielectric dataset),N#CC#N,2.6
+,,,fatal: numeric error or wrong phase at RT (solid/gas in liquid dielectric dataset),O=S(=O)(Cl)c1ccc(S(=O)(=O)C(F)(F)F)cc1,4.72
+,,,fatal: numeric error or wrong phase at RT (solid/gas in liquid dielectric dataset),OCC(O)C(O)C(O)C(O)CO,3.0

@@ -181,6 +181,48 @@ MANUAL_REMOVALS: dict[str, dict] = {
 # Helpers
 # ---------------------------------------------------------------------------
 
+DEFAULT_ANOMALY_XLSX = "downstream_ft/0511_cc_audit/combined_science_anomaly_report.xlsx"
+DEFAULT_KEEP_RULES = "STAT_EXTREME_TUKEY"  # distribution-tail outliers — kept
+
+
+def load_anomaly_blacklist(
+    xlsx_path: Path, keep_rule_ids: set[str]
+) -> dict[str, dict[tuple[str, float], list[str]]]:
+    """Load `combined_science_anomaly_report.xlsx` → per-sheet blacklist.
+
+    Returns ``{sheet: {(canonical_smiles, round(target, 6)): [rule_ids]}}``.
+    Rows whose Rule_ID is in ``keep_rule_ids`` are skipped (kept in data).
+    """
+    if not xlsx_path.exists():
+        print(f"  [anomaly] xlsx not found: {xlsx_path} — skipping anomaly removal")
+        return {}
+    df = pd.read_excel(xlsx_path, sheet_name="Anomaly_List")
+    blacklist: dict[str, dict[tuple[str, float], list[str]]] = {}
+    n_kept_rule = 0
+    n_unparseable = 0
+    for _, row in df.iterrows():
+        rule = str(row["Rule_ID"])
+        if rule in keep_rule_ids:
+            n_kept_rule += 1
+            continue
+        smi_raw = str(row["SMILES"]).strip()
+        tgt = row["TARGET"]
+        if pd.isna(tgt) or not smi_raw or smi_raw.lower() in ("nan", "none"):
+            continue
+        mol = Chem.MolFromSmiles(smi_raw)
+        if mol is None:
+            n_unparseable += 1
+            continue
+        canon = Chem.MolToSmiles(mol, isomericSmiles=True)
+        key = (canon, round(float(tgt), 6))
+        sheet = str(row["Sheet"])
+        blacklist.setdefault(sheet, {}).setdefault(key, []).append(rule)
+    n_blacklisted = sum(len(v) for v in blacklist.values())
+    print(f"  [anomaly] loaded {n_blacklisted} anomalies across {len(blacklist)} sheets "
+          f"({n_kept_rule} kept as distribution-tail, {n_unparseable} unparseable)")
+    return blacklist
+
+
 def newest_data_csv(folder: Path, glob: str | None) -> Path | None:
     """Return the newest Data_YYYYMMDD_*.csv in folder.
     If glob is given, only files whose name contains that substring qualify.
@@ -293,6 +335,7 @@ def audit_one(
     outlier_rel: float,
     knn_k: int,
     knn_z: float,
+    anomaly_set: dict[tuple[str, float], list[str]] | None = None,
 ) -> dict:
 
     # --- Find newest Data_*.csv ---
@@ -307,7 +350,7 @@ def audit_one(
     n_raw = len(df)
 
     # --- Step 1: SMILES validation ---
-    n_empty = n_unparse = n_radical = n_disconnect = n_bad_elem = n_bad_charge = 0
+    n_empty = n_unparse = n_radical = n_disconnect = n_bad_elem = n_bad_charge = n_isotope = 0
     bad_elem_counter: dict[str, int] = {}
     valid_rows, inchikeys, canons = [], [], []
 
@@ -320,6 +363,11 @@ def audit_one(
             n_unparse += 1; continue
         if any(a.GetNumRadicalElectrons() > 0 for a in mol.GetAtoms()):
             n_radical += 1; continue
+        # Reject any explicit isotope (e.g. [2H], [13C]) — InChIKey collapses
+        # them with the parent atom so they otherwise sneak through and risk
+        # introducing a near-duplicate with a conflicting label.
+        if any(a.GetIsotope() != 0 for a in mol.GetAtoms()):
+            n_isotope += 1; continue
         canon = Chem.MolToSmiles(mol, isomericSmiles=True)
         if "." in canon:
             n_disconnect += 1; continue
@@ -347,6 +395,31 @@ def audit_one(
         vdf.loc[~mask_pos, "__tgt"] = np.nan  # drop non-positive before log10
     vdf = vdf.dropna(subset=["__tgt"]).reset_index(drop=True)
     n_after_smi = len(vdf)
+
+    # --- Step 1.5: Drop xlsx anomalies (non-distribution-outlier types) ---
+    # Match by (canonical SMILES, round(target,6)). Distribution-tail outliers
+    # (STAT_EXTREME_TUKEY) are pre-filtered out of anomaly_set by the loader,
+    # so anything that lands here is a real defect (charge, isotope, cross-
+    # sheet inconsistency) flagged in combined_science_anomaly_report.xlsx.
+    n_anomaly = 0
+    anomaly_rows: list[dict] = []
+    if anomaly_set:
+        keys = list(zip(vdf["__canon"], vdf["__tgt"].round(6)))
+        drop_mask = pd.Series([k in anomaly_set for k in keys], index=vdf.index)
+        n_anomaly = int(drop_mask.sum())
+        if n_anomaly:
+            adf = vdf[drop_mask]
+            for _, row in adf.iterrows():
+                key = (row["__canon"], round(float(row["__tgt"]), 6))
+                rules = anomaly_set.get(key, [])
+                anomaly_rows.append({
+                    "inchikey": row["__ik"],
+                    "canonical_smiles": row["__canon"],
+                    "target": float(row["__tgt"]),
+                    "reason": f"anomaly_xlsx [{','.join(sorted(set(rules)))}]",
+                    **{ec: row.get(ec) for ec in extra_cols if ec in row.index},
+                })
+            vdf = vdf[~drop_mask].reset_index(drop=True)
 
     # --- Step 2: Hard limits ---
     ok = pd.Series(True, index=vdf.index)
@@ -492,6 +565,7 @@ def audit_one(
     cleaned.to_csv(clean_dir / f"{name}.csv", index=False)
 
     removed_all = []
+    removed_all.extend(anomaly_rows)
     for _, row in hard_removed.iterrows():
         removed_all.append({
             "inchikey": row["__ik"], "canonical_smiles": row["__canon"],
@@ -506,10 +580,10 @@ def audit_one(
         pd.DataFrame(physics_extreme_rows).to_csv(
             outlier_dir / f"{name}_physics_extreme.csv", index=False)
 
-    n_smi_drop = n_empty + n_unparse + n_radical + n_disconnect + n_bad_elem + n_bad_charge
+    n_smi_drop = n_empty + n_unparse + n_radical + n_isotope + n_disconnect + n_bad_elem + n_bad_charge
     print(f"  source: {csv_path.name}")
-    print(f"  raw={n_raw:,}  smi_drop={n_smi_drop}  hard_drop={n_hard}  "
-          f"ik_drop={n_ik_removed}  ik_agg={n_agg}  "
+    print(f"  raw={n_raw:,}  smi_drop={n_smi_drop}  anom_drop={n_anomaly}  "
+          f"hard_drop={n_hard}  ik_drop={n_ik_removed}  ik_agg={n_agg}  "
           f"knn_flag={n_flagged}  isolated={n_isolated}  → final={len(cleaned):,}")
     if bad_elem_counter:
         print(f"  bad elements: " +
@@ -528,10 +602,12 @@ def audit_one(
         "log10_transform": log10_transform,
         "n_raw": n_raw,
         "n_empty": n_empty, "n_unparseable": n_unparse,
-        "n_radical": n_radical, "n_disconnected": n_disconnect,
+        "n_radical": n_radical, "n_isotope": n_isotope,
+        "n_disconnected": n_disconnect,
         "n_bad_elements": n_bad_elem, "n_bad_charge": n_bad_charge,
         "bad_elements": bad_elem_counter,
         "n_after_smi": n_after_smi,
+        "n_anomaly_removed": n_anomaly,
         "hard_limits": {"lo": lo, "hi": hi},
         "n_hard_removed": n_hard,
         "outlier_rel": outlier_rel,
@@ -650,6 +726,14 @@ def main():
     ap.add_argument("--knn-z", type=float, default=3.0)
     ap.add_argument("--skip-split",  action="store_true",
                     help="Skip CV split generation.")
+    ap.add_argument("--anomaly-xlsx", default=DEFAULT_ANOMALY_XLSX,
+                    help="Path to combined_science_anomaly_report.xlsx; rows in "
+                         "its Anomaly_List whose Rule_ID is NOT in --keep-anomaly-"
+                         "rules are dropped. Pass '' to disable.")
+    ap.add_argument("--keep-anomaly-rules", default=DEFAULT_KEEP_RULES,
+                    help="Comma-separated Rule_IDs from the xlsx that should be "
+                         "kept (not removed). Default: STAT_EXTREME_TUKEY "
+                         "(distribution-tail outliers).")
     args = ap.parse_args()
 
     src     = Path(args.src)
@@ -668,9 +752,18 @@ def main():
 
     all_stats: list[dict] = []
 
+    # Load anomaly blacklist once
+    keep_rules = {r.strip() for r in args.keep_anomaly_rules.split(",") if r.strip()}
+    anomaly_blacklist: dict[str, dict[tuple[str, float], list[str]]] = {}
+    if args.anomaly_xlsx:
+        anomaly_blacklist = load_anomaly_blacklist(Path(args.anomaly_xlsx), keep_rules)
+
     print("=" * 72)
     print(f"Auditing {src}  →  {out}")
     print(f"  outlier_rel={args.outlier_rel}  knn_k={args.knn_k}  knn_z={args.knn_z}")
+    if args.anomaly_xlsx:
+        print(f"  anomaly_xlsx={args.anomaly_xlsx}")
+        print(f"  keep_anomaly_rules={sorted(keep_rules)}")
     print("=" * 72)
 
     for (folder, name, file_glob, lo, hi, tgt_col_ov, extra_cols, log10_t) in DATASETS:
@@ -694,6 +787,7 @@ def main():
                 outlier_rel=args.outlier_rel,
                 knn_k=args.knn_k,
                 knn_z=args.knn_z,
+                anomaly_set=anomaly_blacklist.get(name),
             )
             all_stats.append(stats)
         except Exception as e:
@@ -751,11 +845,13 @@ def main():
     total_removed = 0
     for st in all_stats:
         n_smi   = (st["n_empty"] + st["n_unparseable"] + st["n_radical"] +
+                   st.get("n_isotope", 0) +
                    st["n_disconnected"] + st["n_bad_elements"] + st["n_bad_charge"])
+        n_anom  = st.get("n_anomaly_removed", 0)
         n_hard  = st["n_hard_removed"]
         n_ik    = st["n_ik_removed"]
         n_man   = st.get("n_manual_removed", 0)
-        n_total = n_smi + n_hard + n_ik + n_man
+        n_total = n_smi + n_anom + n_hard + n_ik + n_man
         total_removed += n_total
         if n_total == 0:
             continue
@@ -766,6 +862,7 @@ def main():
             if st["n_empty"]:      breakdown.append(f"empty={st['n_empty']}")
             if st["n_unparseable"]:breakdown.append(f"unparseable={st['n_unparseable']}")
             if st["n_radical"]:    breakdown.append(f"radical={st['n_radical']}")
+            if st.get("n_isotope"):breakdown.append(f"isotope={st['n_isotope']}")
             if st["n_disconnected"]:breakdown.append(f"disconnected={st['n_disconnected']}")
             if st["n_bad_elements"]:
                 be = ",".join(f"{e}:{c}" for e,c in
@@ -773,6 +870,8 @@ def main():
                 breakdown.append(f"bad_elem={st['n_bad_elements']}({be})")
             if st["n_bad_charge"]: breakdown.append(f"bad_charge={st['n_bad_charge']}")
             print(f"    SMILES validation : {n_smi:4d}  — {', '.join(breakdown)}")
+        if n_anom:
+            print(f"    Anomaly xlsx      : {n_anom:4d}  — rows in Anomaly_List ≠ STAT_EXTREME_TUKEY")
         if n_hard:
             lo, hi = st["hard_limits"]["lo"], st["hard_limits"]["hi"]
             print(f"    Hard limits       : {n_hard:4d}  — target outside [{lo}, {hi}]")
@@ -806,17 +905,19 @@ def main():
     print("\n" + "=" * W)
     print("DATASET TABLE")
     print("=" * W)
-    print(f"  {'name':<22s}  {'raw':>7s}  {'smi':>5s}  {'hard':>5s}  "
+    print(f"  {'name':<22s}  {'raw':>7s}  {'smi':>5s}  {'anom':>5s}  {'hard':>5s}  "
           f"{'ik_rm':>6s}  {'ik_ag':>5s}  {'manual':>7s}  {'final':>7s}")
-    print("  " + "-" * 78)
+    print("  " + "-" * 86)
     for st in all_stats:
         n_smi = (st["n_empty"] + st["n_unparseable"] + st["n_radical"] +
+                 st.get("n_isotope", 0) +
                  st["n_disconnected"] + st["n_bad_elements"] + st["n_bad_charge"])
         print(f"  {st['name']:<22s}  {st['n_raw']:>7,}  {n_smi:>5,}  "
+              f"{st.get('n_anomaly_removed',0):>5,}  "
               f"{st['n_hard_removed']:>5,}  {st['n_ik_removed']:>6,}  "
               f"{st['n_ik_aggregated']:>5,}  {st.get('n_manual_removed',0):>7,}  "
               f"{st['n_final']:>7,}")
-    print("  " + "=" * 78)
+    print("  " + "=" * 86)
 
     report = {
         "generated": datetime.now().isoformat(timespec="seconds"),
@@ -826,6 +927,8 @@ def main():
             "outlier_rel": args.outlier_rel,
             "knn_k": args.knn_k,
             "knn_z": args.knn_z,
+            "anomaly_xlsx": args.anomaly_xlsx,
+            "keep_anomaly_rules": sorted(keep_rules),
         },
         "datasets": all_stats,
     }

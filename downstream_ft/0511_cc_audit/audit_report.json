@@ -1,11 +1,15 @@
 {
-  "generated": "2026-05-12T10:01:34",
+  "generated": "2026-05-12T18:02:27",
   "src": "downstream_ft/0511",
   "out": "downstream_ft/0511_cc_audit",
   "params": {
     "outlier_rel": 0.3,
     "knn_k": 20,
-    "knn_z": 3.0
+    "knn_z": 3.0,
+    "anomaly_xlsx": "/Users/zhao922/Downloads/combined_science_anomaly_report.xlsx",
+    "keep_anomaly_rules": [
+      "STAT_EXTREME_TUKEY"
+    ]
   },
   "datasets": [
     {
@@ -16,11 +20,13 @@
       "n_empty": 0,
       "n_unparseable": 0,
       "n_radical": 0,
+      "n_isotope": 0,
       "n_disconnected": 0,
       "n_bad_elements": 0,
       "n_bad_charge": 0,
       "bad_elements": {},
       "n_after_smi": 1496,
+      "n_anomaly_removed": 0,
       "hard_limits": {
         "lo": -5.0,
         "hi": 25.0
@@ -49,11 +55,13 @@
       "n_empty": 0,
       "n_unparseable": 0,
       "n_radical": 0,
+      "n_isotope": 0,
       "n_disconnected": 0,
       "n_bad_elements": 0,
       "n_bad_charge": 0,
       "bad_elements": {},
       "n_after_smi": 692,
+      "n_anomaly_removed": 0,
       "hard_limits": {
         "lo": -20.0,
         "hi": -5.0
@@ -82,11 +90,13 @@
       "n_empty": 0,
       "n_unparseable": 0,
       "n_radical": 0,
+      "n_isotope": 0,
       "n_disconnected": 0,
       "n_bad_elements": 0,
       "n_bad_charge": 0,
       "bad_elements": {},
       "n_after_smi": 595,
+      "n_anomaly_removed": 0,
       "hard_limits": {
         "lo": null,
         "hi": null
@@ -115,11 +125,13 @@
       "n_empty": 0,
       "n_unparseable": 0,
       "n_radical": 0,
+      "n_isotope": 0,
       "n_disconnected": 0,
       "n_bad_elements": 0,
       "n_bad_charge": 0,
       "bad_elements": {},
       "n_after_smi": 1963,
+      "n_anomaly_removed": 0,
       "hard_limits": {
         "lo": 0.0,
         "hi": null
@@ -149,6 +161,7 @@
       "n_empty": 0,
       "n_unparseable": 0,
       "n_radical": 4,
+      "n_isotope": 2,
       "n_disconnected": 0,
       "n_bad_elements": 7,
       "n_bad_charge": 0,
@@ -158,15 +171,16 @@
         "Ar": 1,
         "He": 1
       },
-      "n_after_smi": 10740,
+      "n_after_smi": 10738,
+      "n_anomaly_removed": 6,
       "hard_limits": {
         "lo": 100.0,
         "hi": null
       },
       "n_hard_removed": 0,
       "outlier_rel": 0.3,
-      "sigma_global": 1435.205903,
-      "threshold_abs": 430.561771,
+      "sigma_global": 1423.75407,
+      "threshold_abs": 427.126221,
       "n_ik_removed": 0,
       "n_ik_aggregated": 0,
       "knn_params": {
@@ -174,10 +188,10 @@
         "z_thresh": 3.0,
         "iso_thresh": 0.2
       },
-      "n_knn_flagged": 138,
-      "n_physics_extreme": 13,
+      "n_knn_flagged": 144,
+      "n_physics_extreme": 12,
       "n_isolated": 12,
-      "n_final": 10740
+      "n_final": 10732
     },
     {
       "name": "Tc",
@@ -187,6 +201,7 @@
       "n_empty": 0,
       "n_unparseable": 0,
       "n_radical": 5,
+      "n_isotope": 2,
       "n_disconnected": 0,
       "n_bad_elements": 10,
       "n_bad_charge": 0,
@@ -198,15 +213,16 @@
         "He": 1,
         "Kr": 1
       },
-      "n_after_smi": 10935,
+      "n_after_smi": 10933,
+      "n_anomaly_removed": 20,
       "hard_limits": {
         "lo": 0.0,
         "hi": null
       },
       "n_hard_removed": 0,
       "outlier_rel": 0.3,
-      "sigma_global": 168.743539,
-      "threshold_abs": 50.623062,
+      "sigma_global": 168.445376,
+      "threshold_abs": 50.533613,
       "n_ik_removed": 0,
       "n_ik_aggregated": 0,
       "knn_params": {
@@ -214,10 +230,10 @@
         "z_thresh": 3.0,
         "iso_thresh": 0.2
       },
-      "n_knn_flagged": 86,
-      "n_physics_extreme": 63,
+      "n_knn_flagged": 98,
+      "n_physics_extreme": 51,
       "n_isolated": 10,
-      "n_final": 10931,
+      "n_final": 10909,
       "n_manual_removed": 4
     },
     {
@@ -228,11 +244,13 @@
       "n_empty": 0,
       "n_unparseable": 0,
       "n_radical": 1,
+      "n_isotope": 0,
       "n_disconnected": 0,
       "n_bad_elements": 0,
       "n_bad_charge": 0,
       "bad_elements": {},
       "n_after_smi": 565,
+      "n_anomaly_removed": 0,
       "hard_limits": {
         "lo": 0.0,
         "hi": null
@@ -255,27 +273,29 @@
     },
     {
       "name": "ESOL",
-      "source": "downstream_ft/0511/ESOL/Clean/Data_20260508_ESOL.csv",
+      "source": "downstream_ft/0511/ESOL/Clean/Data_20260512_ESOL.csv",
       "log10_transform": false,
-      "n_raw": 1128,
+      "n_raw": 1115,
       "n_empty": 0,
       "n_unparseable": 0,
       "n_radical": 0,
+      "n_isotope": 0,
       "n_disconnected": 0,
       "n_bad_elements": 0,
       "n_bad_charge": 0,
       "bad_elements": {},
-      "n_after_smi": 1128,
+      "n_after_smi": 1115,
+      "n_anomaly_removed": 0,
       "hard_limits": {
         "lo": -15.0,
         "hi": 3.0
       },
       "n_hard_removed": 0,
       "outlier_rel": 0.3,
-      "sigma_global": 1.014379,
-      "threshold_abs": 0.304314,
-      "n_ik_removed": 2,
-      "n_ik_aggregated": 10,
+      "sigma_global": 2.094178,
+      "threshold_abs": 0.628253,
+      "n_ik_removed": 0,
+      "n_ik_aggregated": 0,
       "knn_params": {
         "k": 20,
         "z_thresh": 3.0,
@@ -284,7 +304,7 @@
       "n_knn_flagged": 4,
       "n_physics_extreme": 0,
       "n_isolated": 15,
-      "n_final": 1116
+      "n_final": 1115
     },
     {
       "name": "Lipophilicity",
@@ -294,11 +314,13 @@
       "n_empty": 0,
       "n_unparseable": 0,
       "n_radical": 0,
+      "n_isotope": 0,
       "n_disconnected": 1,
       "n_bad_elements": 0,
       "n_bad_charge": 0,
       "bad_elements": {},
       "n_after_smi": 4199,
+      "n_anomaly_removed": 0,
       "hard_limits": {
         "lo": -10.0,
         "hi": 12.0
@@ -327,20 +349,22 @@
       "n_empty": 0,
       "n_unparseable": 0,
       "n_radical": 1,
+      "n_isotope": 1,
       "n_disconnected": 0,
       "n_bad_elements": 7,
       "n_bad_charge": 0,
       "bad_elements": {
         "Ge": 7
       },
-      "n_after_smi": 8271,
+      "n_after_smi": 8270,
+      "n_anomaly_removed": 0,
       "hard_limits": {
         "lo": 1.0,
         "hi": 2.0
       },
       "n_hard_removed": 0,
       "outlier_rel": 0.3,
-      "sigma_global": 0.062384,
+      "sigma_global": 0.062385,
       "threshold_abs": 0.018715,
       "n_ik_removed": 0,
       "n_ik_aggregated": 0,
@@ -349,19 +373,20 @@
         "z_thresh": 3.0,
         "iso_thresh": 0.2
       },
-      "n_knn_flagged": 100,
-      "n_physics_extreme": 16,
+      "n_knn_flagged": 99,
+      "n_physics_extreme": 14,
       "n_isolated": 2,
-      "n_final": 8271
+      "n_final": 8270
     },
     {
       "name": "Solubility_water",
-      "source": "downstream_ft/0511/Solubility/Clean/Data_20260509_Solubility_water.csv",
+      "source": "downstream_ft/0511/Solubility/Clean/Data_20260512_Solubility_water.csv",
       "log10_transform": false,
-      "n_raw": 11059,
+      "n_raw": 11330,
       "n_empty": 0,
       "n_unparseable": 0,
       "n_radical": 5,
+      "n_isotope": 0,
       "n_disconnected": 0,
       "n_bad_elements": 2,
       "n_bad_charge": 0,
@@ -369,26 +394,27 @@
         "Te": 1,
         "Ge": 1
       },
-      "n_after_smi": 11052,
+      "n_after_smi": 11323,
+      "n_anomaly_removed": 0,
       "hard_limits": {
         "lo": -20.0,
         "hi": 5.0
       },
       "n_hard_removed": 0,
       "outlier_rel": 0.3,
-      "sigma_global": 2.212616,
-      "threshold_abs": 0.663785,
-      "n_ik_removed": 0,
-      "n_ik_aggregated": 1,
+      "sigma_global": 2.207651,
+      "threshold_abs": 0.662295,
+      "n_ik_removed": 4,
+      "n_ik_aggregated": 18,
       "knn_params": {
         "k": 20,
         "z_thresh": 3.0,
         "iso_thresh": 0.2
       },
-      "n_knn_flagged": 119,
+      "n_knn_flagged": 122,
       "n_physics_extreme": 8,
       "n_isolated": 5,
-      "n_final": 11051
+      "n_final": 11301
     },
     {
       "name": "Solubility_ethanol",
@@ -398,11 +424,13 @@
       "n_empty": 0,
       "n_unparseable": 0,
       "n_radical": 0,
+      "n_isotope": 0,
       "n_disconnected": 0,
       "n_bad_elements": 0,
       "n_bad_charge": 0,
       "bad_elements": {},
       "n_after_smi": 926,
+      "n_anomaly_removed": 0,
       "hard_limits": {
         "lo": -10.0,
         "hi": 5.0
@@ -431,11 +459,13 @@
       "n_empty": 0,
       "n_unparseable": 0,
       "n_radical": 1,
+      "n_isotope": 0,
       "n_disconnected": 0,
       "n_bad_elements": 0,
       "n_bad_charge": 1,
       "bad_elements": {},
       "n_after_smi": 1279,
+      "n_anomaly_removed": 0,
       "hard_limits": {
         "lo": -5000.0,
         "hi": 3000.0
@@ -464,19 +494,21 @@
       "n_empty": 0,
       "n_unparseable": 0,
       "n_radical": 0,
+      "n_isotope": 2,
       "n_disconnected": 0,
       "n_bad_elements": 0,
       "n_bad_charge": 0,
       "bad_elements": {},
-      "n_after_smi": 5978,
+      "n_after_smi": 5976,
+      "n_anomaly_removed": 16,
       "hard_limits": {
         "lo": -10000.0,
         "hi": 5000.0
       },
       "n_hard_removed": 0,
       "outlier_rel": 0.3,
-      "sigma_global": 449.868,
-      "threshold_abs": 134.9604,
+      "sigma_global": 449.933899,
+      "threshold_abs": 134.98017,
       "n_ik_removed": 0,
       "n_ik_aggregated": 0,
       "knn_params": {
@@ -484,10 +516,10 @@
         "z_thresh": 3.0,
         "iso_thresh": 0.2
       },
-      "n_knn_flagged": 87,
+      "n_knn_flagged": 81,
       "n_physics_extreme": 30,
-      "n_isolated": 19,
-      "n_final": 5978
+      "n_isolated": 17,
+      "n_final": 5960
     },
     {
       "name": "Hf_L",
@@ -497,19 +529,21 @@
       "n_empty": 0,
       "n_unparseable": 0,
       "n_radical": 0,
+      "n_isotope": 0,
       "n_disconnected": 0,
       "n_bad_elements": 0,
       "n_bad_charge": 0,
       "bad_elements": {},
       "n_after_smi": 4840,
+      "n_anomaly_removed": 50,
       "hard_limits": {
         "lo": -10000.0,
         "hi": 5000.0
       },
       "n_hard_removed": 0,
       "outlier_rel": 0.3,
-      "sigma_global": 455.21283,
-      "threshold_abs": 136.563849,
+      "sigma_global": 454.847047,
+      "threshold_abs": 136.454114,
       "n_ik_removed": 0,
       "n_ik_aggregated": 0,
       "knn_params": {
@@ -517,10 +551,10 @@
         "z_thresh": 3.0,
         "iso_thresh": 0.2
       },
-      "n_knn_flagged": 61,
-      "n_physics_extreme": 44,
+      "n_knn_flagged": 68,
+      "n_physics_extreme": 40,
       "n_isolated": 9,
-      "n_final": 4840
+      "n_final": 4790
     },
     {
       "name": "ST",
@@ -530,11 +564,13 @@
       "n_empty": 0,
       "n_unparseable": 0,
       "n_radical": 0,
+      "n_isotope": 0,
       "n_disconnected": 0,
       "n_bad_elements": 0,
       "n_bad_charge": 0,
       "bad_elements": {},
       "n_after_smi": 304,
+      "n_anomaly_removed": 0,
       "hard_limits": {
         "lo": 0.0,
         "hi": 0.15
@@ -563,6 +599,7 @@
       "n_empty": 0,
       "n_unparseable": 0,
       "n_radical": 3,
+      "n_isotope": 0,
       "n_disconnected": 0,
       "n_bad_elements": 7,
       "n_bad_charge": 0,
@@ -573,14 +610,15 @@
         "Xe": 4
       },
       "n_after_smi": 4468,
+      "n_anomaly_removed": 7,
       "hard_limits": {
         "lo": 0.0,
         "hi": null
       },
       "n_hard_removed": 0,
       "outlier_rel": 0.3,
-      "sigma_global": 97.762664,
-      "threshold_abs": 29.328799,
+      "sigma_global": 97.742171,
+      "threshold_abs": 29.322651,
       "n_ik_removed": 0,
       "n_ik_aggregated": 0,
       "knn_params": {
@@ -591,7 +629,7 @@
       "n_knn_flagged": 43,
       "n_physics_extreme": 4,
       "n_isolated": 16,
-      "n_final": 4468
+      "n_final": 4461
     },
     {
       "name": "Vcp",
@@ -601,19 +639,21 @@
       "n_empty": 0,
       "n_unparseable": 0,
       "n_radical": 3,
+      "n_isotope": 0,
       "n_disconnected": 0,
       "n_bad_elements": 0,
       "n_bad_charge": 0,
       "bad_elements": {},
       "n_after_smi": 1248,
+      "n_anomaly_removed": 4,
       "hard_limits": {
         "lo": 0.0,
         "hi": null
       },
       "n_hard_removed": 0,
       "outlier_rel": 0.3,
-      "sigma_global": 5.727151,
-      "threshold_abs": 1.718145,
+      "sigma_global": 5.735572,
+      "threshold_abs": 1.720672,
       "n_ik_removed": 0,
       "n_ik_aggregated": 0,
       "knn_params": {
@@ -621,10 +661,10 @@
         "z_thresh": 3.0,
         "iso_thresh": 0.2
       },
-      "n_knn_flagged": 10,
+      "n_knn_flagged": 11,
       "n_physics_extreme": 9,
       "n_isolated": 5,
-      "n_final": 1248
+      "n_final": 1244
     },
     {
       "name": "BP",
@@ -634,19 +674,21 @@
       "n_empty": 0,
       "n_unparseable": 0,
       "n_radical": 3,
+      "n_isotope": 1,
       "n_disconnected": 0,
       "n_bad_elements": 0,
       "n_bad_charge": 1,
       "bad_elements": {},
-      "n_after_smi": 6802,
+      "n_after_smi": 6801,
+      "n_anomaly_removed": 1,
       "hard_limits": {
         "lo": 50.0,
         "hi": 2000.0
       },
       "n_hard_removed": 0,
       "outlier_rel": 0.3,
-      "sigma_global": 92.118058,
-      "threshold_abs": 27.635418,
+      "sigma_global": 92.027002,
+      "threshold_abs": 27.6081,
       "n_ik_removed": 0,
       "n_ik_aggregated": 1,
       "knn_params": {
@@ -655,9 +697,9 @@
         "iso_thresh": 0.2
       },
       "n_knn_flagged": 63,
-      "n_physics_extreme": 39,
-      "n_isolated": 6,
-      "n_final": 6801
+      "n_physics_extreme": 41,
+      "n_isolated": 5,
+      "n_final": 6799
     },
     {
       "name": "de",
@@ -667,19 +709,21 @@
       "n_empty": 0,
       "n_unparseable": 0,
       "n_radical": 0,
+      "n_isotope": 0,
       "n_disconnected": 0,
       "n_bad_elements": 0,
       "n_bad_charge": 0,
       "bad_elements": {},
       "n_after_smi": 1493,
+      "n_anomaly_removed": 1,
       "hard_limits": {
         "lo": 0.0,
         "hi": null
       },
       "n_hard_removed": 0,
       "outlier_rel": 0.3,
-      "sigma_global": 16.698992,
-      "threshold_abs": 5.009698,
+      "sigma_global": 16.66989,
+      "threshold_abs": 5.000967,
       "n_ik_removed": 0,
       "n_ik_aggregated": 0,
       "knn_params": {
@@ -687,10 +731,10 @@
         "z_thresh": 3.0,
         "iso_thresh": 0.2
       },
-      "n_knn_flagged": 16,
+      "n_knn_flagged": 15,
       "n_physics_extreme": 16,
       "n_isolated": 7,
-      "n_final": 1487,
+      "n_final": 1486,
       "n_manual_removed": 6
     },
     {
@@ -701,11 +745,13 @@
       "n_empty": 0,
       "n_unparseable": 0,
       "n_radical": 0,
+      "n_isotope": 0,
       "n_disconnected": 0,
       "n_bad_elements": 0,
       "n_bad_charge": 1,
       "bad_elements": {},
       "n_after_smi": 641,
+      "n_anomaly_removed": 0,
       "hard_limits": {
         "lo": -40.0,
         "hi": 10.0
@@ -734,19 +780,21 @@
       "n_empty": 0,
       "n_unparseable": 0,
       "n_radical": 5,
+      "n_isotope": 3,
       "n_disconnected": 0,
       "n_bad_elements": 0,
       "n_bad_charge": 1,
       "bad_elements": {},
-      "n_after_smi": 1337,
+      "n_after_smi": 1334,
+      "n_anomaly_removed": 5,
       "hard_limits": {
         "lo": 0.0,
         "hi": null
       },
       "n_hard_removed": 0,
       "outlier_rel": 0.3,
-      "sigma_global": 0.023484,
-      "threshold_abs": 0.007045,
+      "sigma_global": 0.02355,
+      "threshold_abs": 0.007065,
       "n_ik_removed": 0,
       "n_ik_aggregated": 0,
       "knn_params": {
@@ -756,8 +804,8 @@
       },
       "n_knn_flagged": 30,
       "n_physics_extreme": 0,
-      "n_isolated": 5,
-      "n_final": 1337
+      "n_isolated": 4,
+      "n_final": 1329
     },
     {
       "name": "MP",
@@ -767,19 +815,21 @@
       "n_empty": 0,
       "n_unparseable": 0,
       "n_radical": 0,
+      "n_isotope": 0,
       "n_disconnected": 0,
       "n_bad_elements": 0,
       "n_bad_charge": 0,
       "bad_elements": {},
       "n_after_smi": 3038,
+      "n_anomaly_removed": 30,
       "hard_limits": {
         "lo": 20.0,
         "hi": 2000.0
       },
       "n_hard_removed": 0,
       "outlier_rel": 0.3,
-      "sigma_global": 95.955503,
-      "threshold_abs": 28.786651,
+      "sigma_global": 95.924174,
+      "threshold_abs": 28.777252,
       "n_ik_removed": 0,
       "n_ik_aggregated": 0,
       "knn_params": {
@@ -790,7 +840,7 @@
       "n_knn_flagged": 13,
       "n_physics_extreme": 7,
       "n_isolated": 11,
-      "n_final": 3038
+      "n_final": 3008
     },
     {
       "name": "AcuteToxicity",
@@ -800,11 +850,13 @@
       "n_empty": 0,
       "n_unparseable": 0,
       "n_radical": 0,
+      "n_isotope": 0,
       "n_disconnected": 0,
       "n_bad_elements": 0,
       "n_bad_charge": 0,
       "bad_elements": {},
       "n_after_smi": 7328,
+      "n_anomaly_removed": 0,
       "hard_limits": {
         "lo": 0.0,
         "hi": 8.0
@@ -833,11 +885,13 @@
       "n_empty": 0,
       "n_unparseable": 0,
       "n_radical": 0,
+      "n_isotope": 0,
       "n_disconnected": 0,
       "n_bad_elements": 0,
       "n_bad_charge": 0,
       "bad_elements": {},
       "n_after_smi": 892,
+      "n_anomaly_removed": 0,
       "hard_limits": {
         "lo": -10.0,
         "hi": -2.0
@@ -866,11 +920,13 @@
       "n_empty": 0,
       "n_unparseable": 0,
       "n_radical": 0,
+      "n_isotope": 0,
       "n_disconnected": 0,
       "n_bad_elements": 0,
       "n_bad_charge": 0,
       "bad_elements": {},
       "n_after_smi": 492,
+      "n_anomaly_removed": 0,
       "hard_limits": {
         "lo": 0.0,
         "hi": null
@@ -899,11 +955,13 @@
       "n_empty": 0,
       "n_unparseable": 0,
       "n_radical": 0,
+      "n_isotope": 0,
       "n_disconnected": 0,
       "n_bad_elements": 0,
       "n_bad_charge": 0,
       "bad_elements": {},
       "n_after_smi": 490,
+      "n_anomaly_removed": 0,
       "hard_limits": {
         "lo": 0.0,
         "hi": null
@@ -932,11 +990,13 @@
       "n_empty": 0,
       "n_unparseable": 0,
       "n_radical": 0,
+      "n_isotope": 0,
       "n_disconnected": 0,
       "n_bad_elements": 0,
       "n_bad_charge": 0,
       "bad_elements": {},
       "n_after_smi": 1412,
+      "n_anomaly_removed": 0,
       "hard_limits": {
         "lo": 0.0,
         "hi": 100.0
