@@ -1,0 +1,10 @@
+inchikey,canonical_smiles,target,knn_predicted,residual,residual_over_sigma,best_neighbour_tanimoto,reason
+PEDCQBHIVMGVHV-UHFFFAOYSA-N,OCC(O)CO,0.0625,0.0282,0.0343,5.45,0.462,high_residual: |res|>3.0σ (k=20)
+YPFDHNVEDLHUCE-UHFFFAOYSA-N,OCCCO,0.053125,0.0297,0.0234,3.72,0.5,high_residual: |res|>3.0σ (k=20)
+ZHNUHDYFZUAESO-UHFFFAOYSA-N,NC=O,0.05651,0.033,0.0235,3.73,0.333,high_residual: |res|>3.0σ (k=20)
+FFUAGWLWBBFQJT-UHFFFAOYSA-N,C[Si](C)(C)N[Si](C)(C)C,0.01816,0.0251,-0.007,1.11,0.167,isolated: best_sim=0.167<0.2
+RWNKSTSCBHKHTB-UHFFFAOYSA-N,ClC(Cl)=C(Cl)C(Cl)=C(Cl)Cl,0.034793,0.0266,0.0082,1.3,0.158,isolated: best_sim=0.158<0.2
+QGJOPFRUJISHPQ-UHFFFAOYSA-N,S=C=S,0.03129,0.0318,-0.0005,0.07,0.167,isolated: best_sim=0.167<0.2
+XLYOFNOQVPJJNP-UHFFFAOYSA-N,O,0.07197,0.0311,0.0409,6.49,0.167,isolated: best_sim=0.167<0.2
+OAKJQQAXSVQMHS-UHFFFAOYSA-N,NN,0.0685,0.0339,0.0346,5.5,0.167,isolated: best_sim=0.167<0.2
+HDZGCSFEDULWCS-UHFFFAOYSA-N,CNN,0.035,0.025,0.01,1.59,0.167,isolated: best_sim=0.167<0.2

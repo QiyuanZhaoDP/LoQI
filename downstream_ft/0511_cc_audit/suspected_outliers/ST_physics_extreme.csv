@@ -1,0 +1,3 @@
+inchikey,canonical_smiles,target,knn_predicted,residual,residual_over_sigma,best_neighbour_tanimoto,reason
+XLYOFNOQVPJJNP-UHFFFAOYSA-N,O,0.07197,0.0311,0.0409,6.49,0.167,physics_extreme: retained — follows known physical law
+OAKJQQAXSVQMHS-UHFFFAOYSA-N,NN,0.0685,0.0339,0.0346,5.5,0.167,physics_extreme: retained — follows known physical law

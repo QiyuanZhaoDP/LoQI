@@ -59,6 +59,13 @@ DATASETS = [
     ("Solubility/Clean",                         "Solubility_water",     "water",    -20.0,    5.0,    None,     [],         False),
     ("Solubility/Clean",                         "Solubility_ethanol",   "ethanol",  -10.0,    5.0,    None,     [],         False),
     # SolvationFreeEnergy removed from db
+    # ── Previously skipped, now included ──────────────────────────────────────
+    # Enthalpy of formation (kJ/mol); broad limits, extremes are real
+    ("EnthalpyofFormation_C/Clean",              "Hf_C",                 None,       -5000.0,  3000.0, None,     [],         False),
+    ("EnthalpyofFormation_G/Clean",              "Hf_G",                 None,       -10000.0, 5000.0, None,     [],         False),
+    ("EnthalpyofFormation_L/Clean",              "Hf_L",                 None,       -10000.0, 5000.0, None,     [],         False),
+    # Surface tension (N/m); must be positive; typical organics 0.01–0.07
+    ("SurfaceTension/Clean",                     "ST",                   None,        0.0,     0.15,   None,     [],         False),
     ("TriplePointTemp/Clean",                    "TPT",                  None,        0.0,     None,   None,     [],         False),
     ("Vcp/Clean",                                "Vcp",                  None,        0.0,     None,   None,     [],         False),
     ("bp/Clean",                                 "BP",                   None,        50.0,    2000.0, None,     [],         False),
@@ -122,6 +129,12 @@ PHYSICS_RETAIN: dict[str, callable] = {
     "Solubility_water":   lambda tgt: tgt < -12.0,
     "Solubility_ethanol": lambda tgt: tgt < -4.0,
     "freesolv":           lambda tgt: tgt < -20.0,
+    # Enthalpy of formation extremes — highly oxidized or strained compounds
+    "Hf_G":               lambda tgt: tgt < -2000.0 or tgt > 1500.0,
+    "Hf_L":               lambda tgt: tgt < -2000.0 or tgt > 800.0,
+    "Hf_C":               lambda tgt: tgt < -1500.0 or tgt > 500.0,
+    # Surface tension: high (>0.065 N/m, water-like polar) or low (<0.010, perfluoro)
+    "ST":                 lambda tgt: tgt > 0.065 or tgt < 0.010,
     # ADMET extremes — all physically justified
     "AcuteToxicity":      lambda tgt: tgt > 5.5,          # extremely toxic (LD50 < 3 μmol/kg)
     "CEP":                lambda tgt: tgt < -7.0 or tgt > -4.0,  # very low/high permeability
