@@ -6,7 +6,7 @@
 # SAMPLING_MODES format — one entry per mode:
 #   "standard|tag|keff|n_steps"
 #       Standard sampling: keff independent trajectories, 1 conformer each.
-#   "multistep|tag|keff|n_traj|n_steps|snap1 snap2 snap3"
+#   "multistep|tag|keff|n_traj:n_steps:snap1 snap2 snap3"   ← ':' inside rest
 #       Multi-snapshot: n_traj trajectories × len(snaps) snapshots = keff conformers.
 #   "reuse|tag|keff|source_tag"
 #       No sampling. Borrows source_tag's pkl with MAX_K_PER_INPUT=keff cap.
@@ -47,9 +47,11 @@ CKPT_DEFS=(
 
 # SAMPLING_MODES: see format at top of file.
 # K8 + K12ms (4 traj × 3 snapshots = 12 conformers).
+# NOTE: multistep rest uses ':' as internal separator (not '|') to avoid
+# clashing with the '|' field separator used in the task queue.
 SAMPLING_MODES=(
     "standard|K8|8|10"
-    "multistep|K12ms|12|4|10|7 8 9"
+    "multistep|K12ms|12|4:10:7 8 9"
 )
 
 # Run tag — used to namespace pkl/pt dirs: data/<RUN_TAG>_pkl_<label>_<mode>
@@ -178,8 +180,8 @@ else
                     --n_confs "$_keff" --n_steps "$_steps" \
                     --batch_size $BATCH --postprocess none \
                     >> "$LOG_DIR/${RUN_TAG}_${_lbl}_${_name}_${_tag}.log" 2>&1 &
-            else  # multistep
-                IFS='|' read -r _n_traj _n_steps _snaps <<< "$_rest"
+            else  # multistep — rest uses ':' internally: "n_traj:n_steps:snap1 snap2 ..."
+                IFS=':' read -r _n_traj _n_steps _snaps <<< "$_rest"
                 CUDA_VISIBLE_DEVICES=$_gpu python scripts/sample_conformers_multistep.py \
                     --ckpt "$_ck" --config "$_cf" \
                     --input "$_smi" --output "$_pkl" \
@@ -357,6 +359,7 @@ else
             HEAD_HIDDEN=$HEAD_HIDDEN N_MP_LAYERS=$N_MP_LAYERS MP_N_HEADS=$MP_N_HEADS \
             MAX_K_PER_INPUT=${_maxk:-0} \
             ONLY_DATASETS=$_ds H_CACHE_DIR=$_pt \
+            EXTRACT_ONLY=0 \
             ${SPLIT_DIR_ROOT:+SPLIT_DIR_ROOT=$SPLIT_DIR_ROOT} \
             WANDB=$WANDB WANDB_PROJECT=$WANDB_PROJECT WANDB_GROUP=$_sfx \
                 bash scripts/run_downstream_pipeline.sh \
