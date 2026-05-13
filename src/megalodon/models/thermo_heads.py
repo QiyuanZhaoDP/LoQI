@@ -14,7 +14,70 @@ import math
 
 import torch
 import torch.nn as nn
-from torch_scatter import scatter_mean, scatter_softmax, scatter_sum
+
+
+# ── Native scatter helpers (Dynamo / torch.compile compatible) ────────────
+# torch_scatter is an external CUDA extension whose custom ops can't be
+# traced by Dynamo with FakeTensors — running torch.compile() against
+# AtomMolMP errors out at the first scatter_max call. The helpers below
+# use only PyTorch built-ins (scatter_reduce_, index_add_), so they
+# compose cleanly with Inductor.
+#
+# Numerical equivalence to torch_scatter:
+#   * scatter_mean: include_self=False so the zero-init isn't averaged in
+#   * scatter_softmax: max-subtraction for numerical stability, same as
+#     torch_scatter.composite.softmax
+#   * scatter_sum: index_add_ is exact equivalent (1-D index broadcasts
+#     naturally across trailing dims)
+
+def _expand_index_like(index: torch.Tensor, src: torch.Tensor) -> torch.Tensor:
+    """[N] long index → matches src's shape by inserting singleton trailing
+    dims and expanding. Required because scatter_reduce_ needs index.ndim
+    == src.ndim."""
+    if src.dim() == 1:
+        return index
+    view_shape = [index.size(0)] + [1] * (src.dim() - 1)
+    return index.view(view_shape).expand_as(src)
+
+
+def _scatter_mean(src: torch.Tensor, index: torch.Tensor,
+                   dim_size: int) -> torch.Tensor:
+    """Group-mean of `src` rows by `index` into `dim_size` buckets."""
+    out_shape = [dim_size] + list(src.shape[1:])
+    out = torch.zeros(out_shape, device=src.device, dtype=src.dtype)
+    out.scatter_reduce_(0, _expand_index_like(index, src), src,
+                         reduce="mean", include_self=False)
+    return out
+
+
+def _scatter_sum(src: torch.Tensor, index: torch.Tensor,
+                  dim_size: int) -> torch.Tensor:
+    """Group-sum of `src` rows by `index` into `dim_size` buckets."""
+    out_shape = [dim_size] + list(src.shape[1:])
+    out = torch.zeros(out_shape, device=src.device, dtype=src.dtype)
+    # index_add_ accepts a 1-D index and broadcasts over trailing dims,
+    # so it's a drop-in replacement for scatter_sum(src, index, dim=0).
+    out.index_add_(0, index, src)
+    return out
+
+
+def _scatter_softmax(src: torch.Tensor, index: torch.Tensor,
+                      dim_size: int) -> torch.Tensor:
+    """Per-group softmax: for each unique value g in `index`, computes
+    softmax over the slice src[index==g]. Returns a tensor of same shape
+    as src."""
+    # Per-group max for numerical stability.
+    init = torch.full(([dim_size] + list(src.shape[1:])),
+                       float("-inf"), device=src.device, dtype=src.dtype)
+    init.scatter_reduce_(0, _expand_index_like(index, src), src,
+                          reduce="amax", include_self=False)
+    # Subtract per-group max and exponentiate.
+    exp_src = (src - init[index]).exp()
+    # Per-group sum of exps.
+    denom_shape = [dim_size] + list(src.shape[1:])
+    denom = torch.zeros(denom_shape, device=src.device, dtype=src.dtype)
+    denom.index_add_(0, index, exp_src)
+    return exp_src / denom[index].clamp(min=1e-12)
 
 
 TARGET_FIELDS = ["enthalpy_298", "gibbs_298", "cv_gas", "entropy_gas", "enthalpy_0"]
@@ -77,18 +140,22 @@ class AtomMolMP(nn.Module):
         )
 
     def forward(self, H, batch):
-        mol_H = scatter_mean(H, batch, dim=0)              # [N_mols, dim]
-        N_mols = mol_H.size(0)
+        # N_mols is inferred from batch — costs one CPU sync (.item()) per
+        # forward, which is fine outside the inner loop. Callers that
+        # already know N_mols can avoid this by passing it through a thin
+        # wrapper, but the current call sites don't need that.
+        N_mols = int(batch.max().item()) + 1
         N_atoms = H.size(0)
+        mol_H = _scatter_mean(H, batch, N_mols)            # [N_mols, dim]
         for l in range(self.n_layers):
             q = self.q_proj[l](mol_H).view(N_mols,  self.n_heads, self.head_dim)
             k = self.k_proj[l](H    ).view(N_atoms, self.n_heads, self.head_dim)
             v = self.v_proj[l](H    ).view(N_atoms, self.n_heads, self.head_dim)
             q_at = q[batch]
-            scores = (q_at * k).sum(-1) * self.scale
-            alpha = scatter_softmax(scores, batch, dim=0)
-            weighted = alpha.unsqueeze(-1) * v
-            agg = scatter_sum(weighted, batch, dim=0)
+            scores = (q_at * k).sum(-1) * self.scale       # [N_atoms, n_heads]
+            alpha = _scatter_softmax(scores, batch, N_mols)
+            weighted = alpha.unsqueeze(-1) * v             # [N_atoms, n_heads, head_dim]
+            agg = _scatter_sum(weighted, batch, N_mols)    # [N_mols, n_heads, head_dim]
             agg = agg.reshape(N_mols, self.dim)
             agg = self.o_proj[l](agg)
             mol_H = mol_H + self.mol_update[l](agg)
