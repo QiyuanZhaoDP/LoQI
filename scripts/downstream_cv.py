@@ -579,8 +579,13 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
 
         # Ring buffer: keep last `last_stable_window` (epoch, val_mae, state)
         # to enable "best epoch in last N" selection at training end.
+        # NOTE: state is cloned ON-DEVICE (not .cpu()) — moving the entire
+        # head state to CPU every epoch added 50+ sync transfers per epoch
+        # and was the single biggest contributor to the post-May-7 CV
+        # slowdown (5-12% GPU util while CPU drained the pipeline). 10
+        # slots × ~12 MB = ~120 MB extra GPU memory per task — trivial.
         last_k.append((ep, val_mae_ep,
-                        {k: v.detach().cpu().clone()
+                        {k: v.detach().clone()
                          for k, v in model.state_dict().items()}))
         if len(last_k) > last_stable_window:
             last_k.pop(0)
@@ -1281,6 +1286,16 @@ def main():
         if args.extract_only:
             print(f"[extract-only] H saved → {cache_path}. Exiting.")
             return
+
+        # Pin H, offsets, targets to GPU once for the whole CV run.
+        # extract_H stores H as bf16 on CPU (~140 MB for a 90k-atom dataset);
+        # without this, batch_iter cast+H2D each batch — ~80k transfers per
+        # fold dominated wall time and GPU util sat at 5-12%.
+        # offsets stays on CPU (used as Python int for slicing — keeping it
+        # on GPU forces a sync on every int(offsets[i]) lookup).
+        H = H.to(device=device, dtype=torch.float32, non_blocking=True)
+        targets = targets.to(device=device, non_blocking=True)
+        print(f"  H pinned to {device}  fp32  {H.element_size() * H.numel() / 1e6:.1f} MB")
 
     # K-fold split on indices where has_target==True.
     # In ensemble mode we split by GROUP (e.g. input_id), so all K conformers
