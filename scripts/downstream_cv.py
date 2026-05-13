@@ -518,11 +518,15 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
 
     for ep in range(args.epochs):
         model.train()
-        epoch_loss_sum = 0.0
-        epoch_loss_count = 0
-        epoch_abs_err_sum = 0.0   # accumulate Σ|pred - target| in z-space
-        epoch_inv_sum = 0.0
-        epoch_inv_count = 0
+        # Accumulate metrics on-device — sync ONCE at end of epoch instead
+        # of three .item() calls per batch (was 3 × ~1500 batches/epoch
+        # = ~4500 GPU→CPU syncs per epoch, the dominant cost for tiny heads
+        # where actual compute per batch is < 1 ms).
+        epoch_loss_sum_d = torch.zeros((), device=device, dtype=torch.float64)
+        epoch_loss_count_d = torch.zeros((), device=device, dtype=torch.long)
+        epoch_abs_err_sum_d = torch.zeros((), device=device, dtype=torch.float64)
+        epoch_inv_sum_d = torch.zeros((), device=device, dtype=torch.float64)
+        epoch_inv_count_d = torch.zeros((), device=device, dtype=torch.long)
         for H_b, b_b, t_b, g_b in batch_iter(
                 H, offsets, tgt_norm, train_idx.tolist(),
                 args.batch_size, device, shuffle=True,
@@ -530,15 +534,22 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
                 group_batched=use_inv):
             pred = model(H_b, b_b)             # [B] scalar
             valid = ~torch.isnan(t_b)
-            if not valid.any():
-                continue
+            # NOTE: dropped the `if not valid.any(): continue` early-exit —
+            # it forced a sync every batch. All-NaN batches are rare; if
+            # they happen, residual is empty and loss_mse is NaN, so we'd
+            # back-prop NaN gradients. Replace with a masked zero loss so
+            # the batch is a no-op for the optimizer without syncing.
             residual = pred[valid] - t_b[valid]
-            loss_mse = (residual ** 2).mean()
+            # Replace empty-tensor reduction with masked sum/mean to keep
+            # everything graph-evaluable on-device.
+            n_valid_t = valid.sum()                                # 0-d long, on dev
+            sq = residual * residual
+            loss_mse = (sq.sum() / n_valid_t.clamp(min=1).to(sq.dtype))
             if use_inv and g_b is not None:
                 loss_inv = _within_group_var_loss(pred[valid], g_b[valid])
                 loss = loss_mse + inv_lambda * loss_inv
-                epoch_inv_sum += float(loss_inv.detach().item())
-                epoch_inv_count += 1
+                epoch_inv_sum_d += loss_inv.detach().double()
+                epoch_inv_count_d += 1
             else:
                 loss = loss_mse
             opt.zero_grad()
@@ -546,23 +557,36 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step()
             sched.step()
-            n_valid = int(valid.sum().item())
-            epoch_loss_sum += float(loss_mse.detach().item()) * n_valid
-            epoch_abs_err_sum += float(residual.detach().abs().sum().item())
-            epoch_loss_count += n_valid
+            with torch.no_grad():
+                epoch_loss_count_d += n_valid_t
+                epoch_loss_sum_d  += loss_mse.detach().double() * n_valid_t.double()
+                epoch_abs_err_sum_d += residual.detach().abs().sum().double()
+
+        # End-of-epoch sync — three .item() calls instead of 4500.
+        epoch_loss_sum = float(epoch_loss_sum_d.item())
+        epoch_loss_count = int(epoch_loss_count_d.item())
+        epoch_abs_err_sum = float(epoch_abs_err_sum_d.item())
+        if use_inv:
+            epoch_inv_sum = float(epoch_inv_sum_d.item())
+            epoch_inv_count = int(epoch_inv_count_d.item())
+        else:
+            epoch_inv_sum = 0.0
+            epoch_inv_count = 0
 
         # Per-epoch val MAE in physical units. Always computed (cheap on
         # cached H) so we can drive best-val tracking + early stopping
-        # regardless of whether wandb is enabled.
+        # regardless of whether wandb is enabled. Accumulate predictions
+        # on-device — single GPU→CPU sync at end (was ~165 syncs/epoch
+        # for the per-batch .cpu().numpy() pattern).
         model.eval()
         with torch.no_grad():
-            vp = []
+            vp_chunks = []
             for H_b, b_b, _, _ in batch_iter(H, offsets, tgt_norm,
                                             val_idx_list,
                                             args.batch_size, device,
                                             shuffle=False):
-                vp.append(model(H_b, b_b).cpu().numpy())
-        vp_phys = np.concatenate(vp) * std + mean
+                vp_chunks.append(model(H_b, b_b))
+        vp_phys = torch.cat(vp_chunks).cpu().numpy() * std + mean
         if val_groups_local is None:
             _vp = vp_phys[val_mask_local]
             _yt = y_true_local[val_mask_local]
@@ -662,8 +686,8 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
             for H_b, b_b, _, _ in batch_iter(H, offsets, tgt_norm,
                                              eval_idx.tolist(),
                                              args.batch_size, device, shuffle=False):
-                _preds.append(model(H_b, b_b).cpu().numpy())
-        return np.concatenate(_preds) * std + mean
+                _preds.append(model(H_b, b_b))
+        return torch.cat(_preds).cpu().numpy() * std + mean
 
     # Final evaluation: on test_idx when provided (UniMol-compatible mode),
     # otherwise fall back to val_idx (legacy).
@@ -683,8 +707,8 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
         for H_b, b_b, _, _ in batch_iter(H, offsets, tgt_norm,
                                        eval_idx.tolist(),
                                        args.batch_size, device, shuffle=False):
-            preds_best.append(model(H_b, b_b).cpu().numpy())
-    preds = np.concatenate(preds_best) * std + mean
+            preds_best.append(model(H_b, b_b))
+    preds = torch.cat(preds_best).cpu().numpy() * std + mean
 
     # --- Last-stable eval: best val epoch within last `last_stable_window` ---
     ls_ep, ls_mae_val, ls_state = min(last_k, key=lambda x: x[1]) if last_k else \
