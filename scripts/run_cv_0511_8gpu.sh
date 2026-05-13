@@ -28,17 +28,22 @@ cd "$(dirname "$0")/.."
 
 export N_GPUS=8
 export CUDA_DEVICES=0,1,2,3,4,5,6,7
-export TASKS_PER_GPU=1
+# 2 tasks per GPU at BATCH=64 — confirmed via test_4x_one_gpu.sh that
+# multiprocessing on one GPU keeps per-task throughput unchanged
+# (28-30 s/epoch solo or 4-way shared at bs=32). For the larger sets
+# here, BATCH=64 amortizes kernel-launch overhead without the bs=128
+# convergence concerns; 2 tasks per GPU gives an extra ~2× wall-time
+# win on top.
+export TASKS_PER_GPU=2
 
 # Memory tuning — these 4 datasets have 6k–8.3k molecules; with K12ms ×
-# 4 trajectories × ~12 conformers the .pt is 70k–100k rows. Default
-# BATCH=64 OOMs on 80 GB cards (fragmented caching allocator), bs=16
-# was confirmed stable for RI/AcuteToxicity/BP/Hf_G. expandable_segments
-# helps torch reclaim fragments between batches.
+# 4 trajectories × ~12 conformers the .pt is 70k–100k rows. Two tasks
+# per GPU × (H ~2 GB + state ~1 GB) ≈ 6 GB per GPU — comfortable on
+# 80 GB. expandable_segments helps torch reclaim fragments.
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-export BATCH=128          # CV training — bigger here because these 4 sets
-                          # are the larger ones (5k-8k mols) and benefit from
-                          # the kernel-launch amortization. 1 task per GPU.
+export BATCH=64           # CV training — middle ground between bs=32
+                          # (kernel-launch bound) and bs=128 (convergence
+                          # drop). Each task still runs solo-equivalent.
 export EXTRACT_BATCH=16   # H-cache extraction (heaviest VRAM stage)
 export SAMPLE_BATCH=32    # conformer sampling
 
