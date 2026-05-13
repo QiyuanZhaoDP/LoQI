@@ -450,9 +450,10 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
     of the same input share a group_id, so we get one prediction per input
     molecule even with K-augmented training data.
     """
-    # z-score normalize on train only
+    # z-score normalize on train only. targets may now live on `device`
+    # (pinned by main()); .cpu() guards against the cuda→numpy error.
     tr_has = has_target[train_idx].bool().numpy()
-    tr_targets = targets[train_idx][tr_has].float().numpy()
+    tr_targets = targets[train_idx][tr_has].float().cpu().numpy()
     mean, std = float(tr_targets.mean()), float(tr_targets.std() or 1.0)
     tgt_norm = ((targets - mean) / std).float()
 
@@ -486,7 +487,7 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
     val_idx_list = val_idx.tolist() if hasattr(val_idx, "tolist") else list(val_idx)
     val_idx_arr_local = np.asarray(val_idx)
     val_has_local = has_target[val_idx_arr_local].bool().numpy()
-    y_true_local = targets[val_idx_arr_local].float().numpy()
+    y_true_local = targets[val_idx_arr_local].float().cpu().numpy()
     val_mask_local = val_has_local & ~np.isnan(y_true_local)
     val_groups_local = (ensemble_groups[val_idx_arr_local]
                          if ensemble_groups is not None else None)
@@ -669,7 +670,7 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
     eval_idx = test_idx if test_idx is not None else val_idx
     val_idx_arr = np.asarray(eval_idx)
     val_has = has_target[val_idx_arr].bool().numpy()
-    y_true = targets[val_idx_arr].float().numpy()
+    y_true = targets[val_idx_arr].float().cpu().numpy()
     mask = val_has & ~np.isnan(y_true)
     n_train_total = int(tr_has.sum())
 
