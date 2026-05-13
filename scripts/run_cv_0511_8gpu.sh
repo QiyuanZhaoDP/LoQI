@@ -36,7 +36,9 @@ export TASKS_PER_GPU=1
 # was confirmed stable for RI/AcuteToxicity/BP/Hf_G. expandable_segments
 # helps torch reclaim fragments between batches.
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-export BATCH=32           # CV training
+export BATCH=128          # CV training — bigger here because these 4 sets
+                          # are the larger ones (5k-8k mols) and benefit from
+                          # the kernel-launch amortization. 1 task per GPU.
 export EXTRACT_BATCH=16   # H-cache extraction (heaviest VRAM stage)
 export SAMPLE_BATCH=32    # conformer sampling
 
@@ -44,11 +46,14 @@ export INPUT_DIR=downstream_ft/0511_cc_audit/Clean
 export SPLIT_DIR_ROOT=downstream_ft/0511_cc_audit/Split
 export DATASETS_FILTER="RI,AcuteToxicity,BP,Hf_G"
 
+# RUN_TAG stays 0511 — names the on-disk PKL/PT/H caches under
+# data/0511_pt_*; changing it would invalidate Stage B.5's cached H
+# (heaviest step). Today's outputs use 0513 for clean separation.
 export RUN_TAG=0511
-export OUT_ROOT=outputs/cv_0511
-export LOG_DIR=/tmp/cv_0511
+export OUT_ROOT=outputs/cv_0513
+export LOG_DIR=/tmp/cv_0513
 export WANDB=1
-export WANDB_PROJECT=downstream_cv_0511
+export WANDB_PROJECT=downstream_cv_0513
 export SWANLAB_SYNC=1    # mirror every wandb run to swanlab (requires `pip install swanlab && swanlab login`)
 
 # Bash arrays don't survive `exec bash` / subprocess — must `source`.

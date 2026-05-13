@@ -471,6 +471,19 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
             print(f"  [warm-init] copied {n_copied} tensors from thermo head; "
                   "final Linear (5→1) random-init.")
             args._thermo_warm_announced = True
+    if getattr(args, "compile", False):
+        # torch.compile fuses many of AtomMolMP's small scatter / matmul
+        # kernels — biggest win at small batch sizes where kernel-launch
+        # overhead dominates. First batch of fold 1 pays the compile cost
+        # (typically 5-20 s); subsequent batches use the cached graph.
+        # Wrap AFTER warm-init so the state_dict copy targets the bare
+        # SingleTargetHead, not a compile wrapper.
+        _compile_mode = getattr(args, "compile_mode", "default")
+        if not getattr(args, "_compile_announced", False):
+            print(f"  [compile] torch.compile(model, mode={_compile_mode!r}) — "
+                  "first batch will incur compile cost")
+            args._compile_announced = True
+        model = torch.compile(model, mode=_compile_mode)
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr,
                              weight_decay=args.weight_decay)
     total_steps = max(1, (len(train_idx) // args.batch_size) * args.epochs)
@@ -1119,6 +1132,19 @@ def main():
                    help="Print per-epoch wall-time breakdown "
                         "(train / val / bookkeeping) — for profiling. "
                         "Adds 2 cuda.synchronize() per epoch, ~negligible.")
+    p.add_argument("--compile", action="store_true",
+                   help="Wrap the head with torch.compile() — fuses small "
+                        "scatter / matmul kernels in AtomMolMP. Biggest win "
+                        "at small batch sizes where kernel-launch overhead "
+                        "dominates. First batch of fold 1 pays the compile "
+                        "cost (~5-20 s); subsequent runs use the cached "
+                        "Inductor graph.")
+    p.add_argument("--compile-mode", type=str, default="default",
+                   choices=["default", "reduce-overhead", "max-autotune"],
+                   help="torch.compile mode. 'default' is conservative; "
+                        "'reduce-overhead' uses CUDA graphs (good for tiny "
+                        "heads); 'max-autotune' picks the fastest kernel "
+                        "via tuning (longer warmup, best steady-state).")
     p.add_argument("--extract-batch-size", type=int, default=64)
     p.add_argument("--lr", type=float, default=3e-4)
     p.add_argument("--lr-min", type=float, default=0.0)

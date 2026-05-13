@@ -21,7 +21,11 @@ cd "$(dirname "$0")/.."
 
 export N_GPUS=4
 export CUDA_DEVICES=0,1,2,3
-export TASKS_PER_GPU=1
+# 4 small CV tasks per GPU. At BATCH=32 the head is kernel-launch-bound
+# (single-task GPU util ~10 %), so multiple tasks share the GPU well
+# without contending — H is pinned per task (~280 MB worst case) so 4
+# tasks ≈ 5-15 GB per GPU, comfortable on 80 GB.
+export TASKS_PER_GPU=4
 
 # Smaller datasets here (≤ ~4800 mols), default batches should fit fine; just
 # enable expandable_segments as a safety net for the largest few (Hf_L, TPT).
@@ -31,11 +35,15 @@ export INPUT_DIR=downstream_ft/0511_cc_audit/Clean
 export SPLIT_DIR_ROOT=downstream_ft/0511_cc_audit/Split
 export DATASETS_FILTER="Hf_L,TPT,Lipophilicity,MP,Cp,pKa,de,PPBR,k,Hf_C,Vcp,ESOL,Solubility_ethanol,CEP,AOH,freesolv,BCF,Density,Clearance,HalfLife,ST"
 
+# RUN_TAG stays 0511 — it names the on-disk PKL/PT/H caches under
+# data/0511_pt_*; changing it would invalidate Stage B.5's cached H
+# embeddings (the heaviest step, ~hours to redo). Today's outputs and
+# wandb runs use 0513 to keep them visually distinct from yesterday's.
 export RUN_TAG=0511
-export OUT_ROOT=outputs/cv_0511
-export LOG_DIR=/tmp/cv_0511
+export OUT_ROOT=outputs/cv_0513
+export LOG_DIR=/tmp/cv_0513
 export WANDB=1
-export WANDB_PROJECT=downstream_cv_0511
+export WANDB_PROJECT=downstream_cv_0513
 export SWANLAB_SYNC=1    # mirror every wandb run to swanlab (requires `pip install swanlab && swanlab login`)
 
 # Bash arrays don't survive `exec bash` / subprocess — must `source`.
