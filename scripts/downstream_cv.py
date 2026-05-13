@@ -245,6 +245,17 @@ def batch_iter(H, offsets, targets, indices, batch_size, device, shuffle,
                group_ids=None, group_batched=False):
     """Yields (H, batch_idx, targets, group_ids_or_None).
 
+    Hot path. The pre-May-13 implementation paid CPU bf16→fp32 cast and
+    H2D transfer on every batch — for tiny heads on cached H this was
+    the dominant cost (GPU util ~5-12 % observed).
+
+    Now: H is assumed to live on `device` as fp32 already (pinned once
+    by the caller in train_one_fold). offsets stays on CPU as a Python-
+    indexable long tensor (using it as a GPU tensor here would force a
+    sync on every int(offsets[mi]) lookup). targets is also expected on
+    `device`. The per-batch loop produces only on-device tensors — no
+    device transfers, no dtype casts.
+
     When `group_batched=True`, sorts indices by group_id then shuffles group
     order, so each batch is dominated by full K-conformer groups (gives
     invariance loss strong within-batch signal). Without it, random shuffle
@@ -274,21 +285,40 @@ def batch_iter(H, offsets, targets, indices, batch_size, device, shuffle,
             indices = indices.copy()
             np.random.shuffle(indices)
 
+    # Fast-path expects H and targets pinned to `device`. Fall back to the
+    # legacy CPU-side path if a caller hasn't migrated (e.g. tests / LoRA).
+    H_on_dev    = (H is not None       and H.device.type      != "cpu")
+    targs_on_dev = (targets is not None and targets.device.type != "cpu")
+
     for s in range(0, len(indices), batch_size):
         mids = indices[s:s + batch_size]
-        Hs, bs_idx = [], []
-        for bi, mi in enumerate(mids):
-            a, b = int(offsets[mi]), int(offsets[mi + 1])
-            Hs.append(H[a:b])
-            bs_idx.append(torch.full((b - a,), bi, dtype=torch.long))
-        gids_b = (torch.tensor(group_ids[mids], dtype=torch.long, device=device)
-                  if group_ids is not None else None)
-        yield (
-            torch.cat(Hs).to(device=device, dtype=torch.float32),
-            torch.cat(bs_idx).to(device),
-            targets[mids].to(device),
-            gids_b,
-        )
+        if H_on_dev and targs_on_dev:
+            # Build per-mol slices directly on device. No dtype cast,
+            # no H2D. The Python loop body is negligible at ~30 µs each.
+            Hs = [H[int(offsets[mi]):int(offsets[mi + 1])] for mi in mids]
+            sizes = [h.shape[0] for h in Hs]
+            bs_idx = torch.repeat_interleave(
+                torch.arange(len(mids), device=H.device),
+                torch.tensor(sizes, device=H.device, dtype=torch.long),
+            )
+            gids_b = (torch.tensor(group_ids[mids], dtype=torch.long, device=H.device)
+                      if group_ids is not None else None)
+            yield torch.cat(Hs), bs_idx, targets[mids], gids_b
+        else:
+            # Legacy fallback (matches old semantics exactly).
+            Hs, bs_idx = [], []
+            for bi, mi in enumerate(mids):
+                a, b = int(offsets[mi]), int(offsets[mi + 1])
+                Hs.append(H[a:b])
+                bs_idx.append(torch.full((b - a,), bi, dtype=torch.long))
+            gids_b = (torch.tensor(group_ids[mids], dtype=torch.long, device=device)
+                      if group_ids is not None else None)
+            yield (
+                torch.cat(Hs).to(device=device, dtype=torch.float32),
+                torch.cat(bs_idx).to(device),
+                targets[mids].to(device),
+                gids_b,
+            )
 
 
 def _within_group_var_loss(pred, group_ids):
@@ -1036,7 +1066,7 @@ def main():
                         "skipped and fold assignments come directly from these files, "
                         "ensuring full reproducibility with the 0511 audit splits.")
     p.add_argument("--epochs", type=int, default=50)
-    p.add_argument("--batch-size", type=int, default=64)
+    p.add_argument("--batch-size", type=int, default=32)
     p.add_argument("--extract-batch-size", type=int, default=64)
     p.add_argument("--lr", type=float, default=3e-4)
     p.add_argument("--lr-min", type=float, default=0.0)

@@ -76,7 +76,7 @@ EPOCHS_LARGE=${EPOCHS_LARGE:-200}
 EPOCHS_SMALL=${EPOCHS_SMALL:-150}
 EARLY_STOP_PATIENCE=${EARLY_STOP_PATIENCE:-100}
 LR=${LR:-3e-4}
-BATCH=${BATCH:-64}                              # CV training batch
+BATCH=${BATCH:-32}                              # CV training batch
 SAMPLE_BATCH=${SAMPLE_BATCH:-$BATCH}            # conformer-sampling batch (Stage B)
 EXTRACT_BATCH=${EXTRACT_BATCH:-$BATCH}          # H-cache extraction batch (Stage B.5 / C)
 
