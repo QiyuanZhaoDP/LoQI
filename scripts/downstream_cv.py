@@ -471,6 +471,17 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
             print(f"  [warm-init] copied {n_copied} tensors from thermo head; "
                   "final Linear (5→1) random-init.")
             args._thermo_warm_announced = True
+    # Optional torch.compile wrap — only works on this branch because
+    # thermo_heads.py was rewritten to use native scatter_reduce_ ops
+    # (commit 5d1317e). On main, the torch_scatter calls in AtomMolMP
+    # break Dynamo tracing.
+    if getattr(args, "compile", False):
+        _compile_mode = getattr(args, "compile_mode", "default")
+        if not getattr(args, "_compile_announced", False):
+            print(f"  [compile] torch.compile(model, mode={_compile_mode!r}) — "
+                  "first batch will incur compile cost")
+            args._compile_announced = True
+        model = torch.compile(model, mode=_compile_mode)
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr,
                              weight_decay=args.weight_decay)
     total_steps = max(1, (len(train_idx) // args.batch_size) * args.epochs)
@@ -1119,6 +1130,17 @@ def main():
                    help="Print per-epoch wall-time breakdown "
                         "(train / val / bookkeeping) — for profiling. "
                         "Adds 2 cuda.synchronize() per epoch, ~negligible.")
+    p.add_argument("--compile", action="store_true",
+                   help="Wrap the head with torch.compile(). Only works on "
+                        "the scatter-reduce-rewrite branch (5d1317e), where "
+                        "AtomMolMP uses native scatter_reduce_ instead of "
+                        "torch_scatter — main's torch_scatter calls break "
+                        "Dynamo tracing.")
+    p.add_argument("--compile-mode", type=str, default="default",
+                   choices=["default", "reduce-overhead", "max-autotune"],
+                   help="torch.compile mode. Use 'default' first — "
+                        "reduce-overhead requires fixed shapes and will "
+                        "recompile per unique atom count.")
     p.add_argument("--extract-batch-size", type=int, default=64)
     p.add_argument("--lr", type=float, default=3e-4)
     p.add_argument("--lr-min", type=float, default=0.0)
