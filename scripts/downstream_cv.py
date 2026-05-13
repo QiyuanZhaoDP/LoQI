@@ -516,7 +516,9 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
     patience_counter = 0
     n_epochs_run = 0
 
+    _debug_timing = bool(getattr(args, "debug_timing", False))
     for ep in range(args.epochs):
+        _t0 = time.perf_counter() if _debug_timing else 0.0
         model.train()
         # Accumulate metrics on-device — sync ONCE at end of epoch instead
         # of three .item() calls per batch (was 3 × ~1500 batches/epoch
@@ -563,6 +565,9 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
                 epoch_abs_err_sum_d += residual.detach().abs().sum().double()
 
         # End-of-epoch sync — three .item() calls instead of 4500.
+        if _debug_timing and torch.cuda.is_available():
+            torch.cuda.synchronize()
+        _t_train = time.perf_counter() if _debug_timing else 0.0
         epoch_loss_sum = float(epoch_loss_sum_d.item())
         epoch_loss_count = int(epoch_loss_count_d.item())
         epoch_abs_err_sum = float(epoch_abs_err_sum_d.item())
@@ -587,6 +592,9 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
                                             shuffle=False):
                 vp_chunks.append(model(H_b, b_b))
         vp_phys = torch.cat(vp_chunks).cpu().numpy() * std + mean
+        if _debug_timing and torch.cuda.is_available():
+            torch.cuda.synchronize()
+        _t_val = time.perf_counter() if _debug_timing else 0.0
         if val_groups_local is None:
             _vp = vp_phys[val_mask_local]
             _yt = y_true_local[val_mask_local]
@@ -631,6 +639,21 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
               f"val_mae={val_mae_ep:.4f}{_improved}  val_rmse={val_rmse_ep:.4f}  "
               f"val_r2={val_r2_ep:.4f}  lr={float(opt.param_groups[0]['lr']):.2e}",
               flush=True)
+        if _debug_timing:
+            _t_end = time.perf_counter()
+            _train_s = _t_train - _t0
+            _val_s   = _t_val   - _t_train
+            _book_s  = _t_end   - _t_val
+            _total_s = _t_end   - _t0
+            _n_train_batches = max(1, (len(train_idx) + args.batch_size - 1) // args.batch_size)
+            _n_val_batches   = max(1, (len(val_idx_list) + args.batch_size - 1) // args.batch_size)
+            print(
+                f"  [timing] ep {ep+1}: total={_total_s:.2f}s | "
+                f"train={_train_s:.2f}s ({_train_s/_n_train_batches*1000:.1f}ms/batch × {_n_train_batches}) | "
+                f"val={_val_s:.2f}s ({_val_s/_n_val_batches*1000:.1f}ms/batch × {_n_val_batches}) | "
+                f"book={_book_s:.2f}s",
+                flush=True,
+            )
 
         # Ring buffer: keep last `last_stable_window` (epoch, val_mae, state)
         # to enable "best epoch in last N" selection at training end.
@@ -1092,6 +1115,10 @@ def main():
                         "ensuring full reproducibility with the 0511 audit splits.")
     p.add_argument("--epochs", type=int, default=50)
     p.add_argument("--batch-size", type=int, default=32)
+    p.add_argument("--debug-timing", action="store_true",
+                   help="Print per-epoch wall-time breakdown "
+                        "(train / val / bookkeeping) — for profiling. "
+                        "Adds 2 cuda.synchronize() per epoch, ~negligible.")
     p.add_argument("--extract-batch-size", type=int, default=64)
     p.add_argument("--lr", type=float, default=3e-4)
     p.add_argument("--lr-min", type=float, default=0.0)
