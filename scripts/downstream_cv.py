@@ -27,10 +27,7 @@ Usage:
 """
 import argparse
 import json
-import sys
-import threading
 import time
-import traceback
 from pathlib import Path
 
 import numpy as np
@@ -1135,18 +1132,6 @@ def main():
                    help="Print per-epoch wall-time breakdown "
                         "(train / val / bookkeeping) — for profiling. "
                         "Adds 2 cuda.synchronize() per epoch, ~negligible.")
-    p.add_argument("--concurrent-folds", action="store_true",
-                   help="Run all n_folds in parallel threads on the same "
-                        "GPU. Each fold has its own model / optimizer / "
-                        "ring buffer; they share the read-only H tensor "
-                        "(no per-fold duplication). Biggest win at small "
-                        "batch (bs ≤ 64) where a single fold leaves the "
-                        "GPU at 5-15 % util — concurrent folds interleave "
-                        "kernels on the command queue. Memory grows by "
-                        "~150 MB / fold beyond the shared H; for 5-fold "
-                        "with Hf_G's H (1.9 GB) total is ~2.7 GB. Not "
-                        "compatible with --lora (LoRA path uses the "
-                        "backbone forward per batch).")
     p.add_argument("--compile", action="store_true",
                    help="Wrap the head with torch.compile() — fuses small "
                         "scatter / matmul kernels in AtomMolMP. Biggest win "
@@ -1467,34 +1452,18 @@ def main():
         print(f"[split-dir] loading fold assignments from {args.split_dir}")
 
     if args.ensemble_by is not None:
-        split_iter = list(kf.split(labeled_groups))
+        split_iter = kf.split(labeled_groups)
     else:
-        split_iter = list(kf.split(labeled))
+        split_iter = kf.split(labeled)
 
-    # Thread-safe print so that 5 concurrent folds don't garble the log.
-    _print_lock = threading.Lock()
-    def _tprint(*a, **kw):
-        with _print_lock:
-            print(*a, **kw)
-
-    def _process_fold(fold_i, tr_pool, test_fold):
-        """Compute fold split, train, save fold_cache, return rep dict.
-
-        Called sequentially in the default path, or from threads when
-        --concurrent-folds is set. Independent state per call:
-          * model / optimizer / scheduler / ring buffer built inside
-            train_one_fold (each call gets its own)
-          * train_idx / val_idx / test_idx are fold-local numpy arrays
-          * fold_cache_path is fold-specific
-        Shared (read-only across folds):
-          * H (pinned on GPU), offsets, targets, has_target, ensemble_groups
-        """
+    for fold_i, (tr_pool, test_fold) in enumerate(split_iter):
         fold_cache_path = fold_cache_dir / f"fold_{fold_i}.json"
         if fold_cache_path.exists():
             import json as _json
             rep = _json.loads(fold_cache_path.read_text())
-            _tprint(f"  [skip fold {fold_i}] loaded from {fold_cache_path}")
-            return rep
+            print(f"  [skip fold {fold_i}] loaded from {fold_cache_path}")
+            fold_reports.append(rep)
+            continue
         # ── Pre-split branch: load indices directly from cv{i}_train/valid/test.csv ──
         if args.split_dir is not None:
             sd = Path(args.split_dir)
@@ -1516,10 +1485,10 @@ def main():
                         seen_kc[g] = seen_kc.get(g, 0) + 1
                 n_before = len(train_idx)
                 train_idx = np.array(kept_kc, dtype=np.int64)
-                _tprint(f"  [K-cap] train Data: {n_before} -> {len(train_idx)}  "
-                        f"(max_k_per_input={args.max_k_per_input})")
-            _tprint(f"\n=== Fold {fold_i+1}/{args.n_folds} [pre-split] | "
-                    f"train={len(train_idx)}  val={len(val_idx)}  test={len(test_idx)} ===")
+                print(f"  [K-cap] train Data: {n_before} -> {len(train_idx)}  "
+                      f"(max_k_per_input={args.max_k_per_input})")
+            print(f"\n=== Fold {fold_i+1}/{args.n_folds} [pre-split] | "
+                  f"train={len(train_idx)}  val={len(val_idx)}  test={len(test_idx)} ===")
             test_idx_arg = test_idx
 
         # ── KFold branch (original logic, skipped when --split-dir is set) ───────
@@ -1574,11 +1543,11 @@ def main():
                             kept.append(i)
                             seen[g] = seen.get(g, 0) + 1
                     train_idx = np.array(kept, dtype=np.int64)
-                    _tprint(f"  [K-cap] train Data: {n_before} -> {len(train_idx)}  "
-                            f"(max_k_per_input={args.max_k_per_input})")
-                _tprint(f"\n=== Fold {fold_i+1}/{args.n_folds} | "
-                        f"train={len(train_idx)} ({len(train_groups)} grp)  "
-                        f"val={len(val_idx)} ({len(val_groups)} grp) ===")
+                    print(f"  [K-cap] train Data: {n_before} -> {len(train_idx)}  "
+                          f"(max_k_per_input={args.max_k_per_input})")
+                print(f"\n=== Fold {fold_i+1}/{args.n_folds} | "
+                      f"train={len(train_idx)} ({len(train_groups)} grp)  "
+                      f"val={len(val_idx)} ({len(val_groups)} grp) ===")
             else:
                 test_idx  = labeled[vl]
                 if val_fraction > 0:
@@ -1587,9 +1556,9 @@ def main():
                 else:
                     train_idx = labeled[tr]
                     val_idx   = test_idx
-                _tprint(f"\n=== Fold {fold_i+1}/{args.n_folds} | "
-                        f"train={len(train_idx)}  val={len(val_idx)}  "
-                        f"test={len(test_idx)} ===")
+                print(f"\n=== Fold {fold_i+1}/{args.n_folds} | "
+                      f"train={len(train_idx)}  val={len(val_idx)}  "
+                      f"test={len(test_idx)} ===")
             test_idx_arg = test_idx if val_fraction > 0 else None
         if use_lora:
             t_type = str(cfg.interpolant.time_type)
@@ -1608,6 +1577,7 @@ def main():
                                   wandb_run=wandb_run, fold_i=fold_i,
                                   test_idx=test_idx_arg)
         rep["fold"] = fold_i
+        fold_reports.append(rep)
         fold_cache_path.write_text(json.dumps(rep))
         # Compact per-fold summary; include conformer-spread when in ensemble mode.
         ens_str = ""
@@ -1616,55 +1586,11 @@ def main():
                        f"(={rep['ensemble_pred_std_over_target_std']*100:.1f}% of target σ)")
         ep_str = (f"  best_ep={rep['best_epoch']}/{rep['n_epochs_run']}"
                   if "best_epoch" in rep else "")
-        _tprint(f"  [F{fold_i}] MAE={rep['mae']:.4f}  RMSE={rep['rmse']:.4f}  "
-                f"R2={rep['r2']:.3f}{ep_str}{ens_str}")
+        print(f"  MAE={rep['mae']:.4f}  RMSE={rep['rmse']:.4f}  "
+              f"R2={rep['r2']:.3f}{ep_str}{ens_str}")
         if wandb_run is not None:
             wandb_run.log({f"fold/{fold_i}/{k}": v for k, v in rep.items()
                             if isinstance(v, (int, float))})
-        return rep
-
-    # Dispatch: sequential (default) or concurrent threads.
-    if getattr(args, "concurrent_folds", False) and not use_lora:
-        # All folds train on the same shared H tensor (read-only); each fold
-        # owns its model / optimizer / ring buffer / fold_cache file. Python
-        # threads share the process-wide CUDA context, so kernels from
-        # different folds interleave on the GPU command queue automatically.
-        # GIL releases during CUDA ops, so threads make real progress.
-        _tprint(f"[concurrent-folds] launching {len(split_iter)} fold threads")
-        _results: dict[int, dict] = {}
-        _errors: dict[int, str] = {}
-
-        def _worker(fi, tr_pool, test_fold):
-            try:
-                rep = _process_fold(fi, tr_pool, test_fold)
-                _results[fi] = rep
-            except Exception as e:
-                _errors[fi] = f"{type(e).__name__}: {e}"
-                with _print_lock:
-                    print(f"[F{fi}] FAILED: {type(e).__name__}: {e}",
-                          file=sys.stderr, flush=True)
-                    traceback.print_exc()
-
-        threads = []
-        for fold_i, (tr_pool, test_fold) in enumerate(split_iter):
-            t = threading.Thread(target=_worker,
-                                  args=(fold_i, tr_pool, test_fold),
-                                  name=f"fold-{fold_i}")
-            t.start()
-            threads.append(t)
-        for t in threads:
-            t.join()
-
-        if _errors:
-            _tprint(f"[concurrent-folds] {len(_errors)} fold(s) failed: "
-                    f"{sorted(_errors)}")
-        for fold_i in sorted(_results.keys()):
-            fold_reports.append(_results[fold_i])
-    else:
-        for fold_i, (tr_pool, test_fold) in enumerate(split_iter):
-            rep = _process_fold(fold_i, tr_pool, test_fold)
-            if rep is not None:
-                fold_reports.append(rep)
 
     # Aggregate
     summary = {
