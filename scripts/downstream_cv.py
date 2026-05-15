@@ -1302,16 +1302,28 @@ def main():
     print(f"Loading backbone {args.ckpt}")
     model, cfg = load_backbone(args.ckpt, args.config, device)
 
-    # If warm-starting the head from the ckpt's thermo head, the head dims
-    # MUST match the trained thermo_head_args (otherwise state_dict won't
-    # load). Override the user's CLI/default head dims accordingly.
+    # If warm-starting the head from the ckpt's thermo / combined head, the
+    # downstream head dims MUST match the trained AtomMolMP (otherwise
+    # state_dict won't load). Override the user's CLI/default head dims
+    # accordingly. Accept either thermo_head_args (separate-head ckpts) or
+    # combined_head_args (unified 14-target ckpt) — both store the same
+    # AtomMolMP arch knobs, and load_thermo_head_into picks the right
+    # prefix at copy time.
     if args.init_head_from_thermo:
         th = OmegaConf.select(cfg, "dynamics.model_args.thermo_head_args",
                               default=None)
         if th is None:
+            th = OmegaConf.select(cfg, "dynamics.model_args.combined_head_args",
+                                  default=None)
+            if th is not None:
+                print("  [warm-init] using combined_head_args (unified 14-target ckpt) "
+                      "for head dims; load_thermo_head_into will slice the first 5 "
+                      "thermo outputs from combined_heads.mp.*")
+        if th is None:
             raise SystemExit(
                 "--init-head-from-thermo requires the ckpt's config to define "
-                "dynamics.model_args.thermo_head_args (so we know what dims "
+                "dynamics.model_args.thermo_head_args OR "
+                "dynamics.model_args.combined_head_args (so we know what dims "
                 "to instantiate)."
             )
         n_mp_layers_cfg = int(OmegaConf.select(th, "n_mp_layers", default=2))
@@ -1319,7 +1331,7 @@ def main():
         hidden_cfg      = int(OmegaConf.select(th, "hidden",      default=128))
         if (args.n_mp_layers, args.mp_n_heads, args.head_hidden) != \
            (n_mp_layers_cfg, mp_n_heads_cfg, hidden_cfg):
-            print(f"  [warm-init] aligning head dims to thermo_head_args: "
+            print(f"  [warm-init] aligning head dims to ckpt's head_args: "
                   f"n_mp_layers={n_mp_layers_cfg}, mp_n_heads={mp_n_heads_cfg}, "
                   f"head_hidden={hidden_cfg} "
                   f"(was {args.n_mp_layers}/{args.mp_n_heads}/{args.head_hidden})")
