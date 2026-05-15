@@ -96,11 +96,18 @@ def load_thermo_head_into(head: "SingleTargetHead", ckpt_path: str) -> int:
     sd = ckpt.get("state_dict", ckpt)
 
     candidates = [
+        # ── Newer-Lightning EMA wrapping (.module. between ema_model and submodule):
+        #    introduced when training switched to lightning 2.x EMACallback.
+        #    Prefer EMA over plain — usually better val numbers.
+        "dynamics.ema_model.module.thermo_heads.mp.",
+        "dynamics.ema_model.module.combined_heads.mp.",
+        "dynamics.model.thermo_heads.mp.",
+        "dynamics.model.combined_heads.mp.",
+        # ── Older-Lightning EMA wrapping (no .module. infix). Kept for
+        #    backwards compatibility with pre-2.x ckpts.
         "dynamics.ema_model.thermo_heads.mp.",
         "dynamics.online_model.thermo_heads.mp.",
         "dynamics.thermo_heads.mp.",
-        # combined_head ckpt: head lives under combined_heads, first 5
-        # outputs are the same thermo targets so weights transfer.
         "dynamics.ema_model.combined_heads.mp.",
         "dynamics.online_model.combined_heads.mp.",
         "dynamics.combined_heads.mp.",
