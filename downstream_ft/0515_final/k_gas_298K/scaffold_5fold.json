@@ -1,0 +1,3587 @@
+{
+ "method": "scaffold_kfold",
+ "k": 5,
+ "seed": 42,
+ "n_total": 353,
+ "n_scaffolds": 22,
+ "folds": [
+  {
+   "train_idx": [
+    25,
+    38,
+    42,
+    57,
+    79,
+    81,
+    191,
+    192,
+    194,
+    196,
+    201,
+    205,
+    206,
+    210,
+    211,
+    212,
+    214,
+    215,
+    217,
+    221,
+    222,
+    224,
+    225,
+    226,
+    229,
+    230,
+    233,
+    235,
+    240,
+    246,
+    247,
+    250,
+    251,
+    252,
+    253,
+    255,
+    262,
+    266,
+    268,
+    269,
+    270,
+    275,
+    278,
+    279,
+    280,
+    281,
+    282,
+    283,
+    294,
+    295,
+    296,
+    298,
+    299,
+    301,
+    302,
+    303,
+    304,
+    306,
+    309,
+    323,
+    331,
+    334,
+    336,
+    343,
+    344
+   ],
+   "valid_idx": [
+    13,
+    218,
+    232,
+    248,
+    261,
+    271,
+    325
+   ],
+   "test_idx": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    39,
+    40,
+    41,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51,
+    52,
+    53,
+    54,
+    55,
+    56,
+    58,
+    59,
+    60,
+    61,
+    62,
+    63,
+    64,
+    65,
+    66,
+    67,
+    68,
+    69,
+    70,
+    71,
+    72,
+    73,
+    74,
+    75,
+    76,
+    77,
+    78,
+    80,
+    82,
+    83,
+    84,
+    85,
+    86,
+    87,
+    88,
+    89,
+    90,
+    91,
+    92,
+    93,
+    94,
+    95,
+    96,
+    97,
+    98,
+    99,
+    100,
+    101,
+    102,
+    103,
+    104,
+    105,
+    106,
+    107,
+    108,
+    109,
+    110,
+    111,
+    112,
+    113,
+    114,
+    115,
+    116,
+    117,
+    118,
+    119,
+    120,
+    121,
+    122,
+    123,
+    124,
+    125,
+    126,
+    127,
+    128,
+    129,
+    130,
+    131,
+    132,
+    133,
+    134,
+    135,
+    136,
+    137,
+    138,
+    139,
+    140,
+    141,
+    142,
+    143,
+    144,
+    145,
+    146,
+    147,
+    148,
+    149,
+    150,
+    151,
+    152,
+    153,
+    154,
+    155,
+    156,
+    157,
+    158,
+    159,
+    160,
+    161,
+    162,
+    163,
+    164,
+    165,
+    166,
+    167,
+    168,
+    169,
+    170,
+    171,
+    172,
+    173,
+    174,
+    175,
+    176,
+    177,
+    178,
+    179,
+    180,
+    181,
+    182,
+    183,
+    184,
+    185,
+    186,
+    187,
+    188,
+    189,
+    190,
+    193,
+    195,
+    197,
+    198,
+    199,
+    200,
+    202,
+    203,
+    204,
+    207,
+    208,
+    209,
+    213,
+    216,
+    219,
+    220,
+    223,
+    227,
+    228,
+    231,
+    234,
+    236,
+    237,
+    238,
+    239,
+    241,
+    242,
+    243,
+    244,
+    245,
+    249,
+    254,
+    256,
+    257,
+    258,
+    259,
+    260,
+    263,
+    264,
+    265,
+    267,
+    272,
+    273,
+    274,
+    276,
+    277,
+    284,
+    285,
+    286,
+    287,
+    288,
+    289,
+    290,
+    291,
+    292,
+    293,
+    297,
+    300,
+    305,
+    307,
+    308,
+    310,
+    311,
+    312,
+    313,
+    314,
+    315,
+    316,
+    317,
+    318,
+    319,
+    320,
+    321,
+    322,
+    324,
+    326,
+    327,
+    328,
+    329,
+    330,
+    332,
+    333,
+    335,
+    337,
+    338,
+    339,
+    340,
+    341,
+    342,
+    345,
+    346,
+    347,
+    348,
+    349,
+    350,
+    351,
+    352
+   ]
+  },
+  {
+   "train_idx": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    6,
+    7,
+    8,
+    9,
+    11,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    39,
+    41,
+    42,
+    43,
+    45,
+    46,
+    48,
+    49,
+    50,
+    52,
+    53,
+    54,
+    55,
+    56,
+    57,
+    58,
+    59,
+    60,
+    61,
+    62,
+    63,
+    64,
+    65,
+    67,
+    68,
+    69,
+    70,
+    71,
+    72,
+    73,
+    74,
+    75,
+    76,
+    77,
+    78,
+    79,
+    80,
+    81,
+    82,
+    83,
+    84,
+    85,
+    86,
+    87,
+    89,
+    90,
+    91,
+    93,
+    94,
+    95,
+    96,
+    97,
+    98,
+    99,
+    100,
+    101,
+    102,
+    103,
+    104,
+    105,
+    106,
+    107,
+    109,
+    111,
+    112,
+    113,
+    114,
+    115,
+    116,
+    118,
+    119,
+    120,
+    121,
+    122,
+    124,
+    125,
+    126,
+    127,
+    128,
+    129,
+    130,
+    131,
+    132,
+    133,
+    135,
+    136,
+    137,
+    138,
+    139,
+    140,
+    141,
+    142,
+    143,
+    144,
+    145,
+    146,
+    147,
+    148,
+    149,
+    150,
+    151,
+    152,
+    153,
+    154,
+    155,
+    156,
+    157,
+    158,
+    159,
+    160,
+    161,
+    162,
+    163,
+    164,
+    165,
+    166,
+    167,
+    168,
+    169,
+    170,
+    172,
+    173,
+    174,
+    175,
+    177,
+    178,
+    179,
+    180,
+    181,
+    182,
+    183,
+    184,
+    185,
+    186,
+    187,
+    188,
+    189,
+    190,
+    191,
+    192,
+    193,
+    194,
+    195,
+    197,
+    198,
+    199,
+    200,
+    202,
+    203,
+    204,
+    206,
+    207,
+    208,
+    209,
+    211,
+    212,
+    213,
+    216,
+    218,
+    219,
+    220,
+    221,
+    222,
+    223,
+    224,
+    225,
+    227,
+    228,
+    230,
+    231,
+    233,
+    234,
+    236,
+    237,
+    238,
+    239,
+    240,
+    241,
+    242,
+    243,
+    244,
+    245,
+    247,
+    249,
+    250,
+    251,
+    254,
+    255,
+    257,
+    258,
+    259,
+    260,
+    261,
+    262,
+    263,
+    264,
+    265,
+    266,
+    267,
+    268,
+    270,
+    271,
+    272,
+    273,
+    274,
+    276,
+    277,
+    278,
+    279,
+    282,
+    284,
+    285,
+    286,
+    287,
+    288,
+    289,
+    291,
+    292,
+    294,
+    295,
+    297,
+    298,
+    299,
+    301,
+    304,
+    307,
+    308,
+    309,
+    310,
+    311,
+    312,
+    313,
+    314,
+    315,
+    316,
+    317,
+    318,
+    319,
+    320,
+    321,
+    322,
+    323,
+    324,
+    325,
+    326,
+    327,
+    328,
+    329,
+    330,
+    332,
+    333,
+    335,
+    337,
+    338,
+    339,
+    340,
+    341,
+    342,
+    343,
+    345,
+    346,
+    347,
+    348,
+    349,
+    350,
+    351
+   ],
+   "valid_idx": [
+    5,
+    10,
+    12,
+    29,
+    40,
+    44,
+    47,
+    51,
+    66,
+    88,
+    92,
+    108,
+    110,
+    117,
+    123,
+    134,
+    171,
+    176,
+    210,
+    215,
+    226,
+    232,
+    248,
+    256,
+    280,
+    290,
+    293,
+    300,
+    302,
+    303,
+    305,
+    336,
+    352
+   ],
+   "test_idx": [
+    38,
+    196,
+    201,
+    205,
+    214,
+    217,
+    229,
+    235,
+    246,
+    252,
+    253,
+    269,
+    275,
+    281,
+    283,
+    296,
+    306,
+    331,
+    334,
+    344
+   ]
+  },
+  {
+   "train_idx": [
+    0,
+    1,
+    2,
+    5,
+    6,
+    7,
+    8,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    28,
+    29,
+    30,
+    31,
+    33,
+    34,
+    36,
+    37,
+    38,
+    39,
+    41,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    51,
+    52,
+    53,
+    54,
+    55,
+    56,
+    57,
+    58,
+    59,
+    60,
+    61,
+    62,
+    63,
+    64,
+    65,
+    66,
+    67,
+    68,
+    69,
+    70,
+    71,
+    72,
+    73,
+    74,
+    76,
+    78,
+    79,
+    80,
+    81,
+    82,
+    83,
+    84,
+    85,
+    86,
+    87,
+    88,
+    89,
+    90,
+    91,
+    93,
+    94,
+    95,
+    96,
+    97,
+    98,
+    99,
+    100,
+    101,
+    102,
+    103,
+    104,
+    105,
+    106,
+    107,
+    108,
+    109,
+    110,
+    111,
+    113,
+    115,
+    116,
+    117,
+    118,
+    119,
+    120,
+    121,
+    122,
+    123,
+    126,
+    127,
+    128,
+    129,
+    130,
+    131,
+    132,
+    133,
+    134,
+    135,
+    138,
+    140,
+    141,
+    142,
+    143,
+    144,
+    145,
+    146,
+    148,
+    149,
+    150,
+    151,
+    152,
+    153,
+    154,
+    155,
+    156,
+    157,
+    158,
+    159,
+    160,
+    161,
+    162,
+    163,
+    164,
+    165,
+    166,
+    167,
+    168,
+    169,
+    170,
+    171,
+    172,
+    174,
+    175,
+    176,
+    178,
+    179,
+    180,
+    182,
+    183,
+    184,
+    185,
+    186,
+    188,
+    189,
+    190,
+    191,
+    192,
+    193,
+    195,
+    196,
+    197,
+    198,
+    199,
+    200,
+    201,
+    202,
+    203,
+    204,
+    205,
+    206,
+    207,
+    208,
+    209,
+    210,
+    211,
+    212,
+    213,
+    214,
+    215,
+    216,
+    217,
+    218,
+    219,
+    220,
+    223,
+    225,
+    227,
+    228,
+    230,
+    231,
+    234,
+    235,
+    236,
+    237,
+    238,
+    239,
+    240,
+    241,
+    242,
+    243,
+    244,
+    245,
+    246,
+    247,
+    248,
+    250,
+    251,
+    252,
+    253,
+    254,
+    255,
+    256,
+    257,
+    258,
+    260,
+    262,
+    263,
+    264,
+    267,
+    268,
+    269,
+    270,
+    271,
+    272,
+    273,
+    274,
+    275,
+    276,
+    277,
+    278,
+    280,
+    282,
+    283,
+    284,
+    285,
+    286,
+    288,
+    289,
+    290,
+    291,
+    292,
+    293,
+    294,
+    295,
+    296,
+    297,
+    300,
+    303,
+    304,
+    305,
+    307,
+    308,
+    310,
+    311,
+    312,
+    313,
+    314,
+    315,
+    317,
+    318,
+    319,
+    320,
+    321,
+    322,
+    326,
+    328,
+    329,
+    330,
+    331,
+    332,
+    333,
+    334,
+    335,
+    336,
+    337,
+    338,
+    340,
+    341,
+    342,
+    343,
+    344,
+    345,
+    346,
+    347,
+    348,
+    349,
+    350,
+    351,
+    352
+   ],
+   "valid_idx": [
+    3,
+    4,
+    9,
+    27,
+    32,
+    35,
+    40,
+    50,
+    75,
+    77,
+    92,
+    112,
+    114,
+    124,
+    125,
+    136,
+    137,
+    139,
+    147,
+    173,
+    177,
+    181,
+    187,
+    229,
+    249,
+    259,
+    265,
+    281,
+    287,
+    306,
+    316,
+    324,
+    327,
+    339
+   ],
+   "test_idx": [
+    42,
+    194,
+    221,
+    222,
+    224,
+    226,
+    232,
+    233,
+    261,
+    266,
+    279,
+    298,
+    299,
+    301,
+    302,
+    309,
+    323,
+    325
+   ]
+  },
+  {
+   "train_idx": [
+    0,
+    2,
+    3,
+    4,
+    5,
+    6,
+    8,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    26,
+    27,
+    28,
+    29,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    51,
+    52,
+    53,
+    54,
+    55,
+    56,
+    58,
+    59,
+    60,
+    61,
+    62,
+    63,
+    64,
+    65,
+    66,
+    67,
+    68,
+    69,
+    71,
+    72,
+    73,
+    75,
+    76,
+    77,
+    78,
+    79,
+    80,
+    81,
+    82,
+    83,
+    85,
+    86,
+    87,
+    89,
+    90,
+    91,
+    92,
+    93,
+    94,
+    95,
+    96,
+    97,
+    98,
+    99,
+    100,
+    101,
+    102,
+    103,
+    104,
+    105,
+    106,
+    107,
+    108,
+    109,
+    110,
+    112,
+    113,
+    114,
+    115,
+    116,
+    117,
+    119,
+    122,
+    123,
+    124,
+    125,
+    126,
+    127,
+    128,
+    129,
+    131,
+    132,
+    133,
+    134,
+    135,
+    136,
+    137,
+    138,
+    139,
+    140,
+    141,
+    142,
+    143,
+    144,
+    145,
+    147,
+    148,
+    149,
+    150,
+    151,
+    152,
+    153,
+    154,
+    155,
+    156,
+    157,
+    158,
+    159,
+    160,
+    161,
+    162,
+    163,
+    165,
+    166,
+    167,
+    168,
+    169,
+    170,
+    171,
+    173,
+    174,
+    175,
+    176,
+    177,
+    178,
+    179,
+    180,
+    181,
+    182,
+    183,
+    184,
+    185,
+    186,
+    187,
+    188,
+    189,
+    190,
+    191,
+    192,
+    193,
+    194,
+    195,
+    196,
+    197,
+    198,
+    199,
+    200,
+    201,
+    202,
+    203,
+    204,
+    205,
+    206,
+    207,
+    208,
+    209,
+    210,
+    211,
+    213,
+    214,
+    216,
+    217,
+    218,
+    219,
+    220,
+    221,
+    222,
+    223,
+    224,
+    225,
+    227,
+    228,
+    229,
+    231,
+    233,
+    235,
+    238,
+    239,
+    241,
+    243,
+    244,
+    246,
+    249,
+    252,
+    253,
+    254,
+    255,
+    256,
+    257,
+    259,
+    260,
+    263,
+    265,
+    266,
+    267,
+    269,
+    271,
+    272,
+    273,
+    274,
+    275,
+    276,
+    277,
+    278,
+    279,
+    281,
+    283,
+    284,
+    285,
+    286,
+    287,
+    288,
+    289,
+    290,
+    292,
+    293,
+    294,
+    296,
+    297,
+    298,
+    299,
+    300,
+    301,
+    302,
+    303,
+    304,
+    305,
+    306,
+    307,
+    308,
+    309,
+    310,
+    311,
+    312,
+    313,
+    314,
+    315,
+    316,
+    317,
+    318,
+    319,
+    320,
+    321,
+    323,
+    324,
+    325,
+    326,
+    327,
+    328,
+    329,
+    331,
+    332,
+    333,
+    334,
+    335,
+    337,
+    338,
+    339,
+    340,
+    341,
+    342,
+    344,
+    345,
+    346,
+    347,
+    348,
+    350,
+    352
+   ],
+   "valid_idx": [
+    1,
+    7,
+    9,
+    30,
+    49,
+    50,
+    70,
+    74,
+    84,
+    88,
+    111,
+    118,
+    120,
+    121,
+    130,
+    146,
+    164,
+    172,
+    212,
+    226,
+    232,
+    234,
+    236,
+    237,
+    242,
+    245,
+    258,
+    261,
+    264,
+    291,
+    322,
+    330,
+    349,
+    351
+   ],
+   "test_idx": [
+    25,
+    57,
+    215,
+    230,
+    240,
+    247,
+    248,
+    250,
+    251,
+    262,
+    268,
+    270,
+    280,
+    282,
+    295,
+    336,
+    343
+   ]
+  },
+  {
+   "train_idx": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    14,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    50,
+    51,
+    52,
+    53,
+    55,
+    56,
+    57,
+    58,
+    59,
+    60,
+    61,
+    62,
+    63,
+    65,
+    66,
+    67,
+    68,
+    69,
+    70,
+    71,
+    72,
+    73,
+    74,
+    75,
+    76,
+    77,
+    78,
+    80,
+    82,
+    83,
+    84,
+    85,
+    86,
+    87,
+    88,
+    89,
+    90,
+    91,
+    92,
+    93,
+    94,
+    95,
+    96,
+    97,
+    99,
+    100,
+    101,
+    102,
+    103,
+    104,
+    105,
+    107,
+    108,
+    109,
+    111,
+    112,
+    113,
+    114,
+    115,
+    116,
+    117,
+    118,
+    119,
+    120,
+    121,
+    122,
+    123,
+    124,
+    125,
+    126,
+    128,
+    129,
+    130,
+    131,
+    132,
+    133,
+    134,
+    135,
+    136,
+    137,
+    138,
+    139,
+    141,
+    142,
+    143,
+    144,
+    145,
+    146,
+    147,
+    148,
+    149,
+    150,
+    151,
+    152,
+    153,
+    154,
+    155,
+    156,
+    157,
+    158,
+    159,
+    160,
+    161,
+    162,
+    163,
+    164,
+    165,
+    166,
+    167,
+    169,
+    170,
+    171,
+    173,
+    174,
+    175,
+    177,
+    178,
+    179,
+    180,
+    181,
+    183,
+    184,
+    185,
+    186,
+    187,
+    188,
+    189,
+    190,
+    193,
+    194,
+    195,
+    196,
+    197,
+    198,
+    199,
+    200,
+    201,
+    202,
+    203,
+    205,
+    207,
+    208,
+    209,
+    213,
+    214,
+    215,
+    216,
+    217,
+    219,
+    220,
+    221,
+    222,
+    223,
+    224,
+    227,
+    228,
+    229,
+    231,
+    232,
+    233,
+    235,
+    236,
+    237,
+    238,
+    239,
+    241,
+    242,
+    243,
+    244,
+    245,
+    246,
+    247,
+    248,
+    249,
+    250,
+    251,
+    252,
+    253,
+    254,
+    256,
+    257,
+    258,
+    259,
+    260,
+    261,
+    263,
+    264,
+    266,
+    267,
+    268,
+    269,
+    270,
+    272,
+    273,
+    274,
+    275,
+    276,
+    277,
+    279,
+    280,
+    281,
+    282,
+    283,
+    284,
+    285,
+    286,
+    287,
+    288,
+    289,
+    290,
+    292,
+    293,
+    295,
+    297,
+    298,
+    300,
+    301,
+    302,
+    305,
+    306,
+    307,
+    308,
+    309,
+    310,
+    311,
+    312,
+    313,
+    314,
+    316,
+    318,
+    319,
+    320,
+    321,
+    322,
+    323,
+    325,
+    326,
+    327,
+    328,
+    329,
+    330,
+    332,
+    333,
+    335,
+    336,
+    337,
+    338,
+    339,
+    340,
+    341,
+    342,
+    345,
+    346,
+    347,
+    348,
+    349,
+    351,
+    352
+   ],
+   "valid_idx": [
+    15,
+    24,
+    41,
+    42,
+    49,
+    54,
+    64,
+    98,
+    106,
+    110,
+    127,
+    140,
+    168,
+    172,
+    176,
+    182,
+    204,
+    226,
+    230,
+    234,
+    240,
+    262,
+    265,
+    291,
+    296,
+    299,
+    315,
+    317,
+    324,
+    331,
+    334,
+    343,
+    344,
+    350
+   ],
+   "test_idx": [
+    13,
+    79,
+    81,
+    191,
+    192,
+    206,
+    210,
+    211,
+    212,
+    218,
+    225,
+    255,
+    271,
+    278,
+    294,
+    303,
+    304
+   ]
+  }
+ ],
+ "molecules": [
+  {
+   "inchikey": "QGJOPFRUJISHPQ-UHFFFAOYSA-N",
+   "smiles": "S=C=S",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "OKKJLVBELUTLKV-UHFFFAOYSA-N",
+   "smiles": "CO",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "NEHMKBQYUWJMIP-UHFFFAOYSA-N",
+   "smiles": "CCl",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "RTZKZFJDLAIYFH-UHFFFAOYSA-N",
+   "smiles": "CCOCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "YMWUJEATGCHHMB-UHFFFAOYSA-N",
+   "smiles": "ClCCl",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "KVNRLNFWIYMESJ-UHFFFAOYSA-N",
+   "smiles": "CCCC#N",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "KXKVLQRXCPHEJC-UHFFFAOYSA-N",
+   "smiles": "COC(C)=O",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "XEKOWRVHYACXOJ-UHFFFAOYSA-N",
+   "smiles": "CCOC(C)=O",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "ATUOYWHBWRKTHZ-UHFFFAOYSA-N",
+   "smiles": "CCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "IKHGUXGNUITLKF-UHFFFAOYSA-N",
+   "smiles": "CC=O",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "HQABUPZFAYXKJW-UHFFFAOYSA-N",
+   "smiles": "CCCCN",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "OFBQJSOFQDEBGM-UHFFFAOYSA-N",
+   "smiles": "CCCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "CSCPPACGZOOCGX-UHFFFAOYSA-N",
+   "smiles": "CC(C)=O",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "RGSFGYAAUTVSQA-UHFFFAOYSA-N",
+   "smiles": "C1CCCC1",
+   "scaffold": "C1CCCC1"
+  },
+  {
+   "inchikey": "FDPIMTJIUBPUKL-UHFFFAOYSA-N",
+   "smiles": "CCC(=O)CC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "LGXVIGDEPROXKC-UHFFFAOYSA-N",
+   "smiles": "C=C(Cl)Cl",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "BAVYZALUXZFZLV-UHFFFAOYSA-N",
+   "smiles": "CN",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "GZUXJHMPEANEGY-UHFFFAOYSA-N",
+   "smiles": "CBr",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "HRYZWHHZPQKTII-UHFFFAOYSA-N",
+   "smiles": "CCCl",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "IJDNQMDRQITEOD-UHFFFAOYSA-N",
+   "smiles": "CCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "FVSKHRXBFJPNKK-UHFFFAOYSA-N",
+   "smiles": "CCC#N",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "HPNMFZURTQLUMO-UHFFFAOYSA-N",
+   "smiles": "CCNCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "VFWCMGCRMGJXDK-UHFFFAOYSA-N",
+   "smiles": "CCCCCl",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "VLKZOEOYAKHREP-UHFFFAOYSA-N",
+   "smiles": "CCCCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "QTBSBXVTEAMEQO-UHFFFAOYSA-N",
+   "smiles": "CC(=O)O",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "RYHBNJHYFVUHQT-UHFFFAOYSA-N",
+   "smiles": "C1COCCO1",
+   "scaffold": "C1COCCO1"
+  },
+  {
+   "inchikey": "XNLICIUVMPYHGG-UHFFFAOYSA-N",
+   "smiles": "CCCC(C)=O",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "XSTXAVWGXDQKEL-UHFFFAOYSA-N",
+   "smiles": "ClC=C(Cl)Cl",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "ROSDSFDQCJNGOL-UHFFFAOYSA-N",
+   "smiles": "CNC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "GETQZCLCWQTVFV-UHFFFAOYSA-N",
+   "smiles": "CN(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "NLHHRLWOUZZQLW-UHFFFAOYSA-N",
+   "smiles": "C=CC#N",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "YWAKXRMUMFPDSH-UHFFFAOYSA-N",
+   "smiles": "C=CCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "IMNFDUFMRHMDMM-UHFFFAOYSA-N",
+   "smiles": "CCCCCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "LIKMAJRDDDTEIG-UHFFFAOYSA-N",
+   "smiles": "C=CCCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "SQCZQTSHSZLZIQ-UHFFFAOYSA-N",
+   "smiles": "CCCCCCl",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "RRHGJUQNOFWUDK-UHFFFAOYSA-N",
+   "smiles": "C=CC(=C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "BZLVMXJERCGZMT-UHFFFAOYSA-N",
+   "smiles": "COC(C)(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "DKPFZGUDAPQIHT-UHFFFAOYSA-N",
+   "smiles": "CCCCOC(C)=O",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "PPBRXRYQALVLMV-UHFFFAOYSA-N",
+   "smiles": "C=Cc1ccccc1",
+   "scaffold": "c1ccccc1"
+  },
+  {
+   "inchikey": "CYTYCFOTNPOANT-UHFFFAOYSA-N",
+   "smiles": "ClC(Cl)=C(Cl)Cl",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "QQONPFPTGQHPMA-UHFFFAOYSA-N",
+   "smiles": "C=CC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "BZHJMEDXRYGGRV-UHFFFAOYSA-N",
+   "smiles": "C=CCl",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "IAYPIBMASNFSPL-UHFFFAOYSA-N",
+   "smiles": "C1CO1",
+   "scaffold": "C1CO1"
+  },
+  {
+   "inchikey": "VXNZUUAINFGPBY-UHFFFAOYSA-N",
+   "smiles": "C=CCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "KAKZBPTYRLMSJV-UHFFFAOYSA-N",
+   "smiles": "C=CC=C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "WBJINCZRORDGAQ-UHFFFAOYSA-N",
+   "smiles": "CCOC=O",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "QWTDNUCVQCZILF-UHFFFAOYSA-N",
+   "smiles": "CCC(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "WEHWNAOGRSTTBQ-UHFFFAOYSA-N",
+   "smiles": "CCCNCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "CRSOQBOWXPBRES-UHFFFAOYSA-N",
+   "smiles": "CC(C)(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "QQZOPKMRPOGIEB-UHFFFAOYSA-N",
+   "smiles": "CCCCC(C)=O",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "PGMYKACGEOXYJE-UHFFFAOYSA-N",
+   "smiles": "CCCCCOC(C)=O",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "VZGDMQKNWNREIO-UHFFFAOYSA-N",
+   "smiles": "ClC(Cl)(Cl)Cl",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "INQOMBQAUSQDDS-UHFFFAOYSA-N",
+   "smiles": "CI",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "QUSNBJAOOMFDIB-UHFFFAOYSA-N",
+   "smiles": "CCN",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "DPBLXKKOBLCELK-UHFFFAOYSA-N",
+   "smiles": "CCCCCN",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "NVJUHMXYKCUMQA-UHFFFAOYSA-N",
+   "smiles": "CCCOCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "NNPPMTNAJDCUHE-UHFFFAOYSA-N",
+   "smiles": "CC(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "DMEGYFMYUHOHGS-UHFFFAOYSA-N",
+   "smiles": "C1CCCCCC1",
+   "scaffold": "C1CCCCCC1"
+  },
+  {
+   "inchikey": "CYRMSUTZVYGINF-UHFFFAOYSA-N",
+   "smiles": "FC(Cl)(Cl)Cl",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "HVTICUPFWKNHNG-UHFFFAOYSA-N",
+   "smiles": "CCI",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "WSFSSNUMVMOOMR-UHFFFAOYSA-N",
+   "smiles": "C=O",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "VQTUBCCKSQIDNK-UHFFFAOYSA-N",
+   "smiles": "C=C(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "ZMANZCXQSJIPKH-UHFFFAOYSA-N",
+   "smiles": "CCN(CC)CC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "OTMSDBZUPAUEDD-UHFFFAOYSA-N",
+   "smiles": "CC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "LCGLNKUTAGEVQW-UHFFFAOYSA-N",
+   "smiles": "COC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "JJWKPURADFRFRB-UHFFFAOYSA-N",
+   "smiles": "O=C=S",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "KDKYADYSIPSCCQ-UHFFFAOYSA-N",
+   "smiles": "C#CCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "VOPWNXZWBYDODV-UHFFFAOYSA-N",
+   "smiles": "FC(F)Cl",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "BEQGRRJLJLVQAQ-UHFFFAOYSA-N",
+   "smiles": "CC=C(C)CC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "YGYAWVDWMABLBF-UHFFFAOYSA-N",
+   "smiles": "O=C(Cl)Cl",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "ZIBGPFATKBEMQZ-UHFFFAOYSA-N",
+   "smiles": "OCCOCCOCCO",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "LSDPWZHWYPCBBB-UHFFFAOYSA-N",
+   "smiles": "CS",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "MWWATHDPGQKSAR-UHFFFAOYSA-N",
+   "smiles": "C#CC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "XOBKSJJDNFUZPF-UHFFFAOYSA-N",
+   "smiles": "CCOC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "NPNPZTNLOVBDOC-UHFFFAOYSA-N",
+   "smiles": "CC(F)F",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "RJCQBQGAPKAMLL-UHFFFAOYSA-N",
+   "smiles": "FC(F)(F)Br",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "ODGLTLJZCVNPBU-UHFFFAOYSA-N",
+   "smiles": "CC(C)CC(C)C(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "VGGSQFUCUMXWEO-UHFFFAOYSA-N",
+   "smiles": "C=C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "IAQRGUVFOMOMEM-UHFFFAOYSA-N",
+   "smiles": "CC=CC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "LVZWSLJZHVFIQJ-UHFFFAOYSA-N",
+   "smiles": "C1CC1",
+   "scaffold": "C1CC1"
+  },
+  {
+   "inchikey": "VNKYTQGIUYNRMY-UHFFFAOYSA-N",
+   "smiles": "CCCOC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "PMPVIKIVABFJJI-UHFFFAOYSA-N",
+   "smiles": "C1CCC1",
+   "scaffold": "C1CCC1"
+  },
+  {
+   "inchikey": "UMNKXPULIDJLSU-UHFFFAOYSA-N",
+   "smiles": "FC(Cl)Cl",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "BHNZEZWIUMJCGF-UHFFFAOYSA-N",
+   "smiles": "CC(F)(F)Cl",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "AUKVIBNBLXQNIZ-UHFFFAOYSA-N",
+   "smiles": "CCCC(C)CC(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "AFTPEBDOGXRMNQ-UHFFFAOYSA-N",
+   "smiles": "CCC(C)CC(C)(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "ARWOOWBJJKVYOV-UHFFFAOYSA-N",
+   "smiles": "CCC(C)C(C)(C)CC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "CBVFSZDQEHBJEQ-UHFFFAOYSA-N",
+   "smiles": "CCCC(C)C(C)(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "DJYSEQMMCZAKGT-UHFFFAOYSA-N",
+   "smiles": "CCCC(C)(C)C(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "SVEMKBCPZYWEPH-UHFFFAOYSA-N",
+   "smiles": "CCC(C)(C)CC(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "JLCYYQOQSAMWTA-UHFFFAOYSA-N",
+   "smiles": "CC(C)C(C)(C)C(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "RWRIWBAIICGTTQ-UHFFFAOYSA-N",
+   "smiles": "FCF",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "INLLPKCGLOXCIV-UHFFFAOYSA-N",
+   "smiles": "C=CBr",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "XJRBAMWJDBPFIM-UHFFFAOYSA-N",
+   "smiles": "C=COC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "JMANVNJQNLATNU-UHFFFAOYSA-N",
+   "smiles": "N#CC#N",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "NKTDTMONXHODTI-UHFFFAOYSA-N",
+   "smiles": "CC#CCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "QNRMTGGDHLBXQZ-UHFFFAOYSA-N",
+   "smiles": "C=C=CC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "ZERULLAPCVRMCO-UHFFFAOYSA-N",
+   "smiles": "CCCSCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "YVXHZKKCZYLQOP-UHFFFAOYSA-N",
+   "smiles": "C#CCCCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "ABYGSZMCWVXFCQ-UHFFFAOYSA-N",
+   "smiles": "CCCC(CCC)CCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "DZJTZGHZAWTWGA-UHFFFAOYSA-N",
+   "smiles": "CCC(C)CC(C)CC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "HQZHQNKZOYIKQC-UHFFFAOYSA-N",
+   "smiles": "CCC(C)CCC(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "WSOKFYJGNBQDPW-UHFFFAOYSA-N",
+   "smiles": "CCCC(C)(C)CCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "KEVMYFLMMDUPJE-UHFFFAOYSA-N",
+   "smiles": "CC(C)CCCCC(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "ZALHPSXXQIPKTQ-UHFFFAOYSA-N",
+   "smiles": "CCC(C)CCCC(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "RUTNOQHQISEBGT-UHFFFAOYSA-N",
+   "smiles": "CCC(C)C(C)C(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "WXEHBUMAEPOYKP-UHFFFAOYSA-N",
+   "smiles": "CCSC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "XUCNUKMRBVNAPB-UHFFFAOYSA-N",
+   "smiles": "C=CF",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "BHELZAPQIKSEDF-UHFFFAOYSA-N",
+   "smiles": "C=CCBr",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "PNLQPWWBHXMFCA-UHFFFAOYSA-N",
+   "smiles": "C=C(C)Cl",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "UJPMYEOUBPIPHQ-UHFFFAOYSA-N",
+   "smiles": "CC(F)(F)F",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "CRNIHJHMEQZAAS-UHFFFAOYSA-N",
+   "smiles": "CCC(C)(C)Cl",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "XMROPFQWHHUFFS-UHFFFAOYSA-N",
+   "smiles": "CCCC(CC)CCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "NRJUFUBKIFIKFI-UHFFFAOYSA-N",
+   "smiles": "CCCCC(CC)CCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "CYWROHZCELEGSE-UHFFFAOYSA-N",
+   "smiles": "CCCC(C)(CC)CC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "KYCZJIBOPKRSOV-UHFFFAOYSA-N",
+   "smiles": "CCC(CC)CC(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "MAKRYGRRIKSDES-UHFFFAOYSA-N",
+   "smiles": "CCCC(C)C(C)CC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "MVLOWDRGPHBNNF-UHFFFAOYSA-N",
+   "smiles": "CCCC(CC)C(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "OKCRKWVABWILDR-UHFFFAOYSA-N",
+   "smiles": "CCC(C)C(CC)CC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "WBRFDUJXCLCKPX-UHFFFAOYSA-N",
+   "smiles": "CCCCC(C)C(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "AZLAWGCUDHUQDB-UHFFFAOYSA-N",
+   "smiles": "CCCC(CCC)C(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "DBULLUBYDONGLT-UHFFFAOYSA-N",
+   "smiles": "CCCCCC(C)(C)CC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "DGEMPTLPTFNEHJ-UHFFFAOYSA-N",
+   "smiles": "CCC(CC)CCC(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "DOYJTLUPPPUSMD-UHFFFAOYSA-N",
+   "smiles": "CCCC(C)C(C)CCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "HOAAQUNESXYFDT-UHFFFAOYSA-N",
+   "smiles": "CCCC(C)CCC(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "HSOMNBKXPGCNBH-UHFFFAOYSA-N",
+   "smiles": "CCCCC(C)(CC)CC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "IXAVTTRPEXFVSX-UHFFFAOYSA-N",
+   "smiles": "CCCCC(C)CC(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "JEEQUUSFXYRPRK-UHFFFAOYSA-N",
+   "smiles": "CCC(C)CCC(C)CC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "NKMJCVVUYDKHAV-UHFFFAOYSA-N",
+   "smiles": "CCCCC(CC)C(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "QQCWGAMGBCGAQJ-UHFFFAOYSA-N",
+   "smiles": "CCCCC(C)C(C)CC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "VRHRGVJOUHJULC-UHFFFAOYSA-N",
+   "smiles": "CCCC(C)CC(C)CC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "YPMNDMUOGQJCLW-UHFFFAOYSA-N",
+   "smiles": "CCCCCC(C)C(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "ZMEDGZAGMLTROM-UHFFFAOYSA-N",
+   "smiles": "CCCCC(C)(C)CCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "ZRTXVJYJVBTXHE-UHFFFAOYSA-N",
+   "smiles": "CCC(CC)C(C)(C)CC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "DDMOUSALMHHKOS-UHFFFAOYSA-N",
+   "smiles": "FC(F)(Cl)C(F)(F)Cl",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "HXQDUXXBVMMIKL-UHFFFAOYSA-N",
+   "smiles": "CC(C)(C)CCC(C)(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "KDRZICOOQNIJDN-UHFFFAOYSA-N",
+   "smiles": "CC(C)C(C)CC(C)(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "RMQHJMMCLSJULX-UHFFFAOYSA-N",
+   "smiles": "CCCC(C)(C)C(C)(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "OWFKEHICSVOVAC-UHFFFAOYSA-N",
+   "smiles": "CC(C(C)(C)C)C(C)(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "IQIBYAHJXQVQGB-UHFFFAOYSA-N",
+   "smiles": "CCC(C)(C)S",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "LVGUZGTVOIAKKC-UHFFFAOYSA-N",
+   "smiles": "FCC(F)(F)F",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "DUPUVYJQZSLSJB-UHFFFAOYSA-N",
+   "smiles": "CCC(CC)C(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "UUAGAQFQZIEFAH-UHFFFAOYSA-N",
+   "smiles": "FC(F)=C(F)Cl",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "JZBKRUIGSVOOIC-UHFFFAOYSA-N",
+   "smiles": "CCCC(C)C(CC)CC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "MPYQJQDSICRCJJ-UHFFFAOYSA-N",
+   "smiles": "CCCC(C)(CC)CCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "OJDKRASKNKPYDH-UHFFFAOYSA-N",
+   "smiles": "CCCC(CC)CC(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "VBZCRMTUDYIWIH-UHFFFAOYSA-N",
+   "smiles": "CCC(CC)C(CC)CC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "VXARVYMIZCGZGG-UHFFFAOYSA-N",
+   "smiles": "CCC(C)CC(CC)CC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "WWNGLKDLYKNGGT-UHFFFAOYSA-N",
+   "smiles": "CCCC(CC)(CC)CC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "ACYHSTUWOQNWCX-UHFFFAOYSA-N",
+   "smiles": "CCCCC(C)C(C)(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "BLNBSBLKPFFJKQ-UHFFFAOYSA-N",
+   "smiles": "CCCC(C)(C)C(C)CC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "FHJCGIUZJXWNET-UHFFFAOYSA-N",
+   "smiles": "CC(C)CCCC(C)(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "GZJFAWOTMWATOS-UHFFFAOYSA-N",
+   "smiles": "CCC(C)CCC(C)(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "IHPXJGBVRWFEJB-UHFFFAOYSA-N",
+   "smiles": "CC(C)CCC(C)C(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "IIYGOARYARWJBO-UHFFFAOYSA-N",
+   "smiles": "CCCC(C)CC(C)(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "LJIIBBYARMPSMT-UHFFFAOYSA-N",
+   "smiles": "CCC(C)C(C)C(C)CC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "PJIFKODHGMUPFH-UHFFFAOYSA-N",
+   "smiles": "CCCC(C)(CC)C(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "QACXEXNKLFWKLK-UHFFFAOYSA-N",
+   "smiles": "CCCCC(C)(C)C(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "QALGVLROELGEEM-UHFFFAOYSA-N",
+   "smiles": "CCCC(C)(C)CC(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "QHLDBFLIDFTHQI-UHFFFAOYSA-N",
+   "smiles": "CCC(CC)CC(C)(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "RHMRCCBCYFAZIK-UHFFFAOYSA-N",
+   "smiles": "CCC(CC)C(C)C(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "SIKFMUYSQCEQOO-UHFFFAOYSA-N",
+   "smiles": "CCC(C)(CC)CC(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "SOYLPZSOEXZMLE-UHFFFAOYSA-N",
+   "smiles": "CCC(C)(C)CCC(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "UJEUVDLASLOZIV-UHFFFAOYSA-N",
+   "smiles": "CCC(CC(C)C)C(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "UVVYAKOLFKEZEE-UHFFFAOYSA-N",
+   "smiles": "CCCC(C)C(C)C(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "VRVRZZWPKABUOE-UHFFFAOYSA-N",
+   "smiles": "CCC(C)CC(C)(C)CC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "XYDYODCWVCBIOQ-UHFFFAOYSA-N",
+   "smiles": "CCCC(CC)C(C)(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "YBOXGRMAQIYMGV-UHFFFAOYSA-N",
+   "smiles": "CCCC(C(C)C)C(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "YKPNYFKOKKKGNM-UHFFFAOYSA-N",
+   "smiles": "CCC(C)CC(C)C(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "YNLBBDHDNIXQNL-UHFFFAOYSA-N",
+   "smiles": "CC(C)CC(C)CC(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "ZGJCTUKRTSBTIQ-UHFFFAOYSA-N",
+   "smiles": "CCC(C)C(C)(CC)CC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "AJDIFHIHSYVDGP-UHFFFAOYSA-N",
+   "smiles": "CCC(C)(CC)C(C)(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "BHGNYYIOYPFWKC-UHFFFAOYSA-N",
+   "smiles": "CC(C)C(C)C(C)C(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "GCFKTDRTZYDRBI-UHFFFAOYSA-N",
+   "smiles": "CC(C)CC(C)C(C)(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "GCGFXFIPOBRMQT-UHFFFAOYSA-N",
+   "smiles": "CC(C)CC(C)(C)C(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "HIHSOGFAVTVMCY-UHFFFAOYSA-N",
+   "smiles": "CCC(C)C(C)(C)C(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "MCEYLFHKATVXLN-UHFFFAOYSA-N",
+   "smiles": "CCC(C)(C)C(C)(C)CC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "MHPSPNGWFAGBNH-UHFFFAOYSA-N",
+   "smiles": "CCC(C)C(C)C(C)(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "OHZNMGSGEFVFTI-UHFFFAOYSA-N",
+   "smiles": "CCC(C)(C(C)C)C(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "VLIZIVHXZXQRDE-UHFFFAOYSA-N",
+   "smiles": "CCC(C(C)C)C(C)(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "XDRDDPSGUQMOBO-UHFFFAOYSA-N",
+   "smiles": "CCC(C)(C)C(C)C(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "YVYHOOYMDHZALB-UHFFFAOYSA-N",
+   "smiles": "CC(C)C(C(C)C)C(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "WKQBIIUOSATALN-UHFFFAOYSA-N",
+   "smiles": "CC(C)C(C)(C)C(C)(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "VNWKTOKETHGBQD-UHFFFAOYSA-N",
+   "smiles": "C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "NBVXSUQYWXRMNV-UHFFFAOYSA-N",
+   "smiles": "CF",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "HSFWRNGVRCDJHI-UHFFFAOYSA-N",
+   "smiles": "C#C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "UHCBBWUQDAVSMS-UHFFFAOYSA-N",
+   "smiles": "CCF",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "WCXXISMIJBRDQK-UHFFFAOYSA-N",
+   "smiles": "CCCCSC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "BQCIDUSAKPWEOX-UHFFFAOYSA-N",
+   "smiles": "C=C(F)F",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "ROSSIHMZZJOVOU-UHFFFAOYSA-N",
+   "smiles": "CSC(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "YZWKKMVJZFACSU-UHFFFAOYSA-N",
+   "smiles": "CCCCCBr",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "QENGPZGAWFQWCZ-UHFFFAOYSA-N",
+   "smiles": "Cc1ccsc1",
+   "scaffold": "c1ccsc1"
+  },
+  {
+   "inchikey": "XQQBUAPQHNYYRS-UHFFFAOYSA-N",
+   "smiles": "Cc1cccs1",
+   "scaffold": "c1ccsc1"
+  },
+  {
+   "inchikey": "AZSZCFSOHXEJQE-UHFFFAOYSA-N",
+   "smiles": "FC(F)(Br)Br",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "CHVJITGCYZJHLR-UHFFFAOYSA-N",
+   "smiles": "C1=CC=CCC=C1",
+   "scaffold": "C1=CC=CCC=C1"
+  },
+  {
+   "inchikey": "OEYGTUAKNZFCDJ-UHFFFAOYSA-N",
+   "smiles": "CCCCCC(CC)CC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "UEMGWPRHOOEKTA-UHFFFAOYSA-N",
+   "smiles": "Fc1cccc(F)c1",
+   "scaffold": "c1ccccc1"
+  },
+  {
+   "inchikey": "GTLACDSXYULKMZ-UHFFFAOYSA-N",
+   "smiles": "FC(F)C(F)(F)F",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "BTGGSWBKRYMHQK-UHFFFAOYSA-N",
+   "smiles": "CCCC(CC)C(C)CC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "DSSAZLXYIQIXGW-UHFFFAOYSA-N",
+   "smiles": "CCC(CC)(CC)C(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "OSKIMJMPFNLVOU-UHFFFAOYSA-N",
+   "smiles": "CCC(C)C(CC)C(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "UOHMMEJUHBCKEE-UHFFFAOYSA-N",
+   "smiles": "Cc1ccc(C)c(C)c1C",
+   "scaffold": "c1ccccc1"
+  },
+  {
+   "inchikey": "WRBHKVWLEIYLDZ-UHFFFAOYSA-N",
+   "smiles": "CCCC(C)C(C)(C)CC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "YMBNRMDSLJNNPF-UHFFFAOYSA-N",
+   "smiles": "CCC(C)C(C)CC(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "PXHNHTBJHHSVPT-UHFFFAOYSA-N",
+   "smiles": "CCC(C)(C)CC(C)(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "WJYMPXJVHNDZHD-UHFFFAOYSA-N",
+   "smiles": "CCc1cc(CC)cc(CC)c1",
+   "scaffold": "c1ccccc1"
+  },
+  {
+   "inchikey": "BCCOBQSFUDVTJQ-UHFFFAOYSA-N",
+   "smiles": "FC1(F)C(F)(F)C(F)(F)C1(F)F",
+   "scaffold": "C1CCC1"
+  },
+  {
+   "inchikey": "QPJDMGCKMHUXFD-UHFFFAOYSA-N",
+   "smiles": "N#CCl",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "ZDDDFDQTSXYYSE-UHFFFAOYSA-N",
+   "smiles": "CCCSCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "XJIRSLHMKBUGMR-UHFFFAOYSA-N",
+   "smiles": "CCCCSCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "ATQUFXWBVZUTKO-UHFFFAOYSA-N",
+   "smiles": "CC1=CCCC1",
+   "scaffold": "C1=CCCC1"
+  },
+  {
+   "inchikey": "CXOZQHPXKPDQGT-UHFFFAOYSA-N",
+   "smiles": "CC1C=CCC1",
+   "scaffold": "C1=CCCC1"
+  },
+  {
+   "inchikey": "FWMRUAODTCVEQK-UHFFFAOYSA-N",
+   "smiles": "CC1CC=CC1",
+   "scaffold": "C1=CCCC1"
+  },
+  {
+   "inchikey": "AFYPFACVUDMOHA-UHFFFAOYSA-N",
+   "smiles": "FC(F)(F)Cl",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "GOYDNIKZWGIXJT-UHFFFAOYSA-N",
+   "smiles": "Fc1ccccc1F",
+   "scaffold": "c1ccccc1"
+  },
+  {
+   "inchikey": "WJTCGQSWYFHTAC-UHFFFAOYSA-N",
+   "smiles": "C1CCCCCCC1",
+   "scaffold": "C1CCCCCCC1"
+  },
+  {
+   "inchikey": "BFKJFAAPBSQJPD-UHFFFAOYSA-N",
+   "smiles": "FC(F)=C(F)F",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "UEXCJVNBTNXOEH-UHFFFAOYSA-N",
+   "smiles": "C#Cc1ccccc1",
+   "scaffold": "c1ccccc1"
+  },
+  {
+   "inchikey": "ZAGHKONXGGSVDV-UHFFFAOYSA-N",
+   "smiles": "CCCCC1CCCC1",
+   "scaffold": "C1CCCC1"
+  },
+  {
+   "inchikey": "ZEOVXNVKXIPWMS-UHFFFAOYSA-N",
+   "smiles": "CC(C)(Cl)Cl",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "MMASVVOQIKCFJZ-UHFFFAOYSA-N",
+   "smiles": "CCC(C)(CC)C(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "RJTJVVYSTUQWNI-UHFFFAOYSA-N",
+   "smiles": "CCc1ccc2ccccc2c1",
+   "scaffold": "c1ccc2ccccc2c1"
+  },
+  {
+   "inchikey": "CBMXCNPQDUJNHT-UHFFFAOYSA-N",
+   "smiles": "Cc1ccc2c(C)cccc2c1",
+   "scaffold": "c1ccc2ccccc2c1"
+  },
+  {
+   "inchikey": "DQDNKQWGBZFFRA-UHFFFAOYSA-N",
+   "smiles": "C#CCCCCCCCCCCCCCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "QHJMFSMPSZREIF-UHFFFAOYSA-N",
+   "smiles": "Cc1cc(C)c2ccccc2c1",
+   "scaffold": "c1ccc2ccccc2c1"
+  },
+  {
+   "inchikey": "XSROQCDVUIHRSI-UHFFFAOYSA-N",
+   "smiles": "C1CSC1",
+   "scaffold": "C1CSC1"
+  },
+  {
+   "inchikey": "YPWFISCTZQNZAU-UHFFFAOYSA-N",
+   "smiles": "C1CCSCC1",
+   "scaffold": "C1CCSCC1"
+  },
+  {
+   "inchikey": "CZHLPWNZCJEPJB-UHFFFAOYSA-N",
+   "smiles": "CC(C)CCCl",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "OSSQSXOTMIGBCF-UHFFFAOYSA-N",
+   "smiles": "C#CCCCCCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "QUGUFLJIAFISSW-UHFFFAOYSA-N",
+   "smiles": "Fc1ccc(F)cc1",
+   "scaffold": "c1ccccc1"
+  },
+  {
+   "inchikey": "MSTLSCNJAHAQNU-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCC1CCCCC1",
+   "scaffold": "C1CCCCC1"
+  },
+  {
+   "inchikey": "OMMLUKLXGSRPHK-UHFFFAOYSA-N",
+   "smiles": "CC(C)(C)C(C)(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "QNLZIZAQLLYXTC-UHFFFAOYSA-N",
+   "smiles": "Cc1ccc2ccccc2c1C",
+   "scaffold": "c1ccc2ccccc2c1"
+  },
+  {
+   "inchikey": "APQSQLNWAIULLK-UHFFFAOYSA-N",
+   "smiles": "Cc1ccc(C)c2ccccc12",
+   "scaffold": "c1ccc2ccccc2c1"
+  },
+  {
+   "inchikey": "HCDGVLDPFQMKDK-UHFFFAOYSA-N",
+   "smiles": "FC(F)=C(F)C(F)(F)F",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "WNLWIOJSURYFIB-UHFFFAOYSA-N",
+   "smiles": "CCc1ccc(CC)c(CC)c1",
+   "scaffold": "c1ccccc1"
+  },
+  {
+   "inchikey": "VBZWSGALLODQNC-UHFFFAOYSA-N",
+   "smiles": "O=C(C(F)(F)F)C(F)(F)F",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "QYSGYZVSCZSLHT-UHFFFAOYSA-N",
+   "smiles": "FC(F)(F)C(F)(F)C(F)(F)F",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "CCGKOQOJPYTBIH-UHFFFAOYSA-N",
+   "smiles": "C=C=O",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "HFEHLDPGIKPNKL-UHFFFAOYSA-N",
+   "smiles": "C=CCI",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "VOVUARRWDCVURC-UHFFFAOYSA-N",
+   "smiles": "C1CS1",
+   "scaffold": "C1CS1"
+  },
+  {
+   "inchikey": "HTHNTJCVPNKCPZ-UHFFFAOYSA-N",
+   "smiles": "FC(F)=CCl",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "UGFAIRIUMAVXCW-UHFFFAOYSA-N",
+   "smiles": "[C-]#[O+]",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "XFNJYAKDBJUJAJ-UHFFFAOYSA-N",
+   "smiles": "CC(Br)CBr",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "CZWSZZHGSNZRMW-UHFFFAOYSA-N",
+   "smiles": "CCC(Br)CBr",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "AYCANDRGVPTASA-UHFFFAOYSA-N",
+   "smiles": "FC(F)=C(F)Br",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "WRWPPGUCZBJXKX-UHFFFAOYSA-N",
+   "smiles": "Cc1ccc(F)cc1",
+   "scaffold": "c1ccccc1"
+  },
+  {
+   "inchikey": "HLTMUYBTNSVOFY-UHFFFAOYSA-N",
+   "smiles": "CCCCCC1CCCCC1",
+   "scaffold": "C1CCCCC1"
+  },
+  {
+   "inchikey": "FBXWCEKQCVOOLT-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCC1CCCCC1",
+   "scaffold": "C1CCCCC1"
+  },
+  {
+   "inchikey": "NALZTFARIYUCBY-UHFFFAOYSA-N",
+   "smiles": "CCCC[N+](=O)[O-]",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "CLMFECCMAVQYQA-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCC1CCCCC1",
+   "scaffold": "C1CCCCC1"
+  },
+  {
+   "inchikey": "DKRUJKKWJGNYQN-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCCCC1CCCCC1",
+   "scaffold": "C1CCCCC1"
+  },
+  {
+   "inchikey": "JZALLXAUNPOCEU-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCCCCc1ccccc1",
+   "scaffold": "c1ccccc1"
+  },
+  {
+   "inchikey": "JIRNEODMTPGRGV-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCCCCCc1ccccc1",
+   "scaffold": "c1ccccc1"
+  },
+  {
+   "inchikey": "XWCDCDSDNJVCLO-UHFFFAOYSA-N",
+   "smiles": "FCCl",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "OGNAOIGAPPSUMG-UHFFFAOYSA-N",
+   "smiles": "C1CC12CC2",
+   "scaffold": "C1CC12CC2"
+  },
+  {
+   "inchikey": "CUDSBWGCGSUXDB-UHFFFAOYSA-N",
+   "smiles": "CCCCSSCCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "ILLHQJIJCRNRCJ-UHFFFAOYSA-N",
+   "smiles": "C#CCCCCCCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "BXXWFOGWXLJPPA-UHFFFAOYSA-N",
+   "smiles": "CC(Br)C(C)Br",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "ZVDBUOGYYYNMQI-UHFFFAOYSA-N",
+   "smiles": "C#CCCCCCCCCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "GZEDKDBFUBPZNG-UHFFFAOYSA-N",
+   "smiles": "C#CCCCCCCCCCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "KDUIUFJBNGTBMD-UHFFFAOYSA-N",
+   "smiles": "C1=CC=CC=CC=C1",
+   "scaffold": "C1=CC=CC=CC=C1"
+  },
+  {
+   "inchikey": "QHWAQXOSHHKCFK-UHFFFAOYSA-N",
+   "smiles": "CCCCCCC1CCCCC1",
+   "scaffold": "C1CCCCC1"
+  },
+  {
+   "inchikey": "UPOMCDPCTBJJDA-UHFFFAOYSA-N",
+   "smiles": "CC(C)COC(C)(C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "DONJGKADZJEXRJ-UHFFFAOYSA-N",
+   "smiles": "C#CCCCCCCCCCCCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "UCIDYSLOTJMRAM-UHFFFAOYSA-N",
+   "smiles": "C#CCCCCCCCCCCCCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "SPUWFVKLHHEKGV-UHFFFAOYSA-N",
+   "smiles": "Cc1ccc2cccc(C)c2c1",
+   "scaffold": "c1ccc2ccccc2c1"
+  },
+  {
+   "inchikey": "SUGZATOHBPXTDV-UHFFFAOYSA-N",
+   "smiles": "CCC(C)[N+](=O)[O-]",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "BLRBGKYYWDBAQQ-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCCC1CCCCC1",
+   "scaffold": "C1CCCCC1"
+  },
+  {
+   "inchikey": "FEWANSQOXSIFOK-UHFFFAOYSA-N",
+   "smiles": "CCc1ccc(CC)c(CC)c1CC",
+   "scaffold": "c1ccccc1"
+  },
+  {
+   "inchikey": "CFBGXYDUODCMNS-UHFFFAOYSA-N",
+   "smiles": "C1=CCC1",
+   "scaffold": "C1=CCC1"
+  },
+  {
+   "inchikey": "WVDYBOADDMMFIY-UHFFFAOYSA-N",
+   "smiles": "SC1CCCC1",
+   "scaffold": "C1CCCC1"
+  },
+  {
+   "inchikey": "FJDWJOQOEZRIDJ-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCSC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "TXEYQDLBPFQVAA-UHFFFAOYSA-N",
+   "smiles": "FC(F)(F)F",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "PQDJYEQOELDLCP-UHFFFAOYSA-N",
+   "smiles": "C[SiH](C)C",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "QROGIFZRVHSFLM-UHFFFAOYSA-N",
+   "smiles": "CC=Cc1ccccc1",
+   "scaffold": "c1ccccc1"
+  },
+  {
+   "inchikey": "IPBROXKVGHZHJV-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCCCS",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "ORTRWBYBJVGVQC-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCCCCCCS",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "WOUVLFFZQCUYOL-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCC1CCCC1",
+   "scaffold": "C1CCCC1"
+  },
+  {
+   "inchikey": "UKAMWVYNAVUZEA-UHFFFAOYSA-N",
+   "smiles": "CCCCc1ccc2ccccc2c1",
+   "scaffold": "c1ccc2ccccc2c1"
+  },
+  {
+   "inchikey": "XQQVOBPJWHQXEN-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCC1CCCCC1",
+   "scaffold": "C1CCCCC1"
+  },
+  {
+   "inchikey": "NSOYZSQQDPNCAC-UHFFFAOYSA-N",
+   "smiles": "CCc1cc(CC)c(CC)cc1CC",
+   "scaffold": "c1ccccc1"
+  },
+  {
+   "inchikey": "NQAVPKIJZCHUNS-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCCCCC1CCCCC1",
+   "scaffold": "C1CCCCC1"
+  },
+  {
+   "inchikey": "QJEXLOSCNXHBAX-UHFFFAOYSA-N",
+   "smiles": "CCc1cc(CC)c(CC)c(CC)c1",
+   "scaffold": "c1ccccc1"
+  },
+  {
+   "inchikey": "WSJULBMCKQTTIG-UHFFFAOYSA-N",
+   "smiles": "FC(=C(F)C(F)(F)F)C(F)(F)F",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "KAVGMUDTWQVPDF-UHFFFAOYSA-N",
+   "smiles": "FC(F)(F)C(F)(F)C(F)(F)C(F)(F)F",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "MJRCCWJSYFOGBX-UHFFFAOYSA-N",
+   "smiles": "CCCCCSCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "AHCJTMBRROLNHV-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCSC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "RNEUXBDXTNIASG-UHFFFAOYSA-N",
+   "smiles": "CCCCCSCCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "WAITXWGCJQLPGH-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCSCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "LUAABLIRQSWMGZ-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCSCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "AQAOPNMAEGBYHI-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCSCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "UNIAPWPIAGJFDG-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCSCCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "VSSRSPLEFYQIEK-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCSCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "CUFNKYGDVFVPHO-UHFFFAOYSA-N",
+   "smiles": "c1ccc2cccc-2cc1",
+   "scaffold": "c1ccc2cccc-2cc1"
+  },
+  {
+   "inchikey": "ODNRTOSCFYDTKF-UHFFFAOYSA-N",
+   "smiles": "CC1CC(C)CC(C)C1",
+   "scaffold": "C1CCCCC1"
+  },
+  {
+   "inchikey": "VIDOPANCAUPXNH-UHFFFAOYSA-N",
+   "smiles": "CCc1cccc(CC)c1CC",
+   "scaffold": "c1ccccc1"
+  },
+  {
+   "inchikey": "WMIYKQLTONQJES-UHFFFAOYSA-N",
+   "smiles": "FC(F)(F)C(F)(F)F",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "HMAMGXMFMCAOPV-UHFFFAOYSA-N",
+   "smiles": "CCCc1cccc2ccccc12",
+   "scaffold": "c1ccc2ccccc2c1"
+  },
+  {
+   "inchikey": "LQBNOHAXLHRIQW-UHFFFAOYSA-N",
+   "smiles": "CCCc1ccc2ccccc2c1",
+   "scaffold": "c1ccc2ccccc2c1"
+  },
+  {
+   "inchikey": "QMJVEYVUEYCZJY-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCCCCCCSC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "FDHDUXOBMHHFFJ-UHFFFAOYSA-N",
+   "smiles": "CCCCCc1cccc2ccccc12",
+   "scaffold": "c1ccc2ccccc2c1"
+  },
+  {
+   "inchikey": "QCMRTPFHMFJUDP-UHFFFAOYSA-N",
+   "smiles": "CCCCCc1ccc2ccccc2c1",
+   "scaffold": "c1ccc2ccccc2c1"
+  },
+  {
+   "inchikey": "MJWRHKSSZBHAEW-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCCCCC1CCCC1",
+   "scaffold": "C1CCCC1"
+  },
+  {
+   "inchikey": "HENJCAULAAJZLZ-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCCCCCC1CCCC1",
+   "scaffold": "C1CCCC1"
+  },
+  {
+   "inchikey": "IDJPKRIELSFBPE-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCSSCCCCCCCCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "YUWFEBAXEOLKSG-UHFFFAOYSA-N",
+   "smiles": "Cc1c(C)c(C)c(C)c(C)c1C",
+   "scaffold": "c1ccccc1"
+  },
+  {
+   "inchikey": "JRHNUZCXXOTJCA-UHFFFAOYSA-N",
+   "smiles": "CCCF",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "ANGGPYSFTXVERY-UHFFFAOYSA-N",
+   "smiles": "CC(C)(C)I",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "JWCVYQRPINPYQJ-UHFFFAOYSA-N",
+   "smiles": "C1CCCSCC1",
+   "scaffold": "C1CCCSCC1"
+  },
+  {
+   "inchikey": "FWRIVMHSSSZAFD-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCSCCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "OSWITQLVZPPUIR-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCSCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "GEKDEMKPCKTKEC-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCCCCS",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "IGMQODZGDORXEN-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCCCCCS",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "REIUXOLGHVXAEO-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCCCCCO",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "PRNZBCYBKGCOFI-UHFFFAOYSA-N",
+   "smiles": "CC(C)F",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "DUYAAUVXQSMXQP-UHFFFAOYSA-N",
+   "smiles": "CC(=O)S",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "YVSFLVNWJIEJRV-UHFFFAOYSA-N",
+   "smiles": "C#CCCCCCCCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "LVTHBOGDYURNJG-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCSCCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "WDPGYMUKIHVMKG-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCCCSCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "OOPWHABAPSZATM-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCCCSCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "QWZXZBTXXNPJBP-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCCCCSCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "VTQLLABMELLUPD-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCCCSCCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "WWGUMAYGTYQSGA-UHFFFAOYSA-N",
+   "smiles": "Cc1cc2ccccc2cc1C",
+   "scaffold": "c1ccc2ccccc2c1"
+  },
+  {
+   "inchikey": "UYADEHJVPVIVBT-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCCCCSCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "SDDBCEWUYXVGCQ-UHFFFAOYSA-N",
+   "smiles": "Cc1cccc2c(C)cccc12",
+   "scaffold": "c1ccc2ccccc2c1"
+  },
+  {
+   "inchikey": "ISXPOEJSKALLKA-UHFFFAOYSA-N",
+   "smiles": "CC(I)CI",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "IYRWEQXVUNLMAY-UHFFFAOYSA-N",
+   "smiles": "O=C(F)F",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "MIAAQPQIWLWRSI-UHFFFAOYSA-N",
+   "smiles": "CCC(I)CI",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "XLTWAJQKAGLQDX-UHFFFAOYSA-N",
+   "smiles": "CC(Br)C(C)(C)Br",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "BUSHLWVWPAEVMX-UHFFFAOYSA-N",
+   "smiles": "C#CCCCCCCCCCCCCCCCCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "DEQLTFPCJRGSHW-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCCCCCCc1ccccc1",
+   "scaffold": "c1ccccc1"
+  },
+  {
+   "inchikey": "MIZLGWKEZAPEFJ-UHFFFAOYSA-N",
+   "smiles": "FC=C(F)F",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "WFLOTYSKFUPZQB-UHFFFAOYSA-N",
+   "smiles": "FC=CF",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "JREJWHNDQOGSQT-UHFFFAOYSA-N",
+   "smiles": "CCc1cc(CC)c(CC)c(CC)c1CC",
+   "scaffold": "c1ccccc1"
+  },
+  {
+   "inchikey": "OKJPEAGHQZHRQV-UHFFFAOYSA-N",
+   "smiles": "IC(I)I",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "ZNUABQHWFGTOCO-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCCCCCC1CCCCC1",
+   "scaffold": "C1CCCCC1"
+  },
+  {
+   "inchikey": "GBBZLMLLFVFKJM-UHFFFAOYSA-N",
+   "smiles": "ICCI",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "IYDNQWWOZQLMRH-UHFFFAOYSA-N",
+   "smiles": "C#CCCCCCCCCCCCCCCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "QJAOYSPHSNGHNC-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCCCCCCCCS",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "KOGJOFWBMIOBCC-UHFFFAOYSA-N",
+   "smiles": "C#CCCCCCCCCCCCCCCCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "XGFDHKJUZCCPKQ-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCCCCCCCCCO",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "GLMMMCMFSSLXAJ-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCCCCCCSCCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "NRHBFNBZAZZTAU-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCCCCCCC1CCCCC1",
+   "scaffold": "C1CCCCC1"
+  },
+  {
+   "inchikey": "LXSMILGNHYBUCG-UHFFFAOYSA-N",
+   "smiles": "CCc1c(CC)c(CC)c(CC)c(CC)c1CC",
+   "scaffold": "c1ccccc1"
+  },
+  {
+   "inchikey": "FXOGYMXDUYOYKR-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCCCCCCCS",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "LYDAIEHVJWBKTD-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCCCCCSCCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "YNESSCJHABBEIO-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCCCCCCCCCS",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "ZUDCLDDTYFWIAX-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCCCCCCCSCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "AUHLDKAFTOVLPZ-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCCCCCCCCCSC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "SCXDNHDZZGVVOL-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCCCCCCCCSCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "JGHBDWHXQBJVHW-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCCCCSCCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "YYHYWOPDNMFEAV-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCCCCCCCCCCS",
+   "scaffold": "EMPTY_SCAFFOLD"
+  }
+ ],
+ "valid_split": {
+  "source": "train_idx",
+  "fraction_of_original_train": 0.1,
+  "seed": 42,
+  "strategy": "deterministic random sample per property/split/fold"
+ }
+}
