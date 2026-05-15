@@ -95,7 +95,7 @@ dynamics:
     edge_classes: 9
     invariant_edge_feat_dim: 96
     invariant_node_feat_dim: 384
-    n_vector_features: 96
+    n_vector_features: 128
     equivariant_node_feature_dim: 3
     num_layers: 12
     num_heads: 4
@@ -105,7 +105,7 @@ dynamics:
     # Same dims as the cold thermo_head_args (4/4/256) so head capacity
     # is comparable; the rdkit (2/4/128) gets folded in.
     combined_head_args:
-      n_mp_layers: 4
+      n_mp_layers: 6
       mp_n_heads:  4
       hidden:      256
   wrapper_args:

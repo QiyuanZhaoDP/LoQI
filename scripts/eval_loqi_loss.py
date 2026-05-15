@@ -34,6 +34,14 @@ def main():
     p.add_argument("--limit-batches", type=float, default=None,
                    help="Pass Lightning's limit_val_batches (int or float in [0,1]). "
                         "Default None = full val set.")
+    p.add_argument("--n-gpus", type=int, default=1,
+                   help="Number of GPUs for DDP val. >1 enables strategy=ddp "
+                        "so each rank processes a shard of the val set; "
+                        "metrics are sync_dist-aggregated. Note: MiDiDataloader "
+                        "iterates the full dataset per rank (no DistributedSampler) "
+                        "so >1 GPU only helps if Lightning auto-injects the "
+                        "sampler (depends on data_loader_type). 1 GPU is usually "
+                        "enough for a one-shot val.")
     args = p.parse_args()
 
     cfg = OmegaConf.load(args.config)
@@ -113,24 +121,33 @@ def main():
     )
 
     # --- Data ---
+    # Pass property_table so the AttachProperties transform injects thermo /
+    # rdkit / combined target fields into each batch. Without this the val
+    # step crashes inside CombinedPropertyLoss with KeyError: 'enthalpy_298'.
     dm = MoleculeDataModule(
         cfg.data.dataset_root,
         cfg.data.processed_folder,
         cfg.data.batch_size,
         cfg.data.data_loader_type,
         cfg.data.inference_batch_size,
+        property_table=OmegaConf.select(cfg, "data.property_table", default=None),
     )
     val_loader = dm.val_dataloader()
 
     # --- Validate via Lightning (runs validation_step → calculate_loss) ---
     accelerator = "gpu" if args.device.startswith("cuda") else "cpu"
+    n_gpus = max(1, int(args.n_gpus)) if accelerator == "gpu" else 1
     trainer_kwargs = dict(
         accelerator=accelerator,
-        devices=1,
+        devices=n_gpus,
+        strategy="ddp" if n_gpus > 1 else "auto",
         logger=False,
         enable_progress_bar=True,
         enable_model_summary=False,
+        use_distributed_sampler=True,   # try to shard the val loader
     )
+    if n_gpus > 1:
+        print(f"  ddp val on {n_gpus} GPUs")
     if args.limit_batches is not None:
         trainer_kwargs["limit_val_batches"] = (
             int(args.limit_batches)
