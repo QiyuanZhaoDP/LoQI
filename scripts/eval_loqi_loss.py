@@ -17,6 +17,13 @@ import argparse
 import json
 
 import torch
+import torch.multiprocessing as _torch_mp
+# Use file_system sharing strategy so DataLoader workers don't exhaust
+# file descriptors under high num_workers (symptom: "RuntimeError:
+# received 0 items of ancdata" → pin-memory thread dies). Mirrors what
+# scripts/train.py does for the same reason.
+_torch_mp.set_sharing_strategy("file_system")
+
 from lightning import pytorch as pl
 from omegaconf import OmegaConf
 
