@@ -81,7 +81,8 @@ EPOCHS_LARGE=${EPOCHS_LARGE:-150}        # was 200 — most tasks plateau well b
 EPOCHS_SMALL=${EPOCHS_SMALL:-100}        # was 150 — small datasets (<2000 mols) converge fast
 EARLY_STOP_PATIENCE=${EARLY_STOP_PATIENCE:-50}  # was 100 — with shorter budget, 50 still gives
                                                 # plenty of room past val plateau before stopping
-LR=${LR:-3e-4}
+LR=${LR:-1e-4}                           # was 3e-4 — smoke confirmed 1e-4 outperforms under
+                                          # the new schedule (0.2 warmup + clip 0.1 + 100-150 ep)
 BATCH=${BATCH:-32}                              # CV training batch
 SAMPLE_BATCH=${SAMPLE_BATCH:-$BATCH}            # conformer-sampling batch (Stage B)
 EXTRACT_BATCH=${EXTRACT_BATCH:-$BATCH}          # H-cache extraction batch (Stage B.5 / C)
