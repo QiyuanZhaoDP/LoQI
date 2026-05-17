@@ -71,12 +71,16 @@ N_MP_LAYERS=${N_MP_LAYERS:-4}
 MP_N_HEADS=${MP_N_HEADS:-4}
 
 EPOCHS=${EPOCHS:-150}
-WARMUP_FRACTION=${WARMUP_FRACTION:-0.0}   # 0 = no warmup (legacy). 0.05-0.1 = standard fine-tune.
-GRAD_CLIP=${GRAD_CLIP:-1.0}               # Max grad norm. 0.1-0.5 for tiny-head + cached-H training.
+WARMUP_FRACTION=${WARMUP_FRACTION:-0.2}   # 0.2 = first 20% of steps ramp linearly; cures the
+                                          # early-training spike user observed on k_liq_298K and
+                                          # other properties around epoch 30. Set 0.0 to disable.
+GRAD_CLIP=${GRAD_CLIP:-0.1}               # Tight grad clip — paired with warmup, prevents the
+                                          # tiny head's stochastic-batch gradient spikes.
 AUTO_EPOCHS=${AUTO_EPOCHS:-1}
-EPOCHS_LARGE=${EPOCHS_LARGE:-200}
-EPOCHS_SMALL=${EPOCHS_SMALL:-150}
-EARLY_STOP_PATIENCE=${EARLY_STOP_PATIENCE:-100}
+EPOCHS_LARGE=${EPOCHS_LARGE:-150}        # was 200 — most tasks plateau well before that
+EPOCHS_SMALL=${EPOCHS_SMALL:-100}        # was 150 — small datasets (<2000 mols) converge fast
+EARLY_STOP_PATIENCE=${EARLY_STOP_PATIENCE:-50}  # was 100 — with shorter budget, 50 still gives
+                                                # plenty of room past val plateau before stopping
 LR=${LR:-3e-4}
 BATCH=${BATCH:-32}                              # CV training batch
 SAMPLE_BATCH=${SAMPLE_BATCH:-$BATCH}            # conformer-sampling batch (Stage B)

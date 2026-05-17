@@ -46,9 +46,13 @@ export BATCH=32
 export EXTRACT_BATCH=16
 export SAMPLE_BATCH=32
 
-# ★★★ The two knobs being smoke-tested ★★★
-export WARMUP_FRACTION=0.1      # 10% of total steps as linear warmup
-export GRAD_CLIP=0.1            # tighter than the legacy 1.0
+# ★★★ New defaults being smoke-tested — match production wrappers post-update ★★★
+# (these match the new run_cv.sh defaults so smoke == prod after this commit)
+export WARMUP_FRACTION=0.2      # 20% of total steps as linear warmup
+export GRAD_CLIP=0.1            # tight clip, paired with warmup
+# Also the new epoch / patience defaults from run_cv.sh:
+#   EPOCHS_LARGE=150 (was 200)  EPOCHS_SMALL=100 (was 150)  EARLY_STOP_PATIENCE=50 (was 100)
+# These all 6 datasets are "small" (n_train < 1000) → EPOCHS_SMALL=100 applies.
 
 export INPUT_DIR=downstream_ft/0515_final/Clean
 export SPLIT_DIR_ROOT=downstream_ft/0515_final/Split
