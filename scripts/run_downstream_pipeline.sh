@@ -62,6 +62,8 @@ N_GPUS=${N_GPUS:-4}
 BASE_GPU=${BASE_GPU:-0}   # physical GPU offset; outer scripts set BASE_GPU=X instead of CUDA_VISIBLE_DEVICES
 EPOCHS=${EPOCHS:-100}
 LR=${LR:-3e-4}
+WARMUP_FRACTION=${WARMUP_FRACTION:-0.0}    # 0 = pure cosine (legacy). 0.1 = first 10% steps warm up linearly.
+GRAD_CLIP=${GRAD_CLIP:-1.0}                # Max gradient norm. Try 0.1-0.5 for tiny heads on cached H.
 
 # wandb (opt-in). Set WANDB=1 to enable; one wandb run per dataset.
 WANDB=${WANDB:-0}
@@ -365,6 +367,8 @@ _run_one() {
         --ensemble-by input_id \
         --out-dir "$out_dir" \
         --n-folds 5 --lr "$LR" \
+        --warmup-fraction "$WARMUP_FRACTION" \
+        --grad-clip "$GRAD_CLIP" \
         --batch-size "$BATCH" \
         --extract-batch-size "$EXTRACT_BATCH" \
         --device cuda \

@@ -486,9 +486,28 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
         # like logging stays consistent.
         sched = torch.optim.lr_scheduler.LambdaLR(opt, lr_lambda=lambda _: 1.0)
     else:
-        sched = torch.optim.lr_scheduler.CosineAnnealingLR(
-            opt, T_max=total_steps, eta_min=args.lr_min
-        )
+        # Optional linear warmup → cosine decay. Without warmup (fraction=0,
+        # the default) the schedule is pure cosine from peak to eta_min as
+        # before — fully backward compatible.
+        warmup_frac = max(0.0, min(0.5, float(getattr(args, "warmup_fraction", 0.0))))
+        warmup_steps = int(round(warmup_frac * total_steps))
+        cosine_steps = max(1, total_steps - warmup_steps)
+        if warmup_steps > 0:
+            warmup_sched = torch.optim.lr_scheduler.LinearLR(
+                opt, start_factor=0.01, end_factor=1.0,
+                total_iters=warmup_steps,
+            )
+            cosine_sched = torch.optim.lr_scheduler.CosineAnnealingLR(
+                opt, T_max=cosine_steps, eta_min=args.lr_min,
+            )
+            sched = torch.optim.lr_scheduler.SequentialLR(
+                opt, schedulers=[warmup_sched, cosine_sched],
+                milestones=[warmup_steps],
+            )
+        else:
+            sched = torch.optim.lr_scheduler.CosineAnnealingLR(
+                opt, T_max=total_steps, eta_min=args.lr_min,
+            )
 
     # Pre-compute val_idx tensor once for efficient per-epoch eval.
     val_idx_list = val_idx.tolist() if hasattr(val_idx, "tolist") else list(val_idx)
@@ -563,7 +582,7 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
                 loss = loss_mse
             opt.zero_grad()
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), float(getattr(args, "grad_clip", 1.0)))
             opt.step()
             sched.step()
             with torch.no_grad():
@@ -1129,6 +1148,18 @@ def main():
     p.add_argument("--extract-batch-size", type=int, default=64)
     p.add_argument("--lr", type=float, default=3e-4)
     p.add_argument("--lr-min", type=float, default=0.0)
+    p.add_argument("--warmup-fraction", type=float, default=0.0,
+                   help="Fraction of total optimizer steps used for linear "
+                        "warmup before cosine decay. 0.0 = no warmup (pure "
+                        "cosine from peak, current default). 0.1 = first 10%% "
+                        "of steps ramp lr from ~0 → peak linearly. Recommended "
+                        "for fine-tuning small heads on cached features where "
+                        "early-training spikes are common.")
+    p.add_argument("--grad-clip", type=float, default=1.0,
+                   help="Max gradient norm. Default 1.0; try 0.1-0.5 for "
+                        "tiny heads on cached H where stochastic batches can "
+                        "cause large gradient swings that destabilize early "
+                        "training.")
     p.add_argument("--lr-schedule", choices=["cosine", "constant"], default="cosine",
                    help="LR schedule. 'constant' keeps lr fixed at --lr the "
                         "whole run (use to test whether cosine decay is "
