@@ -87,11 +87,13 @@ BATCH=${BATCH:-32}                              # CV training batch
 SAMPLE_BATCH=${SAMPLE_BATCH:-$BATCH}            # conformer-sampling batch (Stage B)
 EXTRACT_BATCH=${EXTRACT_BATCH:-$BATCH}          # H-cache extraction batch (Stage B.5 / C)
 
-# Pre-computed CV split directory (for 0511 audited data). When set,
-# downstream_cv.py loads fold assignments directly from
-#   $SPLIT_DIR_ROOT/<dataset>/random_cv5/cv{i}_train/valid/test.csv
+# Pre-computed CV split directory. When set, downstream_cv.py loads fold
+# assignments directly from
+#   $SPLIT_DIR_ROOT/<dataset>/$SPLIT_KIND/cv{i}_train/valid/test.csv
 # instead of re-splitting internally. Leave empty to use internal KFold.
+# SPLIT_KIND defaults to random_cv5; set to scaffold_cv5 for scaffold splits.
 SPLIT_DIR_ROOT=${SPLIT_DIR_ROOT:-}
+SPLIT_KIND=${SPLIT_KIND:-random_cv5}
 
 OUT_ROOT=${OUT_ROOT:-outputs/downstream_cv}
 WANDB=${WANDB:-1}
@@ -400,7 +402,7 @@ else
             HEAD_HIDDEN=$HEAD_HIDDEN N_MP_LAYERS=$N_MP_LAYERS MP_N_HEADS=$MP_N_HEADS \
             MAX_K_PER_INPUT=${_maxk:-0} \
             ONLY_DATASETS=$_ds H_CACHE_DIR=$_pt \
-            SPLIT_DIR_ROOT="${SPLIT_DIR_ROOT:-}" \
+            SPLIT_DIR_ROOT="${SPLIT_DIR_ROOT:-}" SPLIT_KIND="$SPLIT_KIND" \
             WANDB=$WANDB WANDB_PROJECT=$WANDB_PROJECT WANDB_GROUP=$_sfx \
                 bash scripts/run_downstream_pipeline.sh \
                 >> "$LOG_DIR/${RUN_TAG}_cv_${_sfx}_${_ds}.log" 2>&1 &

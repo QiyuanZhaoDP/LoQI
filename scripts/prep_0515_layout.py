@@ -54,9 +54,7 @@ def main():
     for prop in props:
         src_csv   = per_prop / f"{prop}.csv"
         clean_csv = clean_dir / f"{prop}.csv"
-        src_split = csv_data / prop / "Split" / "random_cv5"
         dst_split_parent = split_dir / prop
-        dst_split = dst_split_parent / "random_cv5"
 
         # 1. per_property/<prop>.csv → Clean/<prop>.csv (rename smiles→SMILES, value→TARGET).
         if not src_csv.exists():
@@ -80,33 +78,35 @@ def main():
                 out.to_csv(clean_csv, index=False)
             n_clean += 1
 
-        # 2. csv_data/<prop>/Split/random_cv5/ → Split/<prop>/random_cv5/ (symlink).
-        if not src_split.is_dir():
-            print(f"  [missing splits] {src_split}"); continue
-        if args.dry_run:
-            print(f"  [would link] {dst_split} -> {src_split}")
+        # 2. Symlink BOTH random_cv5 and scaffold_cv5 (when they exist) so
+        #    downstream wrappers can choose via SPLIT_KIND env var.
+        for split_kind in ("random_cv5", "scaffold_cv5"):
+            src_split_kind = csv_data / prop / "Split" / split_kind
+            dst_split_kind = dst_split_parent / split_kind
+            if not src_split_kind.is_dir():
+                continue   # not all properties may have both — skip silently
+            if args.dry_run:
+                print(f"  [would link] {dst_split_kind} -> {src_split_kind}")
+                n_split += 1
+                continue
+            dst_split_parent.mkdir(exist_ok=True)
+            # Relative symlink so the repo works on any host.
+            rel_target = os.path.relpath(src_split_kind, dst_split_kind.parent)
+            if dst_split_kind.is_symlink() or dst_split_kind.exists():
+                try:
+                    current_target = (os.readlink(dst_split_kind)
+                                      if dst_split_kind.is_symlink() else None)
+                    if current_target == rel_target:
+                        n_skip_split += 1
+                        continue
+                    if dst_split_kind.is_symlink() or dst_split_kind.is_file():
+                        dst_split_kind.unlink()
+                    else:
+                        import shutil; shutil.rmtree(dst_split_kind)
+                except FileNotFoundError:
+                    pass
+            dst_split_kind.symlink_to(rel_target, target_is_directory=True)
             n_split += 1
-            continue
-        dst_split_parent.mkdir(exist_ok=True)
-        # Use RELATIVE symlink so the repo can be checked out on any
-        # machine without breaking (absolute paths would point at
-        # /Users/... or /root/... on different hosts).
-        rel_target = os.path.relpath(src_split, dst_split.parent)
-        if dst_split.is_symlink() or dst_split.exists():
-            try:
-                current_target = os.readlink(dst_split) if dst_split.is_symlink() else None
-                if current_target == rel_target:
-                    n_skip_split += 1
-                    continue
-                # Different target: replace.
-                if dst_split.is_symlink() or dst_split.is_file():
-                    dst_split.unlink()
-                else:
-                    import shutil; shutil.rmtree(dst_split)
-            except FileNotFoundError:
-                pass
-        dst_split.symlink_to(rel_target, target_is_directory=True)
-        n_split += 1
 
     print()
     print(f"  Clean csvs   : wrote {n_clean}, skipped {n_skip_clean} (up-to-date)")

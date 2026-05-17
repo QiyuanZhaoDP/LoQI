@@ -112,7 +112,8 @@ H_CACHE_DIR=${H_CACHE_DIR:-}
 # Kept for backwards compat but _CLI_EXTRACT_ONLY (from CLI flag) takes precedence.
 EXTRACT_ONLY=${_CLI_EXTRACT_ONLY:-0}
 # SPLIT_DIR_ROOT: root dir containing pre-computed splits as
-# $SPLIT_DIR_ROOT/<dataset>/random_cv5/cv{i}_train/valid/test.csv.
+# $SPLIT_DIR_ROOT/<dataset>/$SPLIT_KIND/cv{i}_train/valid/test.csv. SPLIT_KIND
+# defaults to random_cv5; set SPLIT_KIND=scaffold_cv5 to use scaffold splits.
 # When set, downstream_cv.py loads fold assignments directly from these
 # files instead of re-splitting internally — fully reproducible.
 SPLIT_DIR_ROOT=${SPLIT_DIR_ROOT:-}
@@ -357,8 +358,9 @@ _run_one() {
         extract_args="--extract-only"
     fi
     local split_dir_args=""
-    if [[ -n "${SPLIT_DIR_ROOT:-}" ]] && [[ -d "${SPLIT_DIR_ROOT}/${name}/random_cv5" ]]; then
-        split_dir_args="--split-dir ${SPLIT_DIR_ROOT}/${name}/random_cv5"
+    local split_kind="${SPLIT_KIND:-random_cv5}"
+    if [[ -n "${SPLIT_DIR_ROOT:-}" ]] && [[ -d "${SPLIT_DIR_ROOT}/${name}/${split_kind}" ]]; then
+        split_dir_args="--split-dir ${SPLIT_DIR_ROOT}/${name}/${split_kind}"
     fi
 
     CUDA_VISIBLE_DEVICES=$gpu python -u scripts/downstream_cv.py \
