@@ -472,22 +472,26 @@ for rep in sorted(glob.glob(os.path.join(root, "*/cv_report.json"))):
         d = json.load(open(rep))
         rows.append((suffix,
                      d.get("mae_mean", math.nan),
+                     d.get("rmse_mean", math.nan),
                      d.get("r2_mean", math.nan),
                      d.get("mae_last_stable_mean", math.nan),
+                     d.get("rmse_last_stable_mean", math.nan),
                      d.get("r2_last_stable_mean", math.nan),
                      sum(f.get("best_epoch",0) for f in d.get("folds",[]))
                      / max(len(d.get("folds",[])), 1)))
     except Exception as e:
-        rows.append((suffix, math.nan, math.nan, math.nan, math.nan, 0))
+        rows.append((suffix, math.nan, math.nan, math.nan, math.nan, math.nan, math.nan, 0))
 
 if not rows:
     print("No cv_report.json found under", root)
 else:
-    # Group columns so the R² right next to its matching MAE: best-val pair, then last-stable pair.
-    print(f"\n{'suffix':<36s}  {'best_val_MAE':>12s} {'best_R²':>8s}  {'last_stab_MAE':>13s} {'last_R²':>8s}  {'ep':>5s}")
-    print("-" * 96)
-    for suffix, mae_bv, r2_bv, mae_ls, r2_ls, ep in rows:
-        print(f"{suffix:<36s}  {mae_bv:>12.4f} {r2_bv:>8.3f}  {mae_ls:>13.4f} {r2_ls:>8.3f}  {ep:>5.0f}")
+    # Group columns by metric block: best-val (MAE, RMSE, R²) and last-stable (same).
+    print(f"\n{'suffix':<36s}  {'bv_MAE':>10s} {'bv_RMSE':>10s} {'bv_R²':>7s}   "
+          f"{'ls_MAE':>10s} {'ls_RMSE':>10s} {'ls_R²':>7s}  {'ep':>4s}")
+    print("-" * 112)
+    for suffix, mae_bv, rmse_bv, r2_bv, mae_ls, rmse_ls, r2_ls, ep in rows:
+        print(f"{suffix:<36s}  {mae_bv:>10.4f} {rmse_bv:>10.4f} {r2_bv:>7.3f}   "
+              f"{mae_ls:>10.4f} {rmse_ls:>10.4f} {r2_ls:>7.3f}  {ep:>4.0f}")
 PY
 
 echo
