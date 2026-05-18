@@ -3177,10 +3177,6 @@
  ],
  "molecules": [
   {
-   "inchikey": "QGJOPFRUJISHPQ-UHFFFAOYSA-N",
-   "smiles": "S=C=S"
-  },
-  {
    "inchikey": "OKKJLVBELUTLKV-UHFFFAOYSA-N",
    "smiles": "CO"
   },
@@ -3189,12 +3185,12 @@
    "smiles": "CCl"
   },
   {
-   "inchikey": "RTZKZFJDLAIYFH-UHFFFAOYSA-N",
-   "smiles": "CCOCC"
+   "inchikey": "QGJOPFRUJISHPQ-UHFFFAOYSA-N",
+   "smiles": "S=C=S"
   },
   {
-   "inchikey": "YMWUJEATGCHHMB-UHFFFAOYSA-N",
-   "smiles": "ClCCl"
+   "inchikey": "RTZKZFJDLAIYFH-UHFFFAOYSA-N",
+   "smiles": "CCOCC"
   },
   {
    "inchikey": "KVNRLNFWIYMESJ-UHFFFAOYSA-N",
@@ -3239,6 +3235,10 @@
   {
    "inchikey": "IKHGUXGNUITLKF-UHFFFAOYSA-N",
    "smiles": "CC=O"
+  },
+  {
+   "inchikey": "YMWUJEATGCHHMB-UHFFFAOYSA-N",
+   "smiles": "ClCCl"
   },
   {
    "inchikey": "RGSFGYAAUTVSQA-UHFFFAOYSA-N",
@@ -3333,20 +3333,8 @@
    "smiles": "C=CC(=C)C"
   },
   {
-   "inchikey": "FKRCODPIKNYEAC-UHFFFAOYSA-N",
-   "smiles": "CCOC(=O)CC"
-  },
-  {
-   "inchikey": "KQNPFQTWMSNSAP-UHFFFAOYSA-N",
-   "smiles": "CC(C)C(=O)O"
-  },
-  {
    "inchikey": "PPBRXRYQALVLMV-UHFFFAOYSA-N",
    "smiles": "C=Cc1ccccc1"
-  },
-  {
-   "inchikey": "GJRQTCIYDGXPES-UHFFFAOYSA-N",
-   "smiles": "CC(=O)OCC(C)C"
   },
   {
    "inchikey": "CYTYCFOTNPOANT-UHFFFAOYSA-N",
@@ -3389,8 +3377,12 @@
    "smiles": "CCCCCCCCC"
   },
   {
-   "inchikey": "ISPYQTSUDJAMAB-UHFFFAOYSA-N",
-   "smiles": "Oc1ccccc1Cl"
+   "inchikey": "FKRCODPIKNYEAC-UHFFFAOYSA-N",
+   "smiles": "CCOC(=O)CC"
+  },
+  {
+   "inchikey": "KQNPFQTWMSNSAP-UHFFFAOYSA-N",
+   "smiles": "CC(C)C(=O)O"
   },
   {
    "inchikey": "SVONRAPFKPVNKG-UHFFFAOYSA-N",
@@ -3399,6 +3391,10 @@
   {
    "inchikey": "AOGQPLXWSUTHQB-UHFFFAOYSA-N",
    "smiles": "CCCCCCOC(C)=O"
+  },
+  {
+   "inchikey": "GJRQTCIYDGXPES-UHFFFAOYSA-N",
+   "smiles": "CC(=O)OCC(C)C"
   },
   {
    "inchikey": "VZGDMQKNWNREIO-UHFFFAOYSA-N",
@@ -3413,10 +3409,6 @@
    "smiles": "CCN"
   },
   {
-   "inchikey": "LYCAIKOWRPUZTN-UHFFFAOYSA-N",
-   "smiles": "OCCO"
-  },
-  {
    "inchikey": "YHRUOJUYPBUZOS-UHFFFAOYSA-N",
    "smiles": "ClCCCCl"
   },
@@ -3429,12 +3421,12 @@
    "smiles": "CCCCCCCBr"
   },
   {
-   "inchikey": "AFBPFSWMIHJQDM-UHFFFAOYSA-N",
-   "smiles": "CNc1ccccc1"
-  },
-  {
    "inchikey": "DIOQZVSQGTUSAI-UHFFFAOYSA-N",
    "smiles": "CCCCCCCCCC"
+  },
+  {
+   "inchikey": "ISPYQTSUDJAMAB-UHFFFAOYSA-N",
+   "smiles": "Oc1ccccc1Cl"
   },
   {
    "inchikey": "YFTHZRPMJXBUME-UHFFFAOYSA-N",
@@ -3443,10 +3435,6 @@
   {
    "inchikey": "WFDIJRYMOXRFFG-UHFFFAOYSA-N",
    "smiles": "CC(=O)OC(C)=O"
-  },
-  {
-   "inchikey": "PQNFLJBBNBOBRQ-UHFFFAOYSA-N",
-   "smiles": "c1ccc2c(c1)CCC2"
   },
   {
    "inchikey": "VLHAGZNBWKUMRW-UHFFFAOYSA-N",
@@ -3459,6 +3447,10 @@
   {
    "inchikey": "NZZFYRREKKOMAT-UHFFFAOYSA-N",
    "smiles": "ICI"
+  },
+  {
+   "inchikey": "LYCAIKOWRPUZTN-UHFFFAOYSA-N",
+   "smiles": "OCCO"
   },
   {
    "inchikey": "KJRCEJOSASVSRA-UHFFFAOYSA-N",
@@ -3489,6 +3481,10 @@
    "smiles": "OCc1ccco1"
   },
   {
+   "inchikey": "AFBPFSWMIHJQDM-UHFFFAOYSA-N",
+   "smiles": "CNc1ccccc1"
+  },
+  {
    "inchikey": "MGNZXYYWBUKAII-UHFFFAOYSA-N",
    "smiles": "C1=CCCC=C1"
   },
@@ -3501,20 +3497,8 @@
    "smiles": "CCCCCCCC=O"
   },
   {
-   "inchikey": "WGQKYBSKWIADBV-UHFFFAOYSA-N",
-   "smiles": "NCc1ccccc1"
-  },
-  {
    "inchikey": "FUZZWVXGSFPDMH-UHFFFAOYSA-N",
    "smiles": "CCCCCC(=O)O"
-  },
-  {
-   "inchikey": "RRQYJINTUHWNHW-UHFFFAOYSA-N",
-   "smiles": "CCOCCOCCOCC"
-  },
-  {
-   "inchikey": "CYRMSUTZVYGINF-UHFFFAOYSA-N",
-   "smiles": "FC(Cl)(Cl)Cl"
   },
   {
    "inchikey": "GGBJHURWWWLEQH-UHFFFAOYSA-N",
@@ -3569,8 +3553,8 @@
    "smiles": "CC(C)C(=O)C(C)C"
   },
   {
-   "inchikey": "WMOVHXAZOJBABW-UHFFFAOYSA-N",
-   "smiles": "CC(=O)OC(C)(C)C"
+   "inchikey": "PQNFLJBBNBOBRQ-UHFFFAOYSA-N",
+   "smiles": "c1ccc2c(c1)CCC2"
   },
   {
    "inchikey": "LMAUULKNZLEMGN-UHFFFAOYSA-N",
@@ -3633,6 +3617,10 @@
    "smiles": "CC(O)C(C)O"
   },
   {
+   "inchikey": "WGQKYBSKWIADBV-UHFFFAOYSA-N",
+   "smiles": "NCc1ccccc1"
+  },
+  {
    "inchikey": "AOPDRZXCEAKHHW-UHFFFAOYSA-N",
    "smiles": "CCCCCOCCCCC"
   },
@@ -3641,8 +3629,12 @@
    "smiles": "Cc1ccccc1Cl"
   },
   {
-   "inchikey": "WRMNZCZEMHIOCP-UHFFFAOYSA-N",
-   "smiles": "OCCc1ccccc1"
+   "inchikey": "RRQYJINTUHWNHW-UHFFFAOYSA-N",
+   "smiles": "CCOCCOCCOCC"
+  },
+  {
+   "inchikey": "CYRMSUTZVYGINF-UHFFFAOYSA-N",
+   "smiles": "FC(Cl)(Cl)Cl"
   },
   {
    "inchikey": "GWYFCOCPABKNJV-UHFFFAOYSA-N",
@@ -3651,10 +3643,6 @@
   {
    "inchikey": "PNPCRKVUWYDDST-UHFFFAOYSA-N",
    "smiles": "Nc1cccc(Cl)c1"
-  },
-  {
-   "inchikey": "HFFLGKNGCAIQMO-UHFFFAOYSA-N",
-   "smiles": "O=CC(Cl)(Cl)Cl"
   },
   {
    "inchikey": "JLBJTVDPSNHSKJ-UHFFFAOYSA-N",
@@ -3667,6 +3655,10 @@
   {
    "inchikey": "JZHGRUMIRATHIU-UHFFFAOYSA-N",
    "smiles": "C=Cc1cccc(C)c1"
+  },
+  {
+   "inchikey": "WMOVHXAZOJBABW-UHFFFAOYSA-N",
+   "smiles": "CC(=O)OC(C)(C)C"
   },
   {
    "inchikey": "YCOZIPAWZNQLMR-UHFFFAOYSA-N",
@@ -3685,10 +3677,6 @@
    "smiles": "CC"
   },
   {
-   "inchikey": "LCGLNKUTAGEVQW-UHFFFAOYSA-N",
-   "smiles": "COC"
-  },
-  {
    "inchikey": "JJWKPURADFRFRB-UHFFFAOYSA-N",
    "smiles": "O=C=S"
   },
@@ -3703,14 +3691,6 @@
   {
    "inchikey": "AOHJOMMDDJHIJH-UHFFFAOYSA-N",
    "smiles": "CC(N)CN"
-  },
-  {
-   "inchikey": "MTHSVFCYNBDYFN-UHFFFAOYSA-N",
-   "smiles": "OCCOCCO"
-  },
-  {
-   "inchikey": "RPNUMPOLZDHAAY-UHFFFAOYSA-N",
-   "smiles": "NCCNCCN"
   },
   {
    "inchikey": "SJNALLRHIVGIBI-UHFFFAOYSA-N",
@@ -3739,10 +3719,6 @@
   {
    "inchikey": "WETWJCDKMRHUPV-UHFFFAOYSA-N",
    "smiles": "CC(=O)Cl"
-  },
-  {
-   "inchikey": "WJYIASZWHGOTOU-UHFFFAOYSA-N",
-   "smiles": "CCCCCCCN"
   },
   {
    "inchikey": "YHQXBTXEYZIYOV-UHFFFAOYSA-N",
@@ -3813,6 +3789,10 @@
    "smiles": "CCCCC(CC)CC"
   },
   {
+   "inchikey": "WRMNZCZEMHIOCP-UHFFFAOYSA-N",
+   "smiles": "OCCc1ccccc1"
+  },
+  {
    "inchikey": "CERQOIWHTDAKMF-UHFFFAOYSA-N",
    "smiles": "C=C(C)C(=O)O"
   },
@@ -3831,10 +3811,6 @@
   {
    "inchikey": "TYSIILFJZXHVPU-UHFFFAOYSA-N",
    "smiles": "CCCCC(C)CCCC"
-  },
-  {
-   "inchikey": "YFNKIDBQEZZDLK-UHFFFAOYSA-N",
-   "smiles": "COCCOCCOCCOC"
   },
   {
    "inchikey": "CRSBERNSMYQZNG-UHFFFAOYSA-N",
@@ -3859,6 +3835,10 @@
   {
    "inchikey": "AXIUBBVSOWPLDA-UHFFFAOYSA-N",
    "smiles": "CCc1cc(C)ccc1C"
+  },
+  {
+   "inchikey": "HFFLGKNGCAIQMO-UHFFFAOYSA-N",
+   "smiles": "O=CC(Cl)(Cl)Cl"
   },
   {
    "inchikey": "MEMBJMDZWKVOTB-UHFFFAOYSA-N",
@@ -3897,6 +3877,10 @@
    "smiles": "CS"
   },
   {
+   "inchikey": "LCGLNKUTAGEVQW-UHFFFAOYSA-N",
+   "smiles": "COC"
+  },
+  {
    "inchikey": "MWWATHDPGQKSAR-UHFFFAOYSA-N",
    "smiles": "C#CC"
   },
@@ -3921,12 +3905,24 @@
    "smiles": "C=C=CCC"
   },
   {
+   "inchikey": "MTHSVFCYNBDYFN-UHFFFAOYSA-N",
+   "smiles": "OCCOCCO"
+  },
+  {
+   "inchikey": "RPNUMPOLZDHAAY-UHFFFAOYSA-N",
+   "smiles": "NCCNCCN"
+  },
+  {
    "inchikey": "APQIUTYORBAGEZ-UHFFFAOYSA-N",
    "smiles": "CC(Br)Br"
   },
   {
    "inchikey": "FVNIMHIOIXPIQT-UHFFFAOYSA-N",
    "smiles": "CCC(C)OC"
+  },
+  {
+   "inchikey": "WJYIASZWHGOTOU-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCN"
   },
   {
    "inchikey": "ZYVYEJXMYBUCMN-UHFFFAOYSA-N",
@@ -3985,16 +3981,12 @@
    "smiles": "C=C1CC(=O)O1"
   },
   {
+   "inchikey": "YFNKIDBQEZZDLK-UHFFFAOYSA-N",
+   "smiles": "COCCOCCOCCOC"
+  },
+  {
    "inchikey": "ZGHFDIIVVIFNPS-UHFFFAOYSA-N",
    "smiles": "C=C(C)C(C)=O"
-  },
-  {
-   "inchikey": "ZIUSEGSNTOUIPT-UHFFFAOYSA-N",
-   "smiles": "CCOC(=O)CC#N"
-  },
-  {
-   "inchikey": "FAGUFWYHJQFNRV-UHFFFAOYSA-N",
-   "smiles": "NCCNCCNCCNCCN"
   },
   {
    "inchikey": "HHBZZTKMMLDNDN-UHFFFAOYSA-N",
@@ -4011,14 +4003,6 @@
   {
    "inchikey": "DTQVDTLACAAQTR-UHFFFAOYSA-N",
    "smiles": "O=C(O)C(F)(F)F"
-  },
-  {
-   "inchikey": "FBUKVWPVBMHYJY-UHFFFAOYSA-N",
-   "smiles": "CCCCCCCCC(=O)O"
-  },
-  {
-   "inchikey": "WRQNANDWMGAFTP-UHFFFAOYSA-N",
-   "smiles": "COC(=O)CC(C)=O"
   },
   {
    "inchikey": "BCQZXOMGPXTTIC-UHFFFAOYSA-N",
@@ -4039,10 +4023,6 @@
   {
    "inchikey": "CDKDZKXSXLNROY-UHFFFAOYSA-N",
    "smiles": "CCCCCCCCc1ccccc1"
-  },
-  {
-   "inchikey": "OSWPMRLSEDHDFF-UHFFFAOYSA-N",
-   "smiles": "COC(=O)c1ccccc1O"
   },
   {
    "inchikey": "SBUYFICWQNHBCM-UHFFFAOYSA-N",
@@ -4073,14 +4053,6 @@
    "smiles": "C1CC1"
   },
   {
-   "inchikey": "VNKYTQGIUYNRMY-UHFFFAOYSA-N",
-   "smiles": "CCCOC"
-  },
-  {
-   "inchikey": "WUGQZFFCHPXWKQ-UHFFFAOYSA-N",
-   "smiles": "NCCCO"
-  },
-  {
    "inchikey": "PMPVIKIVABFJJI-UHFFFAOYSA-N",
    "smiles": "C1CCC1"
   },
@@ -4095,10 +4067,6 @@
   {
    "inchikey": "PODAMDNJNMAKAZ-UHFFFAOYSA-N",
    "smiles": "CC=C=CC"
-  },
-  {
-   "inchikey": "YEYKMVJDLWJFOA-UHFFFAOYSA-N",
-   "smiles": "CCCOCCO"
   },
   {
    "inchikey": "APPOKADJQUIAHP-UHFFFAOYSA-N",
@@ -4157,6 +4125,10 @@
    "smiles": "C[SiH](Cl)Cl"
   },
   {
+   "inchikey": "ZIUSEGSNTOUIPT-UHFFFAOYSA-N",
+   "smiles": "CCOC(=O)CC#N"
+  },
+  {
    "inchikey": "AUKVIBNBLXQNIZ-UHFFFAOYSA-N",
    "smiles": "CCCC(C)CC(C)C"
   },
@@ -4169,8 +4141,20 @@
    "smiles": "O=C=Nc1ccccc1"
   },
   {
+   "inchikey": "FAGUFWYHJQFNRV-UHFFFAOYSA-N",
+   "smiles": "NCCNCCNCCNCCN"
+  },
+  {
    "inchikey": "WDAXFOBOLVPGLV-UHFFFAOYSA-N",
    "smiles": "CCOC(=O)C(C)C"
+  },
+  {
+   "inchikey": "FBUKVWPVBMHYJY-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCC(=O)O"
+  },
+  {
+   "inchikey": "WRQNANDWMGAFTP-UHFFFAOYSA-N",
+   "smiles": "COC(=O)CC(C)=O"
   },
   {
    "inchikey": "AFTPEBDOGXRMNQ-UHFFFAOYSA-N",
@@ -4199,6 +4183,10 @@
   {
    "inchikey": "SVEMKBCPZYWEPH-UHFFFAOYSA-N",
    "smiles": "CCC(C)(C)CC(C)C"
+  },
+  {
+   "inchikey": "OSWPMRLSEDHDFF-UHFFFAOYSA-N",
+   "smiles": "COC(=O)c1ccccc1O"
   },
   {
    "inchikey": "PJLHTVIBELQURV-UHFFFAOYSA-N",
@@ -4259,6 +4247,10 @@
   {
    "inchikey": "MELUCTCJOARQQG-UHFFFAOYSA-N",
    "smiles": "CC#CCCC"
+  },
+  {
+   "inchikey": "YEYKMVJDLWJFOA-UHFFFAOYSA-N",
+   "smiles": "CCCOCCO"
   },
   {
    "inchikey": "ZERULLAPCVRMCO-UHFFFAOYSA-N",
@@ -4327,10 +4319,6 @@
   {
    "inchikey": "VYXHVRARDIDEHS-UHFFFAOYSA-N",
    "smiles": "C1=CCCC=CCC1"
-  },
-  {
-   "inchikey": "DZJTZGHZAWTWGA-UHFFFAOYSA-N",
-   "smiles": "CCC(C)CC(C)CC"
   },
   {
    "inchikey": "HQZHQNKZOYIKQC-UHFFFAOYSA-N",
@@ -4409,8 +4397,12 @@
    "smiles": "CCSC"
   },
   {
-   "inchikey": "XUCNUKMRBVNAPB-UHFFFAOYSA-N",
-   "smiles": "C=CF"
+   "inchikey": "VNKYTQGIUYNRMY-UHFFFAOYSA-N",
+   "smiles": "CCCOC"
+  },
+  {
+   "inchikey": "WUGQZFFCHPXWKQ-UHFFFAOYSA-N",
+   "smiles": "NCCCO"
   },
   {
    "inchikey": "BHELZAPQIKSEDF-UHFFFAOYSA-N",
@@ -4475,6 +4467,10 @@
   {
    "inchikey": "CYWROHZCELEGSE-UHFFFAOYSA-N",
    "smiles": "CCCC(C)(CC)CC"
+  },
+  {
+   "inchikey": "DZJTZGHZAWTWGA-UHFFFAOYSA-N",
+   "smiles": "CCC(C)CC(C)CC"
   },
   {
    "inchikey": "KYCZJIBOPKRSOV-UHFFFAOYSA-N",
@@ -4557,10 +4553,6 @@
    "smiles": "CCc1cccc(CC)c1N"
   },
   {
-   "inchikey": "SMUQFGGVLNAIOZ-UHFFFAOYSA-N",
-   "smiles": "Cc1ccc2ccccc2n1"
-  },
-  {
    "inchikey": "ZRTXVJYJVBTXHE-UHFFFAOYSA-N",
    "smiles": "CCC(CC)C(C)(C)CC"
   },
@@ -4601,10 +4593,6 @@
    "smiles": "CCCC(C)(C)C(C)(C)C"
   },
   {
-   "inchikey": "XSIFPSYPOVKYCO-UHFFFAOYSA-N",
-   "smiles": "CCCCOC(=O)c1ccccc1"
-  },
-  {
    "inchikey": "CCCMONHAUSKTEQ-UHFFFAOYSA-N",
    "smiles": "C=CCCCCCCCCCCCCCCCC"
   },
@@ -4617,6 +4605,10 @@
    "smiles": "CC(C(C)(C)C)C(C)(C)C"
   },
   {
+   "inchikey": "XUCNUKMRBVNAPB-UHFFFAOYSA-N",
+   "smiles": "C=CF"
+  },
+  {
    "inchikey": "FILUFGAZMJGNEN-UHFFFAOYSA-N",
    "smiles": "C=CC#CC"
   },
@@ -4627,10 +4619,6 @@
   {
    "inchikey": "IQIBYAHJXQVQGB-UHFFFAOYSA-N",
    "smiles": "CCC(C)(C)S"
-  },
-  {
-   "inchikey": "LVGUZGTVOIAKKC-UHFFFAOYSA-N",
-   "smiles": "FCC(F)(F)F"
   },
   {
    "inchikey": "IMUDHTPIFIBORV-UHFFFAOYSA-N",
@@ -4679,6 +4667,10 @@
   {
    "inchikey": "WWNGLKDLYKNGGT-UHFFFAOYSA-N",
    "smiles": "CCCC(CC)(CC)CC"
+  },
+  {
+   "inchikey": "SMUQFGGVLNAIOZ-UHFFFAOYSA-N",
+   "smiles": "Cc1ccc2ccccc2n1"
   },
   {
    "inchikey": "ZUHZGEOKBKGPSW-UHFFFAOYSA-N",
@@ -4821,10 +4813,6 @@
    "smiles": "CCC(C)(C(C)C)C(C)C"
   },
   {
-   "inchikey": "UQDUPQYQJKYHQI-UHFFFAOYSA-N",
-   "smiles": "CCCCCCCCCCCC(=O)OC"
-  },
-  {
    "inchikey": "URGSMJLDEFDWNX-UHFFFAOYSA-N",
    "smiles": "CCCCc1cccc2ccccc12"
   },
@@ -4835,6 +4823,10 @@
   {
    "inchikey": "XDRDDPSGUQMOBO-UHFFFAOYSA-N",
    "smiles": "CCC(C)(C)C(C)C(C)C"
+  },
+  {
+   "inchikey": "XSIFPSYPOVKYCO-UHFFFAOYSA-N",
+   "smiles": "CCCCOC(=O)c1ccccc1"
   },
   {
    "inchikey": "YVYHOOYMDHZALB-UHFFFAOYSA-N",
@@ -4989,6 +4981,10 @@
    "smiles": "CCCCCCCCC(=O)OCCCC"
   },
   {
+   "inchikey": "UQDUPQYQJKYHQI-UHFFFAOYSA-N",
+   "smiles": "CCCCCCCCCCCC(=O)OC"
+  },
+  {
    "inchikey": "WJYMPXJVHNDZHD-UHFFFAOYSA-N",
    "smiles": "CCc1cc(CC)cc(CC)c1"
   },
@@ -5011,10 +5007,6 @@
   {
    "inchikey": "IJFPVINAQGWBRJ-UHFFFAOYSA-N",
    "smiles": "CC(C)CCCCCOC(=O)c1ccccc1C(=O)OCCCCCC(C)C"
-  },
-  {
-   "inchikey": "NYTOUQBROMCLBJ-UHFFFAOYSA-N",
-   "smiles": "O=[N+]([O-])C([N+](=O)[O-])([N+](=O)[O-])[N+](=O)[O-]"
   },
   {
    "inchikey": "QPJDMGCKMHUXFD-UHFFFAOYSA-N",
@@ -5057,8 +5049,8 @@
    "smiles": "Fc1ccccc1F"
   },
   {
-   "inchikey": "WJTCGQSWYFHTAC-UHFFFAOYSA-N",
-   "smiles": "C1CCCCCCC1"
+   "inchikey": "LVGUZGTVOIAKKC-UHFFFAOYSA-N",
+   "smiles": "FCC(F)(F)F"
   },
   {
    "inchikey": "BFKJFAAPBSQJPD-UHFFFAOYSA-N",
@@ -5129,10 +5121,6 @@
    "smiles": "NCCOCCO"
   },
   {
-   "inchikey": "YPWFISCTZQNZAU-UHFFFAOYSA-N",
-   "smiles": "C1CCSCC1"
-  },
-  {
    "inchikey": "CZHLPWNZCJEPJB-UHFFFAOYSA-N",
    "smiles": "CC(C)CCCl"
   },
@@ -5143,6 +5131,10 @@
   {
    "inchikey": "OSSQSXOTMIGBCF-UHFFFAOYSA-N",
    "smiles": "C#CCCCCCCC"
+  },
+  {
+   "inchikey": "WJTCGQSWYFHTAC-UHFFFAOYSA-N",
+   "smiles": "C1CCCCCCC1"
   },
   {
    "inchikey": "ZVHAANQOQZVVFD-UHFFFAOYSA-N",
@@ -5159,10 +5151,6 @@
   {
    "inchikey": "MSTLSCNJAHAQNU-UHFFFAOYSA-N",
    "smiles": "CCCCCCCC1CCCCC1"
-  },
-  {
-   "inchikey": "OMMLUKLXGSRPHK-UHFFFAOYSA-N",
-   "smiles": "CC(C)(C)C(C)(C)C"
   },
   {
    "inchikey": "QNLZIZAQLLYXTC-UHFFFAOYSA-N",
@@ -5209,6 +5197,10 @@
    "smiles": "O=CCCl"
   },
   {
+   "inchikey": "YPWFISCTZQNZAU-UHFFFAOYSA-N",
+   "smiles": "C1CCSCC1"
+  },
+  {
    "inchikey": "HTHNTJCVPNKCPZ-UHFFFAOYSA-N",
    "smiles": "FC(F)=CCl"
   },
@@ -5217,20 +5209,12 @@
    "smiles": "[C-]#[O+]"
   },
   {
-   "inchikey": "XFNJYAKDBJUJAJ-UHFFFAOYSA-N",
-   "smiles": "CC(Br)CBr"
-  },
-  {
    "inchikey": "CZWSZZHGSNZRMW-UHFFFAOYSA-N",
    "smiles": "CCC(Br)CBr"
   },
   {
    "inchikey": "AYCANDRGVPTASA-UHFFFAOYSA-N",
    "smiles": "FC(F)=C(F)Br"
-  },
-  {
-   "inchikey": "WRWPPGUCZBJXKX-UHFFFAOYSA-N",
-   "smiles": "Cc1ccc(F)cc1"
   },
   {
    "inchikey": "HLTMUYBTNSVOFY-UHFFFAOYSA-N",
@@ -5243,6 +5227,10 @@
   {
    "inchikey": "NALZTFARIYUCBY-UHFFFAOYSA-N",
    "smiles": "CCCC[N+](=O)[O-]"
+  },
+  {
+   "inchikey": "OMMLUKLXGSRPHK-UHFFFAOYSA-N",
+   "smiles": "CC(C)(C)C(C)(C)C"
   },
   {
    "inchikey": "CLMFECCMAVQYQA-UHFFFAOYSA-N",
@@ -5261,12 +5249,20 @@
    "smiles": "CCCCCCCCCCCCCCCc1ccccc1"
   },
   {
+   "inchikey": "NYTOUQBROMCLBJ-UHFFFAOYSA-N",
+   "smiles": "O=[N+]([O-])C([N+](=O)[O-])([N+](=O)[O-])[N+](=O)[O-]"
+  },
+  {
    "inchikey": "XWCDCDSDNJVCLO-UHFFFAOYSA-N",
    "smiles": "FCCl"
   },
   {
    "inchikey": "OGNAOIGAPPSUMG-UHFFFAOYSA-N",
    "smiles": "C1CC12CC2"
+  },
+  {
+   "inchikey": "XFNJYAKDBJUJAJ-UHFFFAOYSA-N",
+   "smiles": "CC(Br)CBr"
   },
   {
    "inchikey": "CUDSBWGCGSUXDB-UHFFFAOYSA-N",
@@ -5361,12 +5357,12 @@
    "smiles": "C[SiH](C)C"
   },
   {
-   "inchikey": "MEXUFEQDCXZEON-UHFFFAOYSA-N",
-   "smiles": "FC(F)(Cl)Br"
-  },
-  {
    "inchikey": "QROGIFZRVHSFLM-UHFFFAOYSA-N",
    "smiles": "CC=Cc1ccccc1"
+  },
+  {
+   "inchikey": "WRWPPGUCZBJXKX-UHFFFAOYSA-N",
+   "smiles": "Cc1ccc(F)cc1"
   },
   {
    "inchikey": "IPBROXKVGHZHJV-UHFFFAOYSA-N",
@@ -5419,6 +5415,10 @@
   {
    "inchikey": "RNEUXBDXTNIASG-UHFFFAOYSA-N",
    "smiles": "CCCCCSCCCC"
+  },
+  {
+   "inchikey": "MEXUFEQDCXZEON-UHFFFAOYSA-N",
+   "smiles": "FC(F)(Cl)Br"
   },
   {
    "inchikey": "WAITXWGCJQLPGH-UHFFFAOYSA-N",
@@ -5549,10 +5549,6 @@
    "smiles": "CCCCCCCCCCCCCSCCC"
   },
   {
-   "inchikey": "LGQXXHMEBUOXRP-UHFFFAOYSA-N",
-   "smiles": "CCCCOB(OCCCC)OCCCC"
-  },
-  {
    "inchikey": "QWZXZBTXXNPJBP-UHFFFAOYSA-N",
    "smiles": "CCCCCCCCCCCCCCSCCC"
   },
@@ -5587,6 +5583,10 @@
   {
    "inchikey": "XLTWAJQKAGLQDX-UHFFFAOYSA-N",
    "smiles": "CC(Br)C(C)(C)Br"
+  },
+  {
+   "inchikey": "LGQXXHMEBUOXRP-UHFFFAOYSA-N",
+   "smiles": "CCCCOB(OCCCC)OCCCC"
   },
   {
    "inchikey": "BUSHLWVWPAEVMX-UHFFFAOYSA-N",

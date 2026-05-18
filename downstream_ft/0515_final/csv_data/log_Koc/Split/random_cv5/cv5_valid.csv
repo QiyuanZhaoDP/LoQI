@@ -1,8 +1,8 @@
 SMILES,TARGET
-C=C(Cl)Cl,1.81
+Cc1ccccc1C,2.25
 CCCCCO,0.7
-Ic1ccccc1,3.1
 CC(=O)c1ccccc1,1.8
+CCc1cccc2ccccc12,3.78
 CC(C)CCCCCOC(=O)c1ccccc1C(=O)OCCCCCC(C)C,3.21
 CCc1ccc2ccccc2c1,3.76
 Oc1cccc(Cl)c1,2.54

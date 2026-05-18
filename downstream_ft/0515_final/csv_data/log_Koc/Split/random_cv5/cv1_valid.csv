@@ -1,11 +1,11 @@
 SMILES,TARGET
-CO,0.44
-CCCCCCO,1.01
-CBr,1.34
-Brc1ccccc1,2.49
+S=C=S,2.34
+CC(Cl)Cl,1.48
+CCCCN,1.88
+ClC=C(Cl)Cl,2.0
 BrC(Br)Br,2.06
-Nc1ccccc1,1.6
-Cc1cc(C)cc(C)c1,2.82
+CCc1ccccc1,2.23
+CCCCCCCO,1.14
 CCc1ccc2ccccc2c1,3.76
 Nc1cccc([N+](=O)[O-])c1,1.73
 C=CC(N)=O,1.7

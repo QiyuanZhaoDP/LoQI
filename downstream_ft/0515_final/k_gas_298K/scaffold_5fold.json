@@ -7,44 +7,44 @@
  "folds": [
   {
    "train_idx": [
-    25,
+    22,
     38,
     42,
     57,
     79,
-    81,
+    80,
+    190,
     191,
-    192,
-    194,
-    196,
-    201,
+    193,
+    195,
+    200,
+    204,
     205,
-    206,
+    209,
     210,
     211,
-    212,
-    214,
-    215,
+    213,
+    216,
     217,
     221,
-    222,
+    223,
     224,
-    225,
-    226,
+    227,
+    228,
     229,
     230,
     233,
-    235,
-    240,
-    246,
-    247,
+    238,
+    239,
+    244,
+    245,
+    249,
     250,
     251,
-    252,
     253,
-    255,
-    262,
-    266,
+    260,
+    265,
+    267,
     268,
     269,
     270,
@@ -74,12 +74,12 @@
     344
    ],
    "valid_idx": [
-    13,
-    218,
-    232,
+    11,
+    220,
+    231,
     248,
     261,
-    271,
+    274,
     325
    ],
    "test_idx": [
@@ -94,8 +94,8 @@
     8,
     9,
     10,
-    11,
     12,
+    13,
     14,
     15,
     16,
@@ -104,9 +104,9 @@
     19,
     20,
     21,
-    22,
     23,
     24,
+    25,
     26,
     27,
     28,
@@ -157,7 +157,7 @@
     76,
     77,
     78,
-    80,
+    81,
     82,
     83,
     84,
@@ -266,51 +266,51 @@
     187,
     188,
     189,
-    190,
-    193,
-    195,
+    192,
+    194,
+    196,
     197,
     198,
     199,
-    200,
+    201,
     202,
     203,
-    204,
+    206,
     207,
     208,
-    209,
-    213,
-    216,
+    212,
+    214,
+    215,
+    218,
     219,
-    220,
-    223,
-    227,
-    228,
-    231,
+    222,
+    225,
+    226,
+    232,
     234,
+    235,
     236,
     237,
-    238,
-    239,
+    240,
     241,
     242,
     243,
-    244,
-    245,
-    249,
+    246,
+    247,
+    252,
     254,
+    255,
     256,
     257,
     258,
     259,
-    260,
+    262,
     263,
     264,
-    265,
-    267,
+    266,
+    271,
     272,
     273,
-    274,
     276,
     277,
     284,
@@ -544,22 +544,22 @@
     192,
     193,
     194,
-    195,
+    196,
     197,
     198,
     199,
-    200,
+    201,
     202,
     203,
-    204,
+    205,
     206,
     207,
     208,
     209,
     211,
     212,
-    213,
-    216,
+    214,
+    217,
     218,
     219,
     220,
@@ -569,11 +569,11 @@
     224,
     225,
     227,
-    228,
+    229,
     230,
     231,
-    233,
     234,
+    235,
     236,
     237,
     238,
@@ -584,12 +584,13 @@
     243,
     244,
     245,
-    247,
+    246,
+    248,
     249,
-    250,
-    251,
+    252,
+    253,
     254,
-    255,
+    256,
     257,
     258,
     259,
@@ -601,12 +602,11 @@
     265,
     266,
     267,
-    268,
+    269,
     270,
     271,
     272,
     273,
-    274,
     276,
     277,
     278,
@@ -692,8 +692,8 @@
     215,
     226,
     232,
-    248,
-    256,
+    247,
+    255,
     280,
     290,
     293,
@@ -706,17 +706,17 @@
    ],
    "test_idx": [
     38,
-    196,
-    201,
-    205,
-    214,
-    217,
-    229,
-    235,
-    246,
-    252,
-    253,
-    269,
+    195,
+    200,
+    204,
+    213,
+    216,
+    228,
+    233,
+    250,
+    251,
+    268,
+    274,
     275,
     281,
     283,
@@ -898,7 +898,7 @@
     190,
     191,
     192,
-    193,
+    194,
     195,
     196,
     197,
@@ -924,18 +924,18 @@
     217,
     218,
     219,
-    220,
-    223,
+    222,
+    224,
     225,
+    226,
     227,
-    228,
-    230,
-    231,
+    229,
+    232,
+    233,
     234,
     235,
     236,
     237,
-    238,
     239,
     240,
     241,
@@ -955,7 +955,7 @@
     256,
     257,
     258,
-    260,
+    261,
     262,
     263,
     264,
@@ -1055,10 +1055,10 @@
     177,
     181,
     187,
-    229,
+    228,
     249,
     259,
-    265,
+    266,
     281,
     287,
     306,
@@ -1069,15 +1069,15 @@
    ],
    "test_idx": [
     42,
-    194,
+    193,
+    220,
     221,
-    222,
-    224,
-    226,
-    232,
-    233,
-    261,
-    266,
+    223,
+    230,
+    231,
+    238,
+    260,
+    265,
     279,
     298,
     299,
@@ -1109,9 +1109,9 @@
     19,
     20,
     21,
-    22,
     23,
     24,
+    25,
     26,
     27,
     28,
@@ -1284,6 +1284,7 @@
     211,
     213,
     214,
+    215,
     216,
     217,
     218,
@@ -1292,21 +1293,20 @@
     221,
     222,
     223,
-    224,
     225,
     227,
     228,
-    229,
+    230,
     231,
     233,
     235,
     238,
-    239,
+    240,
     241,
     243,
-    244,
     246,
-    249,
+    250,
+    251,
     252,
     253,
     254,
@@ -1318,8 +1318,8 @@
     263,
     265,
     266,
-    267,
-    269,
+    268,
+    270,
     271,
     272,
     273,
@@ -1419,9 +1419,9 @@
     236,
     237,
     242,
-    245,
+    247,
     258,
-    261,
+    262,
     264,
     291,
     322,
@@ -1430,18 +1430,18 @@
     351
    ],
    "test_idx": [
-    25,
+    22,
     57,
-    215,
-    230,
-    240,
-    247,
+    224,
+    229,
+    239,
+    244,
+    245,
     248,
-    250,
-    251,
-    262,
-    268,
-    270,
+    249,
+    261,
+    267,
+    269,
     280,
     282,
     295,
@@ -1462,8 +1462,8 @@
     8,
     9,
     10,
-    11,
     12,
+    13,
     14,
     16,
     17,
@@ -1522,7 +1522,7 @@
     76,
     77,
     78,
-    80,
+    81,
     82,
     83,
     84,
@@ -1622,7 +1622,7 @@
     187,
     188,
     189,
-    190,
+    192,
     193,
     194,
     195,
@@ -1634,22 +1634,22 @@
     201,
     202,
     203,
-    205,
+    206,
     207,
     208,
-    209,
+    212,
     213,
     214,
     215,
     216,
-    217,
+    218,
     219,
     220,
     221,
     222,
     223,
     224,
-    227,
+    226,
     228,
     229,
     231,
@@ -1672,8 +1672,8 @@
     250,
     251,
     252,
-    253,
     254,
+    255,
     256,
     257,
     258,
@@ -1686,7 +1686,7 @@
     267,
     268,
     269,
-    270,
+    271,
     272,
     273,
     274,
@@ -1772,7 +1772,7 @@
     176,
     182,
     204,
-    226,
+    225,
     230,
     234,
     240,
@@ -1791,19 +1791,19 @@
     350
    ],
    "test_idx": [
-    13,
+    11,
     79,
-    81,
+    80,
+    190,
     191,
-    192,
-    206,
+    205,
+    209,
     210,
     211,
-    212,
-    218,
-    225,
-    255,
-    271,
+    217,
+    227,
+    253,
+    270,
     278,
     294,
     303,
@@ -1812,11 +1812,6 @@
   }
  ],
  "molecules": [
-  {
-   "inchikey": "QGJOPFRUJISHPQ-UHFFFAOYSA-N",
-   "smiles": "S=C=S",
-   "scaffold": "EMPTY_SCAFFOLD"
-  },
   {
    "inchikey": "OKKJLVBELUTLKV-UHFFFAOYSA-N",
    "smiles": "CO",
@@ -1828,13 +1823,13 @@
    "scaffold": "EMPTY_SCAFFOLD"
   },
   {
-   "inchikey": "RTZKZFJDLAIYFH-UHFFFAOYSA-N",
-   "smiles": "CCOCC",
+   "inchikey": "QGJOPFRUJISHPQ-UHFFFAOYSA-N",
+   "smiles": "S=C=S",
    "scaffold": "EMPTY_SCAFFOLD"
   },
   {
-   "inchikey": "YMWUJEATGCHHMB-UHFFFAOYSA-N",
-   "smiles": "ClCCl",
+   "inchikey": "RTZKZFJDLAIYFH-UHFFFAOYSA-N",
+   "smiles": "CCOCC",
    "scaffold": "EMPTY_SCAFFOLD"
   },
   {
@@ -1863,13 +1858,8 @@
    "scaffold": "EMPTY_SCAFFOLD"
   },
   {
-   "inchikey": "HQABUPZFAYXKJW-UHFFFAOYSA-N",
-   "smiles": "CCCCN",
-   "scaffold": "EMPTY_SCAFFOLD"
-  },
-  {
-   "inchikey": "OFBQJSOFQDEBGM-UHFFFAOYSA-N",
-   "smiles": "CCCCC",
+   "inchikey": "YMWUJEATGCHHMB-UHFFFAOYSA-N",
+   "smiles": "ClCCl",
    "scaffold": "EMPTY_SCAFFOLD"
   },
   {
@@ -1913,13 +1903,13 @@
    "scaffold": "EMPTY_SCAFFOLD"
   },
   {
-   "inchikey": "FVSKHRXBFJPNKK-UHFFFAOYSA-N",
-   "smiles": "CCC#N",
+   "inchikey": "HQABUPZFAYXKJW-UHFFFAOYSA-N",
+   "smiles": "CCCCN",
    "scaffold": "EMPTY_SCAFFOLD"
   },
   {
-   "inchikey": "HPNMFZURTQLUMO-UHFFFAOYSA-N",
-   "smiles": "CCNCC",
+   "inchikey": "OFBQJSOFQDEBGM-UHFFFAOYSA-N",
+   "smiles": "CCCCC",
    "scaffold": "EMPTY_SCAFFOLD"
   },
   {
@@ -1930,11 +1920,6 @@
   {
    "inchikey": "VLKZOEOYAKHREP-UHFFFAOYSA-N",
    "smiles": "CCCCCC",
-   "scaffold": "EMPTY_SCAFFOLD"
-  },
-  {
-   "inchikey": "QTBSBXVTEAMEQO-UHFFFAOYSA-N",
-   "smiles": "CC(=O)O",
    "scaffold": "EMPTY_SCAFFOLD"
   },
   {
@@ -1955,6 +1940,16 @@
   {
    "inchikey": "ROSDSFDQCJNGOL-UHFFFAOYSA-N",
    "smiles": "CNC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "FVSKHRXBFJPNKK-UHFFFAOYSA-N",
+   "smiles": "CCC#N",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "HPNMFZURTQLUMO-UHFFFAOYSA-N",
+   "smiles": "CCNCC",
    "scaffold": "EMPTY_SCAFFOLD"
   },
   {
@@ -1980,6 +1975,11 @@
   {
    "inchikey": "LIKMAJRDDDTEIG-UHFFFAOYSA-N",
    "smiles": "C=CCCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "QTBSBXVTEAMEQO-UHFFFAOYSA-N",
+   "smiles": "CC(=O)O",
    "scaffold": "EMPTY_SCAFFOLD"
   },
   {
@@ -2048,11 +2048,6 @@
    "scaffold": "EMPTY_SCAFFOLD"
   },
   {
-   "inchikey": "WEHWNAOGRSTTBQ-UHFFFAOYSA-N",
-   "smiles": "CCCNCCC",
-   "scaffold": "EMPTY_SCAFFOLD"
-  },
-  {
    "inchikey": "CRSOQBOWXPBRES-UHFFFAOYSA-N",
    "smiles": "CC(C)(C)C",
    "scaffold": "EMPTY_SCAFFOLD"
@@ -2083,13 +2078,18 @@
    "scaffold": "EMPTY_SCAFFOLD"
   },
   {
-   "inchikey": "DPBLXKKOBLCELK-UHFFFAOYSA-N",
-   "smiles": "CCCCCN",
+   "inchikey": "NVJUHMXYKCUMQA-UHFFFAOYSA-N",
+   "smiles": "CCCOCC",
    "scaffold": "EMPTY_SCAFFOLD"
   },
   {
-   "inchikey": "NVJUHMXYKCUMQA-UHFFFAOYSA-N",
-   "smiles": "CCCOCC",
+   "inchikey": "WEHWNAOGRSTTBQ-UHFFFAOYSA-N",
+   "smiles": "CCCNCCC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "DPBLXKKOBLCELK-UHFFFAOYSA-N",
+   "smiles": "CCCCCN",
    "scaffold": "EMPTY_SCAFFOLD"
   },
   {
@@ -2101,11 +2101,6 @@
    "inchikey": "DMEGYFMYUHOHGS-UHFFFAOYSA-N",
    "smiles": "C1CCCCCC1",
    "scaffold": "C1CCCCCC1"
-  },
-  {
-   "inchikey": "CYRMSUTZVYGINF-UHFFFAOYSA-N",
-   "smiles": "FC(Cl)(Cl)Cl",
-   "scaffold": "EMPTY_SCAFFOLD"
   },
   {
    "inchikey": "HVTICUPFWKNHNG-UHFFFAOYSA-N",
@@ -2128,13 +2123,13 @@
    "scaffold": "EMPTY_SCAFFOLD"
   },
   {
-   "inchikey": "OTMSDBZUPAUEDD-UHFFFAOYSA-N",
-   "smiles": "CC",
+   "inchikey": "CYRMSUTZVYGINF-UHFFFAOYSA-N",
+   "smiles": "FC(Cl)(Cl)Cl",
    "scaffold": "EMPTY_SCAFFOLD"
   },
   {
-   "inchikey": "LCGLNKUTAGEVQW-UHFFFAOYSA-N",
-   "smiles": "COC",
+   "inchikey": "OTMSDBZUPAUEDD-UHFFFAOYSA-N",
+   "smiles": "CC",
    "scaffold": "EMPTY_SCAFFOLD"
   },
   {
@@ -2163,13 +2158,13 @@
    "scaffold": "EMPTY_SCAFFOLD"
   },
   {
-   "inchikey": "ZIBGPFATKBEMQZ-UHFFFAOYSA-N",
-   "smiles": "OCCOCCOCCO",
+   "inchikey": "LSDPWZHWYPCBBB-UHFFFAOYSA-N",
+   "smiles": "CS",
    "scaffold": "EMPTY_SCAFFOLD"
   },
   {
-   "inchikey": "LSDPWZHWYPCBBB-UHFFFAOYSA-N",
-   "smiles": "CS",
+   "inchikey": "LCGLNKUTAGEVQW-UHFFFAOYSA-N",
+   "smiles": "COC",
    "scaffold": "EMPTY_SCAFFOLD"
   },
   {
@@ -2193,6 +2188,11 @@
    "scaffold": "EMPTY_SCAFFOLD"
   },
   {
+   "inchikey": "ZIBGPFATKBEMQZ-UHFFFAOYSA-N",
+   "smiles": "OCCOCCOCCO",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
    "inchikey": "ODGLTLJZCVNPBU-UHFFFAOYSA-N",
    "smiles": "CC(C)CC(C)C(C)C",
    "scaffold": "EMPTY_SCAFFOLD"
@@ -2211,11 +2211,6 @@
    "inchikey": "LVZWSLJZHVFIQJ-UHFFFAOYSA-N",
    "smiles": "C1CC1",
    "scaffold": "C1CC1"
-  },
-  {
-   "inchikey": "VNKYTQGIUYNRMY-UHFFFAOYSA-N",
-   "smiles": "CCCOC",
-   "scaffold": "EMPTY_SCAFFOLD"
   },
   {
    "inchikey": "PMPVIKIVABFJJI-UHFFFAOYSA-N",
@@ -2313,11 +2308,6 @@
    "scaffold": "EMPTY_SCAFFOLD"
   },
   {
-   "inchikey": "DZJTZGHZAWTWGA-UHFFFAOYSA-N",
-   "smiles": "CCC(C)CC(C)CC",
-   "scaffold": "EMPTY_SCAFFOLD"
-  },
-  {
    "inchikey": "HQZHQNKZOYIKQC-UHFFFAOYSA-N",
    "smiles": "CCC(C)CCC(C)C",
    "scaffold": "EMPTY_SCAFFOLD"
@@ -2348,8 +2338,8 @@
    "scaffold": "EMPTY_SCAFFOLD"
   },
   {
-   "inchikey": "XUCNUKMRBVNAPB-UHFFFAOYSA-N",
-   "smiles": "C=CF",
+   "inchikey": "VNKYTQGIUYNRMY-UHFFFAOYSA-N",
+   "smiles": "CCCOC",
    "scaffold": "EMPTY_SCAFFOLD"
   },
   {
@@ -2385,6 +2375,11 @@
   {
    "inchikey": "CYWROHZCELEGSE-UHFFFAOYSA-N",
    "smiles": "CCCC(C)(CC)CC",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "DZJTZGHZAWTWGA-UHFFFAOYSA-N",
+   "smiles": "CCC(C)CC(C)CC",
    "scaffold": "EMPTY_SCAFFOLD"
   },
   {
@@ -2508,13 +2503,13 @@
    "scaffold": "EMPTY_SCAFFOLD"
   },
   {
-   "inchikey": "IQIBYAHJXQVQGB-UHFFFAOYSA-N",
-   "smiles": "CCC(C)(C)S",
+   "inchikey": "XUCNUKMRBVNAPB-UHFFFAOYSA-N",
+   "smiles": "C=CF",
    "scaffold": "EMPTY_SCAFFOLD"
   },
   {
-   "inchikey": "LVGUZGTVOIAKKC-UHFFFAOYSA-N",
-   "smiles": "FCC(F)(F)F",
+   "inchikey": "IQIBYAHJXQVQGB-UHFFFAOYSA-N",
+   "smiles": "CCC(C)(C)S",
    "scaffold": "EMPTY_SCAFFOLD"
   },
   {
@@ -2888,9 +2883,9 @@
    "scaffold": "c1ccccc1"
   },
   {
-   "inchikey": "WJTCGQSWYFHTAC-UHFFFAOYSA-N",
-   "smiles": "C1CCCCCCC1",
-   "scaffold": "C1CCCCCCC1"
+   "inchikey": "LVGUZGTVOIAKKC-UHFFFAOYSA-N",
+   "smiles": "FCC(F)(F)F",
+   "scaffold": "EMPTY_SCAFFOLD"
   },
   {
    "inchikey": "BFKJFAAPBSQJPD-UHFFFAOYSA-N",
@@ -2943,11 +2938,6 @@
    "scaffold": "C1CSC1"
   },
   {
-   "inchikey": "YPWFISCTZQNZAU-UHFFFAOYSA-N",
-   "smiles": "C1CCSCC1",
-   "scaffold": "C1CCSCC1"
-  },
-  {
    "inchikey": "CZHLPWNZCJEPJB-UHFFFAOYSA-N",
    "smiles": "CC(C)CCCl",
    "scaffold": "EMPTY_SCAFFOLD"
@@ -2958,6 +2948,11 @@
    "scaffold": "EMPTY_SCAFFOLD"
   },
   {
+   "inchikey": "WJTCGQSWYFHTAC-UHFFFAOYSA-N",
+   "smiles": "C1CCCCCCC1",
+   "scaffold": "C1CCCCCCC1"
+  },
+  {
    "inchikey": "QUGUFLJIAFISSW-UHFFFAOYSA-N",
    "smiles": "Fc1ccc(F)cc1",
    "scaffold": "c1ccccc1"
@@ -2966,11 +2961,6 @@
    "inchikey": "MSTLSCNJAHAQNU-UHFFFAOYSA-N",
    "smiles": "CCCCCCCC1CCCCC1",
    "scaffold": "C1CCCCC1"
-  },
-  {
-   "inchikey": "OMMLUKLXGSRPHK-UHFFFAOYSA-N",
-   "smiles": "CC(C)(C)C(C)(C)C",
-   "scaffold": "EMPTY_SCAFFOLD"
   },
   {
    "inchikey": "QNLZIZAQLLYXTC-UHFFFAOYSA-N",
@@ -3018,6 +3008,11 @@
    "scaffold": "C1CS1"
   },
   {
+   "inchikey": "YPWFISCTZQNZAU-UHFFFAOYSA-N",
+   "smiles": "C1CCSCC1",
+   "scaffold": "C1CCSCC1"
+  },
+  {
    "inchikey": "HTHNTJCVPNKCPZ-UHFFFAOYSA-N",
    "smiles": "FC(F)=CCl",
    "scaffold": "EMPTY_SCAFFOLD"
@@ -3025,11 +3020,6 @@
   {
    "inchikey": "UGFAIRIUMAVXCW-UHFFFAOYSA-N",
    "smiles": "[C-]#[O+]",
-   "scaffold": "EMPTY_SCAFFOLD"
-  },
-  {
-   "inchikey": "XFNJYAKDBJUJAJ-UHFFFAOYSA-N",
-   "smiles": "CC(Br)CBr",
    "scaffold": "EMPTY_SCAFFOLD"
   },
   {
@@ -3041,11 +3031,6 @@
    "inchikey": "AYCANDRGVPTASA-UHFFFAOYSA-N",
    "smiles": "FC(F)=C(F)Br",
    "scaffold": "EMPTY_SCAFFOLD"
-  },
-  {
-   "inchikey": "WRWPPGUCZBJXKX-UHFFFAOYSA-N",
-   "smiles": "Cc1ccc(F)cc1",
-   "scaffold": "c1ccccc1"
   },
   {
    "inchikey": "HLTMUYBTNSVOFY-UHFFFAOYSA-N",
@@ -3060,6 +3045,11 @@
   {
    "inchikey": "NALZTFARIYUCBY-UHFFFAOYSA-N",
    "smiles": "CCCC[N+](=O)[O-]",
+   "scaffold": "EMPTY_SCAFFOLD"
+  },
+  {
+   "inchikey": "OMMLUKLXGSRPHK-UHFFFAOYSA-N",
+   "smiles": "CC(C)(C)C(C)(C)C",
    "scaffold": "EMPTY_SCAFFOLD"
   },
   {
@@ -3091,6 +3081,11 @@
    "inchikey": "OGNAOIGAPPSUMG-UHFFFAOYSA-N",
    "smiles": "C1CC12CC2",
    "scaffold": "C1CC12CC2"
+  },
+  {
+   "inchikey": "XFNJYAKDBJUJAJ-UHFFFAOYSA-N",
+   "smiles": "CC(Br)CBr",
+   "scaffold": "EMPTY_SCAFFOLD"
   },
   {
    "inchikey": "CUDSBWGCGSUXDB-UHFFFAOYSA-N",
@@ -3190,6 +3185,11 @@
   {
    "inchikey": "QROGIFZRVHSFLM-UHFFFAOYSA-N",
    "smiles": "CC=Cc1ccccc1",
+   "scaffold": "c1ccccc1"
+  },
+  {
+   "inchikey": "WRWPPGUCZBJXKX-UHFFFAOYSA-N",
+   "smiles": "Cc1ccc(F)cc1",
    "scaffold": "c1ccccc1"
   },
   {

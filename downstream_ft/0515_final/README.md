@@ -4,7 +4,7 @@
 **Dropped vs LoQI 17:** Al, As, Hg, Bi, Se
 **Base:** `dataset_v1/releases/3star`  filtered through this stricter element gate
 **Extension:** 5 downstream tasks (freesolv / ESOL / Lipophilicity / CEP / PPBR)
-**Total:** 21,277 unique molecules × 43 properties
+**Total:** 21,276 unique molecules × 43 properties
 **Seed:** 42    **Folds:** 5    **Valid fraction of train:** 0.1
 
 ## 3★ base molecules dropped by stricter element filter
