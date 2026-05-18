@@ -3,16 +3,16 @@
 **Source:** `downstream_ft/0515_final/per_property/*.csv`
 **Generated:** by `scripts/build_thermo_statistics.py`
 
-**Unique molecules:** 20,816     **Properties:** 43     **Total cells:** 63,873
+**Unique molecules:** 20,816     **Properties:** 42     **Total cells:** 62,875
 
 ## 1. Confidence-star distribution (overall, all cells)
 
 | ★ | Count | Share | Tier labels |
 |---:|---:|---:|---|
-| ★★★★★ | 35,270 | 55.2% | tier1, tier1+confirmed |
-| ★★★★☆ | 11,222 | 17.6% | tier1+disputed, tier2, tier2+confirmed |
-| ★★★☆☆ | 9,173 | 14.4% | tier2+disputed, secondary_tight |
-| — | 8,208 | 12.9% | downstream (no upstream tier; ML-bench targets) |
+| ★★★★★ | 34,272 | 54.5% | tier1, tier1+confirmed |
+| ★★★★☆ | 11,222 | 17.8% | tier1+disputed, tier2, tier2+confirmed |
+| ★★★☆☆ | 9,173 | 14.6% | tier2+disputed, secondary_tight |
+| — | 8,208 | 13.1% | downstream (no upstream tier; ML-bench targets) |
 
 ## 2. Per-property tier composition
 
@@ -55,7 +55,6 @@ Columns: n = total rows, mol = unique molecules, 5★/4★/3★/2★/1★/dn = c
 | `gyration_radius_A` | 990 | 990 | 990 |  |  |  |  |  |
 | `k_gas_298K` | 353 | 353 | 353 |  |  |  |  |  |
 | `k_liq_298K` | 993 | 993 | 880 | 102 | 11 |  |  |  |
-| `kinematic_viscosity_298K_cSt` | 998 | 998 | 998 |  |  |  |  |  |
 | `log_Henry_atmmolfrac` | 558 | 558 | 558 |  |  |  |  |  |
 | `log_Koc` | 715 | 715 |  | 715 |  |  |  |  |
 | `log_solubility_water_molL` | 8,310 | 8,310 |  |  | 8,310 |  |  |  |
@@ -103,7 +102,6 @@ Columns: n = total rows, mol = unique molecules, 5★/4★/3★/2★/1★/dn = c
 | `gyration_radius_A` | 990 | 4.162 | 1.39 | 0.558 | 3.317 | 3.976 | 4.714 | 11.66 |
 | `k_gas_298K` | 353 | 0.009451 | 0.003768 | 0.00244 | 0.00696 | 0.00892 | 0.0106 | 0.03557 |
 | `k_liq_298K` | 993 | 0.129 | 0.03223 | 0.0447 | 0.1109 | 0.1291 | 0.1421 | 0.4115 |
-| `kinematic_viscosity_298K_cSt` | 998 | 3.431 | 11.87 | 0.062 | 0.5374 | 0.957 | 2.071 | 178.7 |
 | `log_Henry_atmmolfrac` | 558 | 3.309 | 1.799 | 0.0018 | 1.822 | 3.127 | 5.055 | 5.973 |
 | `log_Koc` | 715 | 2.703 | 1.228 | 0 | 1.84 | 2.49 | 3.385 | 6.5 |
 | `log_solubility_water_molL` | 8,310 | -3.004 | 2.311 | -13.17 | -4.37 | -2.701 | -1.403 | 2.138 |
@@ -153,7 +151,6 @@ Top-3 sources per property, plus total number of distinct sources.
 | `gyration_radius_A` | 0 | (no sources column — downstream) |
 | `k_gas_298K` | 0 | (no sources column — downstream) |
 | `k_liq_298K` | 0 | (no sources column — downstream) |
-| `kinematic_viscosity_298K_cSt` | 0 | (no sources column — downstream) |
 | `log_Henry_atmmolfrac` | 0 | (no sources column — downstream) |
 | `log_Koc` | 0 | (no sources column — downstream) |
 | `log_solubility_water_molL` | 0 | (no sources column — downstream) |
@@ -201,7 +198,6 @@ Top-3 sources per property, plus total number of distinct sources.
 | `gyration_radius_A` | 990 | 106 | `198|198|198|198|198` | `629|185|59|59|58` |
 | `k_gas_298K` | 353 | 22 | `71|71|71|70|70` | `281|20|18|17|17` |
 | `k_liq_298K` | 993 | 72 | `199|199|199|198|198` | `716|125|51|51|50` |
-| `kinematic_viscosity_298K_cSt` | 998 | 64 | `200|200|200|199|199` | `736|123|47|46|46` |
 | `log_Henry_atmmolfrac` | 558 | 21 | `112|112|112|111|111` | `447|68|15|14|14` |
 | `log_Koc` | 715 | 181 | `143|143|143|143|143` | `288|107|107|107|106` |
 | `log_solubility_water_molL` | 8310 | 1640 | `1662|1662|1662|1662|1662` | `2105|1592|1538|1538|1537` |
@@ -233,10 +229,9 @@ Click any property name to open the standalone PNG.
 | **[autoignition_K](distributions/autoignition_K.png)**<br><img src="distributions/autoignition_K.png" width="280"> | **[density_liq_298K_gcm3](distributions/density_liq_298K_gcm3.png)**<br><img src="distributions/density_liq_298K_gcm3.png" width="280"> | **[dielectric_298K](distributions/dielectric_298K.png)**<br><img src="distributions/dielectric_298K.png" width="280"> |
 | **[dipole_moment_D](distributions/dipole_moment_D.png)**<br><img src="distributions/dipole_moment_D.png" width="280"> | **[expand_coeff_liq_K-1](distributions/expand_coeff_liq_K-1.png)**<br><img src="distributions/expand_coeff_liq_K-1.png" width="280"> | **[flash_point_K](distributions/flash_point_K.png)**<br><img src="distributions/flash_point_K.png" width="280"> |
 | **[freesolv_dG_kcalmol](distributions/freesolv_dG_kcalmol.png)**<br><img src="distributions/freesolv_dG_kcalmol.png" width="280"> | **[fusion_T_K](distributions/fusion_T_K.png)**<br><img src="distributions/fusion_T_K.png" width="280"> | **[gyration_radius_A](distributions/gyration_radius_A.png)**<br><img src="distributions/gyration_radius_A.png" width="280"> |
-| **[k_gas_298K](distributions/k_gas_298K.png)**<br><img src="distributions/k_gas_298K.png" width="280"> | **[k_liq_298K](distributions/k_liq_298K.png)**<br><img src="distributions/k_liq_298K.png" width="280"> | **[kinematic_viscosity_298K_cSt](distributions/kinematic_viscosity_298K_cSt.png)**<br><img src="distributions/kinematic_viscosity_298K_cSt.png" width="280"> |
-| **[log_Henry_atmmolfrac](distributions/log_Henry_atmmolfrac.png)**<br><img src="distributions/log_Henry_atmmolfrac.png" width="280"> | **[log_Koc](distributions/log_Koc.png)**<br><img src="distributions/log_Koc.png" width="280"> | **[log_solubility_water_molL](distributions/log_solubility_water_molL.png)**<br><img src="distributions/log_solubility_water_molL.png" width="280"> |
-| **[log_solubility_water_ppm](distributions/log_solubility_water_ppm.png)**<br><img src="distributions/log_solubility_water_ppm.png" width="280"> | **[omega](distributions/omega.png)**<br><img src="distributions/omega.png" width="280"> | **[visc_gas_298K_uPas](distributions/visc_gas_298K_uPas.png)**<br><img src="distributions/visc_gas_298K_uPas.png" width="280"> |
-| **[visc_liq_298K_cP](distributions/visc_liq_298K_cP.png)**<br><img src="distributions/visc_liq_298K_cP.png" width="280"> |  |  |
+| **[k_gas_298K](distributions/k_gas_298K.png)**<br><img src="distributions/k_gas_298K.png" width="280"> | **[k_liq_298K](distributions/k_liq_298K.png)**<br><img src="distributions/k_liq_298K.png" width="280"> | **[log_Henry_atmmolfrac](distributions/log_Henry_atmmolfrac.png)**<br><img src="distributions/log_Henry_atmmolfrac.png" width="280"> |
+| **[log_Koc](distributions/log_Koc.png)**<br><img src="distributions/log_Koc.png" width="280"> | **[log_solubility_water_molL](distributions/log_solubility_water_molL.png)**<br><img src="distributions/log_solubility_water_molL.png" width="280"> | **[log_solubility_water_ppm](distributions/log_solubility_water_ppm.png)**<br><img src="distributions/log_solubility_water_ppm.png" width="280"> |
+| **[omega](distributions/omega.png)**<br><img src="distributions/omega.png" width="280"> | **[visc_gas_298K_uPas](distributions/visc_gas_298K_uPas.png)**<br><img src="distributions/visc_gas_298K_uPas.png" width="280"> | **[visc_liq_298K_cP](distributions/visc_liq_298K_cP.png)**<br><img src="distributions/visc_liq_298K_cP.png" width="280"> |
 
 ## 7. Top 20 upstream sources across all properties
 
