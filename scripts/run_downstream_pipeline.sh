@@ -362,6 +362,11 @@ _run_one() {
     if [[ -n "${SPLIT_DIR_ROOT:-}" ]] && [[ -d "${SPLIT_DIR_ROOT}/${name}/${split_kind}" ]]; then
         split_dir_args="--split-dir ${SPLIT_DIR_ROOT}/${name}/${split_kind}"
     fi
+    # Head pooling scheme: attention (default) | sum | atomwise.
+    local head_type_args=""
+    if [[ -n "${HEAD_TYPE:-}" ]]; then
+        head_type_args="--head-type ${HEAD_TYPE}"
+    fi
 
     CUDA_VISIBLE_DEVICES=$gpu python -u scripts/downstream_cv.py \
         --ckpt   "$CKPT"   --config "$CONFIG" \
@@ -375,7 +380,7 @@ _run_one() {
         --extract-batch-size "$EXTRACT_BATCH" \
         --device cuda \
         $epoch_args $wandb_args $warm_args $stop_args $lora_args $maxk_args \
-        $h_cache_args $extract_args $split_dir_args \
+        $h_cache_args $extract_args $split_dir_args $head_type_args \
         >> "$out_dir/cv.log" 2>&1 \
         || { echo "[$name] CV FAILED, see $out_dir/cv.log" >&2; return 1; }
 

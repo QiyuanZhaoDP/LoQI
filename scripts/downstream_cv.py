@@ -67,6 +67,11 @@ class SingleTargetHead(nn.Module):
     important: `SingleTargetHead.mp.<...>` ↔ `dynamics.thermo_heads.mp.<...>`
     in the ckpt state_dict. Only `mp.final[3]` (the last Linear) has a
     different output dim (1 vs 5) and is always randomly initialized.
+
+    Pool: attention-weighted MEAN (size-invariant). The mol-level virtual
+    node attends to atoms with softmax weights (sum to 1 per molecule), so
+    the output magnitude does NOT scale with molecule size. Appropriate
+    for size-intensive properties (BP, density, logP, RI, ...).
     """
 
     def __init__(self, dim=256, hidden=128, n_mp_layers=2, n_heads=4):
@@ -78,6 +83,97 @@ class SingleTargetHead(nn.Module):
 
     def forward(self, H, batch_idx):
         return self.mp(H, batch_idx).squeeze(-1)
+
+
+class SumPoolHead(nn.Module):
+    """Per-atom MLP -> scatter_SUM (size-extensive). No attention pool.
+
+    Architecture: per-atom MLP applied independently to each H_i, then a
+    plain scatter_sum over molecule. Output scales linearly with N_atoms,
+    which matches the physics of extensive thermodynamic quantities
+    (Hf, Gf, S, Cv, H_combus, ...). Compare to SingleTargetHead's
+    attention-mean pool which is size-invariant.
+
+    Param count is comparable to a 2-layer AtomMolMP head when
+    hidden=256, n_layers=4 (~250K params).
+    """
+
+    def __init__(self, dim=256, hidden=256, n_layers=4):
+        super().__init__()
+        layers = []
+        in_dim = dim
+        for _ in range(n_layers - 1):
+            layers += [
+                nn.LayerNorm(in_dim),
+                nn.Linear(in_dim, hidden),
+                nn.SiLU(),
+            ]
+            in_dim = hidden
+        layers.append(nn.Linear(in_dim, 1))
+        self.per_atom_mlp = nn.Sequential(*layers)
+
+    def forward(self, H, batch_idx):
+        per_atom = self.per_atom_mlp(H).squeeze(-1)         # [N_atoms]
+        return scatter_sum(per_atom, batch_idx, dim=0)      # [N_mols]
+
+
+class AtomwiseHead(nn.Module):
+    """Per-atom prediction with residual blocks, then scatter_sum.
+
+    Same extensive output structure as SumPoolHead, but with deeper
+    per-atom refinement via residual MLP blocks (closer to NequIP /
+    PaiNN / SchNet energy decomposition heads). Captures more complex
+    per-atom contributions while keeping the output size-extensive.
+
+    Default config gives ~800K params at dim=256/hidden=256/n_blocks=4.
+    """
+
+    def __init__(self, dim=256, hidden=256, n_blocks=4):
+        super().__init__()
+        self.in_proj = nn.Linear(dim, hidden)
+        self.blocks = nn.ModuleList([
+            nn.Sequential(
+                nn.LayerNorm(hidden),
+                nn.Linear(hidden, hidden),
+                nn.SiLU(),
+                nn.Linear(hidden, hidden),
+            )
+            for _ in range(n_blocks)
+        ])
+        self.out_proj = nn.Sequential(
+            nn.LayerNorm(hidden),
+            nn.Linear(hidden, hidden),
+            nn.SiLU(),
+            nn.Linear(hidden, 1),
+        )
+
+    def forward(self, H, batch_idx):
+        x = self.in_proj(H)
+        for block in self.blocks:
+            x = x + block(x)                                 # residual
+        per_atom = self.out_proj(x).squeeze(-1)             # [N_atoms]
+        return scatter_sum(per_atom, batch_idx, dim=0)      # [N_mols]
+
+
+def make_head(head_type: str, dim: int, hidden: int,
+              n_mp_layers: int, n_heads: int):
+    """Factory: dispatch head class by --head-type flag.
+
+    'attention' -> SingleTargetHead (current default, size-invariant)
+    'sum'       -> SumPoolHead     (per-atom MLP + scatter_sum, extensive)
+    'atomwise'  -> AtomwiseHead    (deeper residual per-atom + scatter_sum)
+
+    Returns the head module (not yet moved to device).
+    """
+    if head_type == "attention":
+        return SingleTargetHead(dim=dim, hidden=hidden,
+                                n_mp_layers=n_mp_layers, n_heads=n_heads)
+    if head_type == "sum":
+        return SumPoolHead(dim=dim, hidden=hidden, n_layers=max(2, n_mp_layers))
+    if head_type == "atomwise":
+        return AtomwiseHead(dim=dim, hidden=hidden, n_blocks=max(2, n_mp_layers))
+    raise ValueError(f"Unknown --head-type: {head_type!r}. "
+                     f"Choose from: attention, sum, atomwise.")
 
 
 def load_thermo_head_into(head: "SingleTargetHead", ckpt_path: str) -> int:
@@ -467,13 +563,19 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
     mean, std = float(tr_targets.mean()), float(tr_targets.std() or 1.0)
     tgt_norm = ((targets - mean) / std).float()
 
-    model = SingleTargetHead(
+    model = make_head(
+        head_type=getattr(args, "head_type", "attention"),
         dim=H.shape[-1],
         hidden=args.head_hidden,
         n_mp_layers=args.n_mp_layers,
         n_heads=args.mp_n_heads,
     ).to(device)
-    if getattr(args, "init_head_from_thermo", False):
+    # init_head_from_thermo only matches the 'attention' head architecture
+    # (the pretrained combined_head IS an AtomMolMP). For sum/atomwise we
+    # silently skip the warm-init — their structure has no thermo-head
+    # parity.
+    _head_type = getattr(args, "head_type", "attention")
+    if getattr(args, "init_head_from_thermo", False) and _head_type == "attention":
         n_copied = load_thermo_head_into(model, args.ckpt)
         model = model.to(device)
         # Print only on first fold to keep logs clean.
@@ -481,6 +583,11 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
             print(f"  [warm-init] copied {n_copied} tensors from thermo head; "
                   "final Linear (5→1) random-init.")
             args._thermo_warm_announced = True
+    elif getattr(args, "init_head_from_thermo", False) and _head_type != "attention":
+        if not getattr(args, "_thermo_warm_skipped", False):
+            print(f"  [warm-init] skipped for --head-type={_head_type!r} "
+                  "(no architectural parity with pretrained thermo head).")
+            args._thermo_warm_skipped = True
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr,
                              weight_decay=args.weight_decay)
     total_steps = max(1, (len(train_idx) // args.batch_size) * args.epochs)
@@ -907,17 +1014,24 @@ def train_one_fold_lora(ds, model, train_idx, val_idx, args, device,
                else torch.full((bs,), float(t_max), dtype=torch.float32, device=device))
         out, _, _ = model(probe_pp, t_p)
         H_dim = int(out["H"].shape[-1])
-    head = SingleTargetHead(
+    head = make_head(
+        head_type=getattr(args, "head_type", "attention"),
         dim=H_dim, hidden=args.head_hidden,
         n_mp_layers=args.n_mp_layers, n_heads=args.mp_n_heads,
     ).to(device)
-    if getattr(args, "init_head_from_thermo", False):
+    _head_type = getattr(args, "head_type", "attention")
+    if getattr(args, "init_head_from_thermo", False) and _head_type == "attention":
         n_copied = load_thermo_head_into(head, args.ckpt)
         head = head.to(device)
         if not getattr(args, "_thermo_warm_announced", False):
             print(f"  [warm-init] copied {n_copied} tensors from thermo head; "
                   "final Linear (5→1) random-init.")
             args._thermo_warm_announced = True
+    elif getattr(args, "init_head_from_thermo", False) and _head_type != "attention":
+        if not getattr(args, "_thermo_warm_skipped", False):
+            print(f"  [warm-init] skipped for --head-type={_head_type!r} "
+                  "(no architectural parity).")
+            args._thermo_warm_skipped = True
 
     # --- Optimizer over LoRA A/B + head params ---------------------------
     lora_p = list(lora_parameters(model))
@@ -1240,6 +1354,17 @@ def main():
     p.add_argument("--n-mp-layers", type=int, default=2)
     p.add_argument("--mp-n-heads", type=int, default=4)
     p.add_argument("--head-hidden", type=int, default=256)
+    p.add_argument("--head-type", type=str, default="attention",
+                   choices=["attention", "sum", "atomwise"],
+                   help="Head pooling scheme. 'attention' (default) = "
+                        "AtomMolMP attention-weighted MEAN pool (size-invariant). "
+                        "'sum' = per-atom MLP + scatter_sum (size-extensive). "
+                        "'atomwise' = deeper residual per-atom MLP + scatter_sum "
+                        "(NequIP/SchNet-style). For size-extensive thermo targets "
+                        "(Hf, Gf, S, Cv, H_combus, ...), 'sum' or 'atomwise' are "
+                        "physically more appropriate. --init-head-from-thermo is "
+                        "auto-skipped for non-attention heads (no architectural "
+                        "parity with the pretrained combined_head).")
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     p.add_argument("--seed", type=int, default=2,
                    help="KFold fold-assignment seed. Default 2 matches "
