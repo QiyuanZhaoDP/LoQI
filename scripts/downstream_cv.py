@@ -556,12 +556,47 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
     of the same input share a group_id, so we get one prediction per input
     molecule even with K-augmented training data.
     """
+    # --- Optional pre-processing controlled by env vars ----------------------
+    # Y_MAX_FILTER : drop rows whose raw target value exceeds the given
+    #                threshold from train / val / test (default off).
+    # LOG_TARGET   : if "1", train the head on log10(y + LOG_TARGET_EPS)
+    #                instead of raw y. Predictions are exp-back to the
+    #                original scale before metrics / dump-preds so MAE,
+    #                RMSE, R² are reported in raw units.
+    _y_max = float(os.environ.get("Y_MAX_FILTER", "") or 0)
+    if _y_max > 0:
+        raw = targets.float().cpu().numpy()
+        keep = (raw <= _y_max) | np.isnan(raw)  # NaN ≡ no target ≡ neutral
+        def _filt(idx):
+            arr = np.asarray(idx)
+            return arr[keep[arr]]
+        train_idx = _filt(train_idx)
+        val_idx   = _filt(val_idx)
+        if test_idx is not None:
+            test_idx = _filt(test_idx)
+        if not getattr(args, "_y_max_announced", False):
+            print(f"  [Y_MAX_FILTER={_y_max}] post-filter sizes: "
+                  f"train={len(train_idx)}  val={len(val_idx)}"
+                  + (f"  test={len(test_idx)}" if test_idx is not None else ""))
+            args._y_max_announced = True
+
+    _use_log = os.environ.get("LOG_TARGET", "") in ("1", "true", "yes")
+    if _use_log:
+        _log_eps = float(os.environ.get("LOG_TARGET_EPS", "1e-3"))
+        targets_train = torch.log10(targets.float().clamp(min=_log_eps))
+        if not getattr(args, "_log_target_announced", False):
+            print(f"  [LOG_TARGET=1] training on log10(y + {_log_eps}); "
+                  f"preds inverse-transformed before metrics.")
+            args._log_target_announced = True
+    else:
+        targets_train = targets
+
     # z-score normalize on train only. targets may now live on `device`
     # (pinned by main()); .cpu() guards against the cuda→numpy error.
     tr_has = has_target[train_idx].bool().numpy()
-    tr_targets = targets[train_idx][tr_has].float().cpu().numpy()
+    tr_targets = targets_train[train_idx][tr_has].float().cpu().numpy()
     mean, std = float(tr_targets.mean()), float(tr_targets.std() or 1.0)
-    tgt_norm = ((targets - mean) / std).float()
+    tgt_norm = ((targets_train - mean) / std).float()
 
     model = make_head(
         head_type=getattr(args, "head_type", "attention"),
@@ -846,13 +881,20 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
                                              eval_idx.tolist(),
                                              args.batch_size, device, shuffle=False):
                 _preds.append(model(H_b, b_b))
-        return torch.cat(_preds).cpu().numpy() * std + mean
+        _out = torch.cat(_preds).cpu().numpy() * std + mean
+        # If trained on log10(y), exp-back to raw scale so all downstream
+        # metrics + prediction dumps are reported in original units.
+        if _use_log:
+            _out = np.power(10.0, _out)
+        return _out
 
     # Final evaluation: on test_idx when provided (UniMol-compatible mode),
     # otherwise fall back to val_idx (legacy).
     eval_idx = test_idx if test_idx is not None else val_idx
     val_idx_arr = np.asarray(eval_idx)
     val_has = has_target[val_idx_arr].bool().numpy()
+    # y_true is read from the ORIGINAL `targets` tensor (never log-transformed)
+    # so metrics are always in raw units, regardless of LOG_TARGET.
     y_true = targets[val_idx_arr].float().cpu().numpy()
     mask = val_has & ~np.isnan(y_true)
     n_train_total = int(tr_has.sum())
@@ -868,6 +910,8 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
                                        args.batch_size, device, shuffle=False):
             preds_best.append(model(H_b, b_b))
     preds = torch.cat(preds_best).cpu().numpy() * std + mean
+    if _use_log:
+        preds = np.power(10.0, preds)
 
     # --- Last-stable eval: best val epoch within last `last_stable_window` ---
     ls_ep, ls_mae_val, ls_state = min(last_k, key=lambda x: x[1]) if last_k else \
