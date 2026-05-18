@@ -1,0 +1,243 @@
+"""Build THERMO_STATISTICS.md for the LoQI ThermoGen mirror.
+
+Reads downstream_ft/0515_final/per_property/<prop>.csv (post-LoQI 12-element,
+post-star-filter view) and emits a single markdown report covering:
+
+  * overall counts (molecules, properties, cells)
+  * per-property tier composition (★ histogram)
+  * per-property value stats (mean / std / min / p25 / median / p75 / max)
+  * per-property source diversity (top sources contributing rows)
+  * scaffold counts and fold sizes (random + scaffold splits)
+
+Usage:
+    python scripts/build_thermo_statistics.py
+    python scripts/build_thermo_statistics.py --root downstream_ft/0515_final
+    python scripts/build_thermo_statistics.py --out  custom_path.md
+"""
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+import math
+import statistics as stats
+from collections import Counter, defaultdict
+from pathlib import Path
+
+
+STAR = {
+    'tier1': 5, 'tier1+confirmed': 5,
+    'tier1+disputed': 4, 'tier2': 4, 'tier2+confirmed': 4,
+    'tier2+disputed': 3, 'secondary_tight': 3,
+    'secondary_loose': 2,
+    'secondary_single': 1,
+    'downstream': 0,
+}
+
+
+def quantile(xs, q):
+    if not xs:
+        return float('nan')
+    s = sorted(xs)
+    k = (len(s) - 1) * q
+    f = math.floor(k); c = math.ceil(k)
+    if f == c:
+        return s[int(k)]
+    return s[f] + (s[c] - s[f]) * (k - f)
+
+
+def read_per_property(root: Path):
+    """Yield (prop, rows) where rows is a list of dicts with at minimum
+    inchikey/smiles/value/tier/sources keys."""
+    pp = root / 'per_property'
+    for f in sorted(pp.glob('*.csv')):
+        prop = f.stem
+        rows = list(csv.DictReader(f.open()))
+        yield prop, rows
+
+
+def split_summary(root: Path):
+    """Read splits_summary.csv (n_molecules, n_scaffolds, fold sizes)."""
+    p = root / 'splits_summary.csv'
+    if not p.exists():
+        return {}
+    out = {}
+    for r in csv.DictReader(p.open()):
+        out[r['property']] = r
+    return out
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                  formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument('--root', default='downstream_ft/0515_final',
+                    help='Root of the LoQI mirror (default: downstream_ft/0515_final)')
+    ap.add_argument('--out', default=None,
+                    help='Output markdown path (default: <root>/THERMO_STATISTICS.md)')
+    args = ap.parse_args()
+
+    root = Path(args.root).resolve()
+    if not (root / 'per_property').is_dir():
+        raise SystemExit(f'ERROR: {root}/per_property not found')
+
+    out_path = Path(args.out) if args.out else root / 'THERMO_STATISTICS.md'
+
+    sp = split_summary(root)
+
+    # First pass: collect everything.
+    per_prop = {}
+    all_ik = set()
+    overall_tier = Counter()
+    overall_source = Counter()
+    total_cells = 0
+
+    for prop, rows in read_per_property(root):
+        ik_set = set()
+        tier_count = Counter()
+        src_count = Counter()
+        vals = []
+        for r in rows:
+            ik_set.add(r['inchikey'])
+            t = r.get('tier', '')
+            tier_count[t] += 1; overall_tier[t] += 1
+            for s in (r.get('sources') or '').split('|'):
+                if s:
+                    src_count[s] += 1; overall_source[s] += 1
+            try:
+                vals.append(float(r['value']))
+            except (ValueError, KeyError):
+                pass
+        per_prop[prop] = {
+            'n': len(rows),
+            'n_mol': len(ik_set),
+            'tier': tier_count,
+            'src': src_count,
+            'vals': vals,
+        }
+        all_ik |= ik_set
+        total_cells += len(rows)
+
+    # Star histogram per row (overall).
+    star_hist = Counter()
+    for t, n in overall_tier.items():
+        star_hist[STAR.get(t, 0)] += n
+
+    # ------------------------------- write --------------------------------
+    lines: list[str] = []
+    w = lines.append
+
+    w(f'# ThermoGen — Per-Property Statistics')
+    w('')
+    w(f'**Source:** `{root.relative_to(root.parent.parent) if root.is_absolute() else root}/per_property/*.csv`')
+    w(f'**Generated:** by `scripts/build_thermo_statistics.py`')
+    w('')
+    w(f'**Unique molecules:** {len(all_ik):,}     '
+      f'**Properties:** {len(per_prop)}     '
+      f'**Total cells:** {total_cells:,}')
+    w('')
+
+    # ---- 1. Star histogram ----
+    w('## 1. Confidence-star distribution (overall, all cells)')
+    w('')
+    w('| ★ | Count | Share | Tier labels |')
+    w('|---:|---:|---:|---|')
+    star_labels = {
+        5: 'tier1, tier1+confirmed',
+        4: 'tier1+disputed, tier2, tier2+confirmed',
+        3: 'tier2+disputed, secondary_tight',
+        2: 'secondary_loose',
+        1: 'secondary_single',
+        0: 'downstream (no upstream tier; ML-bench targets)',
+    }
+    for s in (5, 4, 3, 2, 1, 0):
+        n = star_hist.get(s, 0)
+        if n == 0:
+            continue
+        pct = 100 * n / total_cells
+        w(f'| {"★"*s + "☆"*(5-s) if s>0 else "—"} | {n:,} | {pct:.1f}% | {star_labels[s]} |')
+    w('')
+
+    # ---- 2. Per-property table (tier composition) ----
+    w('## 2. Per-property tier composition')
+    w('')
+    w('Columns: n = total rows, mol = unique molecules, 5★/4★/3★/2★/1★/dn = '
+      'cell counts at each confidence level (`dn` = downstream/ML targets).')
+    w('')
+    w('| Property | n | mol | 5★ | 4★ | 3★ | 2★ | 1★ | dn |')
+    w('|---|---:|---:|---:|---:|---:|---:|---:|---:|')
+    for prop in sorted(per_prop):
+        d = per_prop[prop]
+        h = Counter()
+        for t, n in d['tier'].items():
+            h[STAR.get(t, 0)] += n
+        def cell(s):  # noqa: E306
+            return f'{h.get(s,0):,}' if h.get(s, 0) else ''
+        w(f'| `{prop}` | {d["n"]:,} | {d["n_mol"]:,} | '
+          f'{cell(5)} | {cell(4)} | {cell(3)} | {cell(2)} | {cell(1)} | {cell(0)} |')
+    w('')
+
+    # ---- 3. Per-property value stats ----
+    w('## 3. Per-property value statistics')
+    w('')
+    w('| Property | n | mean | std | min | p25 | median | p75 | max |')
+    w('|---|---:|---:|---:|---:|---:|---:|---:|---:|')
+    for prop in sorted(per_prop):
+        v = per_prop[prop]['vals']
+        if not v:
+            w(f'| `{prop}` | 0 | — | — | — | — | — | — | — |')
+            continue
+        m = stats.fmean(v)
+        s = stats.pstdev(v) if len(v) > 1 else 0.0
+        w(f'| `{prop}` | {len(v):,} | {m:.4g} | {s:.4g} | '
+          f'{min(v):.4g} | {quantile(v,.25):.4g} | {quantile(v,.5):.4g} | '
+          f'{quantile(v,.75):.4g} | {max(v):.4g} |')
+    w('')
+
+    # ---- 4. Per-property top sources ----
+    w('## 4. Per-property top sources (rows by upstream provider)')
+    w('')
+    w('Top-3 sources per property, plus total number of distinct sources.')
+    w('')
+    w('| Property | n_sources | top sources (rows) |')
+    w('|---|---:|---|')
+    for prop in sorted(per_prop):
+        srcs = per_prop[prop]['src']
+        if not srcs:
+            w(f'| `{prop}` | 0 | (no sources column — downstream) |')
+            continue
+        top = ', '.join(f'`{s}`: {n}' for s, n in srcs.most_common(3))
+        w(f'| `{prop}` | {len(srcs)} | {top} |')
+    w('')
+
+    # ---- 5. Splits ----
+    w('## 5. Split sizes (random + scaffold, 5-fold)')
+    w('')
+    if not sp:
+        w('_(splits_summary.csv not found — skipped)_')
+    else:
+        w('| Property | n_mol | n_scaffolds | random fold sizes | scaffold fold sizes |')
+        w('|---|---:|---:|---|---|')
+        for prop in sorted(sp):
+            r = sp[prop]
+            w(f'| `{prop}` | {r["n_molecules"]} | {r["n_scaffolds"]} | '
+              f'`{r["random_fold_sizes"]}` | `{r["scaffold_fold_sizes"]}` |')
+    w('')
+
+    # ---- 6. Top providers across the whole DB ----
+    w('## 6. Top 20 upstream sources across all properties')
+    w('')
+    w('| Source | Rows |')
+    w('|---|---:|')
+    for s, n in overall_source.most_common(20):
+        w(f'| `{s}` | {n:,} |')
+    w('')
+
+    out_path.write_text('\n'.join(lines))
+    print(f'Wrote {out_path}')
+    print(f'  {len(all_ik):,} molecules × {len(per_prop)} properties = {total_cells:,} cells')
+    print(f'  ★ histogram: ' + ', '.join(
+        f'{s}★={star_hist.get(s,0):,}' for s in (5,4,3,2,1,0) if star_hist.get(s,0)))
+
+
+if __name__ == '__main__':
+    main()
