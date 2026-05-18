@@ -26,7 +26,9 @@ Usage:
         --device cuda
 """
 import argparse
+import csv
 import json
+import os
 import time
 from pathlib import Path
 
@@ -436,7 +438,8 @@ def lora_parameters(module: nn.Module):
 
 def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
                     args, device, ensemble_groups=None,
-                    wandb_run=None, fold_i=0, test_idx=None):
+                    wandb_run=None, fold_i=0, test_idx=None,
+                    ds=None, out_dir=None):
     """Train head on train_idx, early-stop on val_idx, report on test_idx.
 
     When `test_idx` is None (legacy behaviour) val_idx serves as both the
@@ -767,6 +770,27 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
     # Restore best state so the function leaves model in best-val config
     if best_state is not None:
         model.load_state_dict({k: v.to(device) for k, v in best_state.items()})
+
+    # Opt-in per-sample prediction dump for label-noise scanning.
+    # Activated by DUMP_PREDS=1.  Writes <out_dir>/preds_fold{fold_i+1}.csv
+    # with columns: smiles, y_true, y_pred_best, y_pred_last_stable.
+    # No-op when out_dir or ds isn't provided (legacy callers unaffected).
+    if (os.environ.get('DUMP_PREDS', '') in ('1', 'true', 'yes')
+            and ds is not None and out_dir is not None):
+        out_csv = Path(out_dir) / f'preds_fold{fold_i + 1}.csv'
+        eval_idx_list = eval_idx.tolist() if hasattr(eval_idx, 'tolist') else list(eval_idx)
+        with open(out_csv, 'w', newline='') as _fp:
+            _w = csv.writer(_fp)
+            _w.writerow(['smiles', 'y_true', 'y_pred_best', 'y_pred_last_stable',
+                          'group_id', 'has_target'])
+            for _row, _data_i in enumerate(eval_idx_list):
+                _smi = str(getattr(ds[_data_i], 'input_id',
+                                    getattr(ds[_data_i], 'smiles', f'idx_{_data_i}')))
+                _gid = int(ensemble_groups[_data_i]) if ensemble_groups is not None else -1
+                _w.writerow([_smi, float(y_true[_row]),
+                              float(preds[_row]), float(preds_ls[_row]),
+                              _gid, int(bool(mask[_row]))])
+        print(f"  [DUMP_PREDS] wrote {out_csv.name} ({len(eval_idx_list)} rows)")
 
     if ensemble_groups is None:
         # Standard path: one prediction per Data.
@@ -1599,7 +1623,8 @@ def main():
                                   train_idx, val_idx, args, device,
                                   ensemble_groups=ensemble_groups,
                                   wandb_run=wandb_run, fold_i=fold_i,
-                                  test_idx=test_idx_arg)
+                                  test_idx=test_idx_arg,
+                                  ds=ds, out_dir=out_dir)
         rep["fold"] = fold_i
         fold_reports.append(rep)
         fold_cache_path.write_text(json.dumps(rep))

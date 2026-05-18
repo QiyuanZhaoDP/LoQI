@@ -52,6 +52,11 @@ export BATCH="${BATCH:-32}"
 export EXTRACT_BATCH="${EXTRACT_BATCH:-16}"
 export SAMPLE_BATCH="${SAMPLE_BATCH:-32}"
 
+# Dump per-sample (smiles, y_true, y_pred_best, y_pred_last_stable) at the
+# end of each fold so scripts/scan_label_noise.py can flag rows whose label
+# is far from where the model thinks it should be (likely data errors).
+export DUMP_PREDS="${DUMP_PREDS:-1}"
+
 export INPUT_DIR=downstream_ft/0515_final/Clean
 export SPLIT_DIR_ROOT=downstream_ft/0515_final/Split
 
