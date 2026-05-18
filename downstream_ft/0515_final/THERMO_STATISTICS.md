@@ -210,7 +210,35 @@ Top-3 sources per property, plus total number of distinct sources.
 | `visc_gas_298K_uPas` | 626 | 44 | `126|125|125|125|125` | `471|66|30|30|29` |
 | `visc_liq_298K_cP` | 1211 | 75 | `243|242|242|242|242` | `902|135|58|58|58` |
 
-## 6. Top 20 upstream sources across all properties
+## 6. Per-property value distributions
+
+Composite (all 43 properties): [`distributions/_all_distributions.png`](distributions/_all_distributions.png)
+
+![all](distributions/_all_distributions.png)
+
+### Per-property histograms
+
+Click any property name to open the standalone PNG.
+
+| | | |
+|---|---|---|
+| **[BP_K](distributions/BP_K.png)**<br><img src="distributions/BP_K.png" width="280"> | **[CEP_PCE](distributions/CEP_PCE.png)**<br><img src="distributions/CEP_PCE.png" width="280"> | **[Cp_gas_298K](distributions/Cp_gas_298K.png)**<br><img src="distributions/Cp_gas_298K.png" width="280"> |
+| **[Cp_liq_298K](distributions/Cp_liq_298K.png)**<br><img src="distributions/Cp_liq_298K.png" width="280"> | **[ESOL_logS](distributions/ESOL_logS.png)**<br><img src="distributions/ESOL_logS.png" width="280"> | **[Gf_gas_kJmol](distributions/Gf_gas_kJmol.png)**<br><img src="distributions/Gf_gas_kJmol.png" width="280"> |
+| **[H_combus_kJmol](distributions/H_combus_kJmol.png)**<br><img src="distributions/H_combus_kJmol.png" width="280"> | **[Hf_gas_kJmol](distributions/Hf_gas_kJmol.png)**<br><img src="distributions/Hf_gas_kJmol.png" width="280"> | **[Hf_liq_kJmol](distributions/Hf_liq_kJmol.png)**<br><img src="distributions/Hf_liq_kJmol.png" width="280"> |
+| **[Hfus_at_TF_kJmol](distributions/Hfus_at_TF_kJmol.png)**<br><img src="distributions/Hfus_at_TF_kJmol.png" width="280"> | **[Hvap_at_TB_kJmol](distributions/Hvap_at_TB_kJmol.png)**<br><img src="distributions/Hvap_at_TB_kJmol.png" width="280"> | **[LEL_volpct](distributions/LEL_volpct.png)**<br><img src="distributions/LEL_volpct.png" width="280"> |
+| **[Lipophilicity_logD](distributions/Lipophilicity_logD.png)**<br><img src="distributions/Lipophilicity_logD.png" width="280"> | **[PPBR_pct](distributions/PPBR_pct.png)**<br><img src="distributions/PPBR_pct.png" width="280"> | **[Pc_bar](distributions/Pc_bar.png)**<br><img src="distributions/Pc_bar.png" width="280"> |
+| **[Pvap_log10mmHg](distributions/Pvap_log10mmHg.png)**<br><img src="distributions/Pvap_log10mmHg.png" width="280"> | **[Q_10ppmv_mgg](distributions/Q_10ppmv_mgg.png)**<br><img src="distributions/Q_10ppmv_mgg.png" width="280"> | **[RI_298K](distributions/RI_298K.png)**<br><img src="distributions/RI_298K.png" width="280"> |
+| **[ST_298K_mNm](distributions/ST_298K_mNm.png)**<br><img src="distributions/ST_298K_mNm.png" width="280"> | **[S_gas_JmolK](distributions/S_gas_JmolK.png)**<br><img src="distributions/S_gas_JmolK.png" width="280"> | **[Sf_gas_JmolK](distributions/Sf_gas_JmolK.png)**<br><img src="distributions/Sf_gas_JmolK.png" width="280"> |
+| **[Tc_K](distributions/Tc_K.png)**<br><img src="distributions/Tc_K.png" width="280"> | **[UEL_volpct](distributions/UEL_volpct.png)**<br><img src="distributions/UEL_volpct.png" width="280"> | **[Vc_cm3mol](distributions/Vc_cm3mol.png)**<br><img src="distributions/Vc_cm3mol.png" width="280"> |
+| **[autoignition_K](distributions/autoignition_K.png)**<br><img src="distributions/autoignition_K.png" width="280"> | **[density_liq_298K_gcm3](distributions/density_liq_298K_gcm3.png)**<br><img src="distributions/density_liq_298K_gcm3.png" width="280"> | **[dielectric_298K](distributions/dielectric_298K.png)**<br><img src="distributions/dielectric_298K.png" width="280"> |
+| **[dipole_moment_D](distributions/dipole_moment_D.png)**<br><img src="distributions/dipole_moment_D.png" width="280"> | **[expand_coeff_liq_K-1](distributions/expand_coeff_liq_K-1.png)**<br><img src="distributions/expand_coeff_liq_K-1.png" width="280"> | **[flash_point_K](distributions/flash_point_K.png)**<br><img src="distributions/flash_point_K.png" width="280"> |
+| **[freesolv_dG_kcalmol](distributions/freesolv_dG_kcalmol.png)**<br><img src="distributions/freesolv_dG_kcalmol.png" width="280"> | **[fusion_T_K](distributions/fusion_T_K.png)**<br><img src="distributions/fusion_T_K.png" width="280"> | **[gyration_radius_A](distributions/gyration_radius_A.png)**<br><img src="distributions/gyration_radius_A.png" width="280"> |
+| **[k_gas_298K](distributions/k_gas_298K.png)**<br><img src="distributions/k_gas_298K.png" width="280"> | **[k_liq_298K](distributions/k_liq_298K.png)**<br><img src="distributions/k_liq_298K.png" width="280"> | **[kinematic_viscosity_298K_cSt](distributions/kinematic_viscosity_298K_cSt.png)**<br><img src="distributions/kinematic_viscosity_298K_cSt.png" width="280"> |
+| **[log_Henry_atmmolfrac](distributions/log_Henry_atmmolfrac.png)**<br><img src="distributions/log_Henry_atmmolfrac.png" width="280"> | **[log_Koc](distributions/log_Koc.png)**<br><img src="distributions/log_Koc.png" width="280"> | **[log_solubility_water_molL](distributions/log_solubility_water_molL.png)**<br><img src="distributions/log_solubility_water_molL.png" width="280"> |
+| **[log_solubility_water_ppm](distributions/log_solubility_water_ppm.png)**<br><img src="distributions/log_solubility_water_ppm.png" width="280"> | **[omega](distributions/omega.png)**<br><img src="distributions/omega.png" width="280"> | **[visc_gas_298K_uPas](distributions/visc_gas_298K_uPas.png)**<br><img src="distributions/visc_gas_298K_uPas.png" width="280"> |
+| **[visc_liq_298K_cP](distributions/visc_liq_298K_cP.png)**<br><img src="distributions/visc_liq_298K_cP.png" width="280"> |  |  |
+
+## 7. Top 20 upstream sources across all properties
 
 | Source | Rows |
 |---|---:|

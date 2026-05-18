@@ -8,11 +8,13 @@ post-star-filter view) and emits a single markdown report covering:
   * per-property value stats (mean / std / min / p25 / median / p75 / max)
   * per-property source diversity (top sources contributing rows)
   * scaffold counts and fold sizes (random + scaffold splits)
+  * per-property value histograms (PNG) — saved to <root>/distributions/
 
 Usage:
     python scripts/build_thermo_statistics.py
     python scripts/build_thermo_statistics.py --root downstream_ft/0515_final
     python scripts/build_thermo_statistics.py --out  custom_path.md
+    python scripts/build_thermo_statistics.py --no-plots
 """
 from __future__ import annotations
 
@@ -33,6 +35,74 @@ STAR = {
     'secondary_single': 1,
     'downstream': 0,
 }
+
+
+AXIS_OVERRIDES = {
+    'visc_liq_298K_cP':             {'logy': True},
+    'kinematic_viscosity_298K_cSt': {'logy': True},
+    'Q_10ppmv_mgg':                 {'logy': True},
+    'dielectric_298K':              {'logy': True},
+}
+
+
+def plot_distributions(per_prop, dist_dir):
+    """Write per-property histograms + a composite grid. Returns True on success."""
+    try:
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+    except ImportError:
+        return False
+    dist_dir.mkdir(parents=True, exist_ok=True)
+
+    # ---- per-property single PNG ----
+    for prop, d in sorted(per_prop.items()):
+        vals = d['vals']
+        if not vals:
+            continue
+        n = len(vals)
+        m = sum(vals) / n
+        s = (sum((v-m)**2 for v in vals) / n) ** 0.5 if n > 1 else 0.0
+        ov = AXIS_OVERRIDES.get(prop, {})
+        fig, ax = plt.subplots(figsize=(6, 3.5))
+        ax.hist(vals, bins=min(60, max(10, n // 50)),
+                color='#4a7bb7', edgecolor='white', linewidth=0.5)
+        if ov.get('logy'):
+            ax.set_yscale('log')
+        ax.set_title(f'{prop}  (n={n}, μ={m:.3g}, σ={s:.3g})')
+        ax.set_xlabel('value'); ax.set_ylabel('count')
+        ax.grid(True, alpha=0.3)
+        fig.tight_layout()
+        fig.savefig(dist_dir / f'{prop}.png', dpi=110)
+        plt.close(fig)
+
+    # ---- composite grid ----
+    props_with_vals = [(p, d) for p, d in sorted(per_prop.items()) if d['vals']]
+    nprops = len(props_with_vals)
+    if nprops == 0:
+        return True
+    ncols = 6
+    nrows = (nprops + ncols - 1) // ncols
+    fig, axes = plt.subplots(nrows, ncols, figsize=(ncols*3.2, nrows*2.3))
+    axes = axes.flatten() if hasattr(axes, 'flatten') else [axes]
+    for ax, (prop, d) in zip(axes, props_with_vals):
+        vals = d['vals']; n = len(vals)
+        m = sum(vals) / n
+        sd = (sum((v-m)**2 for v in vals) / n) ** 0.5 if n > 1 else 0.0
+        ov = AXIS_OVERRIDES.get(prop, {})
+        ax.hist(vals, bins=min(40, max(8, n // 40)),
+                color='#4a7bb7', edgecolor='white', linewidth=0.4)
+        if ov.get('logy'):
+            ax.set_yscale('log')
+        ax.set_title(f'{prop}\nn={n}  μ={m:.3g}  σ={sd:.3g}', fontsize=8)
+        ax.tick_params(labelsize=7)
+        ax.grid(True, alpha=0.3, linewidth=0.4)
+    for ax in axes[nprops:]:
+        ax.set_visible(False)
+    fig.tight_layout()
+    fig.savefig(dist_dir / '_all_distributions.png', dpi=120, bbox_inches='tight')
+    plt.close(fig)
+    return True
 
 
 def quantile(xs, q):
@@ -74,6 +144,8 @@ def main():
                     help='Root of the LoQI mirror (default: downstream_ft/0515_final)')
     ap.add_argument('--out', default=None,
                     help='Output markdown path (default: <root>/THERMO_STATISTICS.md)')
+    ap.add_argument('--no-plots', action='store_true',
+                    help='Skip generating per-property histogram PNGs.')
     args = ap.parse_args()
 
     root = Path(args.root).resolve()
@@ -223,8 +295,41 @@ def main():
               f'`{r["random_fold_sizes"]}` | `{r["scaffold_fold_sizes"]}` |')
     w('')
 
-    # ---- 6. Top providers across the whole DB ----
-    w('## 6. Top 20 upstream sources across all properties')
+    # ---- 6. Per-property distributions (PNG gallery) ----
+    if not args.no_plots:
+        dist_dir = root / 'distributions'
+        ok = plot_distributions(per_prop, dist_dir)
+        if ok:
+            rel = dist_dir.name  # relative link from the report
+            w('## 6. Per-property value distributions')
+            w('')
+            w(f'Composite (all 43 properties): [`{rel}/_all_distributions.png`]'
+              f'({rel}/_all_distributions.png)')
+            w('')
+            w(f'![all]({rel}/_all_distributions.png)')
+            w('')
+            w('### Per-property histograms')
+            w('')
+            w('Click any property name to open the standalone PNG.')
+            w('')
+            # Render in a 3-column gallery using markdown tables (each cell = thumb).
+            props_with_plots = sorted(p for p, d in per_prop.items() if d['vals'])
+            ncol = 3
+            w('| | | |')
+            w('|---|---|---|')
+            for i in range(0, len(props_with_plots), ncol):
+                chunk = props_with_plots[i:i+ncol]
+                cells = []
+                for prop in chunk:
+                    cells.append(f'**[{prop}]({rel}/{prop}.png)**<br>'
+                                 f'<img src="{rel}/{prop}.png" width="280">')
+                while len(cells) < ncol:
+                    cells.append('')
+                w('| ' + ' | '.join(cells) + ' |')
+            w('')
+
+    # ---- 7. Top providers across the whole DB ----
+    w('## 7. Top 20 upstream sources across all properties')
     w('')
     w('| Source | Rows |')
     w('|---|---:|')
