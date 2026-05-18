@@ -3,16 +3,16 @@
 **Source:** `downstream_ft/0515_final/per_property/*.csv`
 **Generated:** by `scripts/build_thermo_statistics.py`
 
-**Unique molecules:** 20,816     **Properties:** 42     **Total cells:** 62,875
+**Unique molecules:** 21,269     **Properties:** 43     **Total cells:** 64,477
 
 ## 1. Confidence-star distribution (overall, all cells)
 
 | ★ | Count | Share | Tier labels |
 |---:|---:|---:|---|
-| ★★★★★ | 34,272 | 54.5% | tier1, tier1+confirmed |
-| ★★★★☆ | 11,222 | 17.8% | tier1+disputed, tier2, tier2+confirmed |
-| ★★★☆☆ | 9,173 | 14.6% | tier2+disputed, secondary_tight |
-| — | 8,208 | 13.1% | downstream (no upstream tier; ML-bench targets) |
+| ★★★★★ | 34,272 | 53.2% | tier1, tier1+confirmed |
+| ★★★★☆ | 11,222 | 17.4% | tier1+disputed, tier2, tier2+confirmed |
+| ★★★☆☆ | 9,173 | 14.2% | tier2+disputed, secondary_tight |
+| — | 9,810 | 15.2% | downstream (no upstream tier; ML-bench targets) |
 
 ## 2. Per-property tier composition
 
@@ -62,6 +62,7 @@ Columns: n = total rows, mol = unique molecules, 5★/4★/3★/2★/1★/dn = c
 | `omega` | 1,264 | 1,264 | 1,264 |  |  |  |  |  |
 | `visc_gas_298K_uPas` | 626 | 626 | 626 |  |  |  |  |  |
 | `visc_liq_298K_cP` | 1,211 | 1,211 | 1,005 | 120 | 86 |  |  |  |
+| `visc_liq_298K_cP_manual` | 1,602 | 1,602 |  |  |  |  |  | 1,602 |
 
 ## 3. Per-property value statistics
 
@@ -109,6 +110,7 @@ Columns: n = total rows, mol = unique molecules, 5★/4★/3★/2★/1★/dn = c
 | `omega` | 1,264 | 0.4701 | 0.2409 | 0.011 | 0.2967 | 0.403 | 0.5952 | 1.578 |
 | `visc_gas_298K_uPas` | 626 | 6.77 | 2.335 | 3.236 | 5.358 | 6.14 | 7.66 | 17.27 |
 | `visc_liq_298K_cP` | 1,211 | 4.213 | 13.68 | 0.039 | 0.538 | 0.951 | 2.912 | 187.8 |
+| `visc_liq_298K_cP_manual` | 1,602 | 6.021 | 81.84 | 0.05212 | 0.4521 | 0.7463 | 1.9 | 3018 |
 
 ## 4. Per-property top sources (rows by upstream provider)
 
@@ -158,6 +160,7 @@ Top-3 sources per property, plus total number of distinct sources.
 | `omega` | 0 | (no sources column — downstream) |
 | `visc_gas_298K_uPas` | 0 | (no sources column — downstream) |
 | `visc_liq_298K_cP` | 0 | (no sources column — downstream) |
+| `visc_liq_298K_cP_manual` | 0 | (no sources column — downstream) |
 
 ## 5. Split sizes (random + scaffold, 5-fold)
 
@@ -205,6 +208,7 @@ Top-3 sources per property, plus total number of distinct sources.
 | `omega` | 1264 | 116 | `253|253|253|253|252` | `836|204|75|75|74` |
 | `visc_gas_298K_uPas` | 626 | 44 | `126|125|125|125|125` | `471|66|30|30|29` |
 | `visc_liq_298K_cP` | 1211 | 75 | `243|242|242|242|242` | `902|135|58|58|58` |
+| `visc_liq_298K_cP_manual` | 1602 | 78 | `321|321|320|320|320` | `1255|138|70|70|69` |
 
 ## 6. Per-property value distributions
 
@@ -232,6 +236,7 @@ Click any property name to open the standalone PNG.
 | **[k_gas_298K](distributions/k_gas_298K.png)**<br><img src="distributions/k_gas_298K.png" width="280"> | **[k_liq_298K](distributions/k_liq_298K.png)**<br><img src="distributions/k_liq_298K.png" width="280"> | **[log_Henry_atmmolfrac](distributions/log_Henry_atmmolfrac.png)**<br><img src="distributions/log_Henry_atmmolfrac.png" width="280"> |
 | **[log_Koc](distributions/log_Koc.png)**<br><img src="distributions/log_Koc.png" width="280"> | **[log_solubility_water_molL](distributions/log_solubility_water_molL.png)**<br><img src="distributions/log_solubility_water_molL.png" width="280"> | **[log_solubility_water_ppm](distributions/log_solubility_water_ppm.png)**<br><img src="distributions/log_solubility_water_ppm.png" width="280"> |
 | **[omega](distributions/omega.png)**<br><img src="distributions/omega.png" width="280"> | **[visc_gas_298K_uPas](distributions/visc_gas_298K_uPas.png)**<br><img src="distributions/visc_gas_298K_uPas.png" width="280"> | **[visc_liq_298K_cP](distributions/visc_liq_298K_cP.png)**<br><img src="distributions/visc_liq_298K_cP.png" width="280"> |
+| **[visc_liq_298K_cP_manual](distributions/visc_liq_298K_cP_manual.png)**<br><img src="distributions/visc_liq_298K_cP_manual.png" width="280"> |  |  |
 
 ## 7. Top 20 upstream sources across all properties
 
