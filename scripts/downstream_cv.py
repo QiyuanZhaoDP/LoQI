@@ -1237,6 +1237,14 @@ def main():
                         "test MAE achievable within those last N epochs "
                         "(represents converged model, not a lucky dip).")
     p.add_argument("--weight-decay", type=float, default=1e-5)
+    p.add_argument("--only-fold", type=int, default=None,
+                   help="Run ONLY the given 0-indexed fold (0..n_folds-1) and exit. "
+                        "Skip cv_report.json aggregation. Used by run_cv_pool.sh "
+                        "to dispatch (dataset, fold) tasks across GPU slots as "
+                        "independent jobs. After all folds complete, "
+                        "scripts/finalize_cv_report.py aggregates fold_cache/*.json "
+                        "into cv_report.json. Default None = legacy behavior "
+                        "(run all folds sequentially, write cv_report.json).")
     p.add_argument("--n-mp-layers", type=int, default=2)
     p.add_argument("--mp-n-heads", type=int, default=4)
     p.add_argument("--head-hidden", type=int, default=256)
@@ -1505,6 +1513,11 @@ def main():
         split_iter = kf.split(labeled)
 
     for fold_i, (tr_pool, test_fold) in enumerate(split_iter):
+        # Pool-mode: --only-fold N runs only that one fold. Skip all others
+        # (don't even load cache for them — they may not be present yet, and
+        # we won't aggregate cv_report.json in pool mode anyway).
+        if args.only_fold is not None and fold_i != args.only_fold:
+            continue
         fold_cache_path = fold_cache_dir / f"fold_{fold_i}.json"
         if fold_cache_path.exists():
             import json as _json
@@ -1640,6 +1653,22 @@ def main():
         if wandb_run is not None:
             wandb_run.log({f"fold/{fold_i}/{k}": v for k, v in rep.items()
                             if isinstance(v, (int, float))})
+
+    # Pool-mode: in --only-fold mode we don't aggregate. Just report what
+    # we did and exit. The outer scheduler will run finalize_cv_report.py
+    # once all folds for this dataset are present.
+    if args.only_fold is not None:
+        if fold_reports:
+            r = fold_reports[0]
+            ens_str = ""
+            if "ensemble_pred_std_mean" in r:
+                ens_str = (f"  pred_σ_mean={r['ensemble_pred_std_mean']:.4f}")
+            print(f"\n[only-fold {args.only_fold}]  "
+                  f"MAE={r['mae']:.4f}  RMSE={r['rmse']:.4f}  R²={r['r2']:.3f}{ens_str}")
+            print(f"  wrote {fold_cache_dir}/fold_{args.only_fold}.json")
+        else:
+            print(f"\n[only-fold {args.only_fold}]  no work done (cache may exist)")
+        return
 
     # Aggregate
     summary = {
