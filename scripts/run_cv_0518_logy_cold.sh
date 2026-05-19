@@ -56,7 +56,7 @@ export LOG_TARGET_EPS="${LOG_TARGET_EPS:-1e-3}"
 export INPUT_DIR=downstream_ft/0515_final/Clean
 export SPLIT_DIR_ROOT=downstream_ft/0515_final/Split
 
-export DATASETS_FILTER="ST_298K_mNm,visc_liq_298K_cP_manual,Hvap_at_TB_kJmol,dielectric_298K,visc_liq_298K_cP"
+export DATASETS_FILTER="ST_298K_mNm,Hvap_at_TB_kJmol,dielectric_298K,visc_liq_298K_cP"
 
 # Same RUN_TAG → share Stage A/B/B.5 caches with the baseline.  Distinct
 # OUT_ROOT + WANDB project so the log variant doesn't collide with the

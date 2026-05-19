@@ -85,42 +85,10 @@ class SingleTargetHead(nn.Module):
         return self.mp(H, batch_idx).squeeze(-1)
 
 
-class SumPoolHead(nn.Module):
-    """Per-atom MLP -> scatter_SUM (size-extensive). No attention pool.
-
-    Architecture: per-atom MLP applied independently to each H_i, then a
-    plain scatter_sum over molecule. Output scales linearly with N_atoms,
-    which matches the physics of extensive thermodynamic quantities
-    (Hf, Gf, S, Cv, H_combus, ...). Compare to SingleTargetHead's
-    attention-mean pool which is size-invariant.
-
-    Param count is comparable to a 2-layer AtomMolMP head when
-    hidden=256, n_layers=4 (~250K params).
-    """
-
-    def __init__(self, dim=256, hidden=256, n_layers=4):
-        super().__init__()
-        layers = []
-        in_dim = dim
-        for _ in range(n_layers - 1):
-            layers += [
-                nn.LayerNorm(in_dim),
-                nn.Linear(in_dim, hidden),
-                nn.SiLU(),
-            ]
-            in_dim = hidden
-        layers.append(nn.Linear(in_dim, 1))
-        self.per_atom_mlp = nn.Sequential(*layers)
-
-    def forward(self, H, batch_idx):
-        per_atom = self.per_atom_mlp(H).squeeze(-1)         # [N_atoms]
-        return scatter_sum(per_atom, batch_idx, dim=0)      # [N_mols]
-
-
 class AtomwiseHead(nn.Module):
     """Per-atom prediction with residual blocks, then scatter_sum.
 
-    Same extensive output structure as SumPoolHead, but with deeper
+    Per-atom prediction then scatter_sum (size-extensive), with deeper
     per-atom refinement via residual MLP blocks (closer to NequIP /
     PaiNN / SchNet energy decomposition heads). Captures more complex
     per-atom contributions while keeping the output size-extensive.
@@ -159,21 +127,25 @@ def make_head(head_type: str, dim: int, hidden: int,
               n_mp_layers: int, n_heads: int):
     """Factory: dispatch head class by --head-type flag.
 
-    'attention' -> SingleTargetHead (current default, size-invariant)
-    'sum'       -> SumPoolHead     (per-atom MLP + scatter_sum, extensive)
-    'atomwise'  -> AtomwiseHead    (deeper residual per-atom + scatter_sum)
+    'attention' -> SingleTargetHead (default; AtomMolMP attention-mean pool,
+                   size-invariant; warm-init from thermo ckpt available).
+    'atomwise'  -> AtomwiseHead     (deeper residual per-atom MLP +
+                   scatter_sum; size-extensive; good for additive thermo
+                   targets like Hf_gas, H_combus, Vc).
+
+    The SumPoolHead variant was evaluated in the 0518 head_pool ablation
+    and dominated by AtomwiseHead on every metric where it differed from
+    `attention`, so it was removed on 2026-05-19.
 
     Returns the head module (not yet moved to device).
     """
     if head_type == "attention":
         return SingleTargetHead(dim=dim, hidden=hidden,
                                 n_mp_layers=n_mp_layers, n_heads=n_heads)
-    if head_type == "sum":
-        return SumPoolHead(dim=dim, hidden=hidden, n_layers=max(2, n_mp_layers))
     if head_type == "atomwise":
         return AtomwiseHead(dim=dim, hidden=hidden, n_blocks=max(2, n_mp_layers))
     raise ValueError(f"Unknown --head-type: {head_type!r}. "
-                     f"Choose from: attention, sum, atomwise.")
+                     f"Choose from: attention (default), atomwise.")
 
 
 def load_thermo_head_into(head: "SingleTargetHead", ckpt_path: str) -> int:

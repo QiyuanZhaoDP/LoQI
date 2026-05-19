@@ -55,7 +55,7 @@ export Y_MAX_FILTER="${Y_MAX_FILTER:-50}"
 export INPUT_DIR=downstream_ft/0515_final/Clean
 export SPLIT_DIR_ROOT=downstream_ft/0515_final/Split
 
-export DATASETS_FILTER="ST_298K_mNm,visc_liq_298K_cP_manual,Hvap_at_TB_kJmol,dielectric_298K,visc_liq_298K_cP"
+export DATASETS_FILTER="ST_298K_mNm,Hvap_at_TB_kJmol,dielectric_298K,visc_liq_298K_cP"
 
 export RUN_TAG="${RUN_TAG:-0518rev}"
 export OUT_ROOT="${OUT_ROOT:-outputs/cv_0518_filt50_cold}"

@@ -1,24 +1,28 @@
 #!/usr/bin/env bash
 # 0518 head-pool ablation on size-extensive thermo properties.
 #
-# Three head types are tested on the same backbone (cold_combined K=8) and
+# Two head types are tested on the same backbone (cold_combined K=8) and
 # the same balanced scaffold split (scaffold_balanced_cv5):
 #
 #   attention : SingleTargetHead = AtomMolMP attention-weighted MEAN pool
-#               (size-invariant; current default)
-#   sum       : SumPoolHead     = per-atom MLP + scatter_SUM
-#               (size-extensive; physically appropriate for Hf, S, Cv, ...)
-#   atomwise  : AtomwiseHead    = deeper residual per-atom MLP + scatter_SUM
-#               (NequIP / PaiNN / SchNet energy-decomposition style)
+#               (size-invariant; default; warm-init from thermo ckpt)
+#   atomwise  : AtomwiseHead     = deeper residual per-atom MLP + scatter_SUM
+#               (size-extensive; physically motivated for extensive thermo
+#               targets like H_combus, Hf, Vc; NequIP/PaiNN style)
 #
-# Each head trains on the SAME cached H features (Stage A/B/C skipped if
+# The earlier SumPoolHead variant was removed on 2026-05-19 — it was
+# dominated by AtomwiseHead on every metric where the two differed, and
+# never beat `attention` on MAE.  See the original ablation log for
+# context (3 head types × 10 ds, kept here as historical baseline).
+#
+# Each head trains on the SAME cached H features (Stage A/B/B.5 skipped if
 # data/0515_pt_cold_combined_K8/<ds>_H.pt exists), so the only difference
-# between the three runs is the head architecture + pooling scheme.
+# between the two runs is the head architecture + pooling scheme.
 #
 # Datasets: 10 size-extensive thermo / structural ds (TH + HC + Vc).
-# Total work: 3 head_types × 10 ds × 5 folds = 150 jobs.
+# Total work: 2 head_types × 10 ds × 5 folds = 100 jobs.
 # On 8 GPUs × 4 tasks = 32 slots, each head-type sweep ≈ 30-45 min.
-# Total wall ≈ 2 hours sequential.
+# Total wall ≈ 60-90 min sequential.
 #
 # Output: outputs/cv_0518_head_pool/<head_type>/<ds>_<cfg>/cv_report.json
 #
@@ -27,7 +31,7 @@
 #       > /tmp/cv_0518_head_pool.log 2>&1 & disown
 #
 # To run a single head_type (e.g. to parallelize across machines):
-#   HEAD_TYPE=sum bash scripts/run_cv_0518_head_pool_thermo_ablation.sh
+#   HEAD_TYPE=atomwise bash scripts/run_cv_0518_head_pool_thermo_ablation.sh
 
 set -uo pipefail
 cd "$(dirname "$0")/.."
@@ -82,7 +86,7 @@ SAMPLING_MODES=(
 if [[ -n "${HEAD_TYPE:-}" ]]; then
     HEAD_TYPES=("$HEAD_TYPE")
 else
-    HEAD_TYPES=(attention sum atomwise)
+    HEAD_TYPES=(attention atomwise)
 fi
 
 for ht in "${HEAD_TYPES[@]}"; do
