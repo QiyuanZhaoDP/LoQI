@@ -144,18 +144,14 @@ class HybridHead(nn.Module):
     """
 
     def __init__(self, dim=256, hidden=256, n_mp_layers=2, n_heads=4,
-                 n_blocks=4, alpha_init=0.0):
+                 n_blocks=4, alpha_init=0.1):
         super().__init__()
         self.attn = SingleTargetHead(dim=dim, hidden=hidden,
                                       n_mp_layers=n_mp_layers, n_heads=n_heads)
         self.atom = AtomwiseHead(dim=dim, hidden=hidden, n_blocks=n_blocks)
-        # Learned mixing scalar.  alpha_init=0.0 (LoRA-style zero init) makes
-        # the head start as pure attention — atomwise contributes nothing
-        # until α grows during training.  This avoids the random-init
-        # atomwise output corrupting the attention path's gradient signal
-        # in the first few epochs (the hypothesized cause of hybrid losing
-        # to plain attention on the 0519 pilot).  Override via
-        # HYBRID_ALPHA_INIT env var for the old 0.1 behaviour.
+        # Learned mixing scalar.  alpha_init=0.1 keeps the head close to pure
+        # attention at start (so warm-init from thermo ckpt stays meaningful)
+        # and lets gradient descent grow the additive correction as needed.
         self.alpha = nn.Parameter(torch.tensor(float(alpha_init)))
 
     def forward(self, H, batch_idx):
@@ -186,7 +182,7 @@ def make_head(head_type: str, dim: int, hidden: int,
     if head_type == "atomwise":
         return AtomwiseHead(dim=dim, hidden=hidden, n_blocks=max(2, n_mp_layers))
     if head_type == "hybrid":
-        alpha_init = float(os.environ.get("HYBRID_ALPHA_INIT", "0.0"))
+        alpha_init = float(os.environ.get("HYBRID_ALPHA_INIT", "0.1"))
         return HybridHead(dim=dim, hidden=hidden,
                           n_mp_layers=n_mp_layers, n_heads=n_heads,
                           n_blocks=max(2, n_mp_layers), alpha_init=alpha_init)
@@ -961,21 +957,9 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
                               _gid, int(bool(mask[_row]))])
         print(f"  [DUMP_PREDS] wrote {out_csv.name} ({len(eval_idx_list)} rows)")
 
-    # HybridHead diagnostic: surface the learned mixing scalar α.
-    # α ≈ 0   ⇒ atomwise contributes nothing on this task (degenerates to attention)
-    # α large ⇒ extensive correction is doing real work
-    _hybrid_alpha = None
-    if hasattr(model, "alpha"):
-        try:
-            _hybrid_alpha = float(model.alpha.detach().cpu())
-        except Exception:
-            pass
-    if _hybrid_alpha is not None:
-        print(f"  [HybridHead] learned α = {_hybrid_alpha:+.4f}")
-
     if ensemble_groups is None:
         # Standard path: one prediction per Data.
-        _rep = {
+        return {
             "n_train": n_train_total, "n_val": int(mask.sum()),
             "target_mean": mean, "target_std": std,
             # Global best-val metrics
@@ -990,9 +974,6 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
             "r2_last_stable":   float(r2_score(y_true[mask], preds_ls[mask])),
             "best_epoch_last_stable": ls_ep + 1,
         }
-        if _hybrid_alpha is not None:
-            _rep["hybrid_alpha"] = _hybrid_alpha
-        return _rep
 
     # Ensemble path: aggregate K conformer preds per group_id, then metrics.
     val_groups = ensemble_groups[val_idx_arr]
@@ -1021,7 +1002,7 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
     pc_rmse = float(np.sqrt(mean_squared_error(y_true_masked, preds_masked)))
     pc_r2   = float(r2_score(y_true_masked, preds_masked))
 
-    _rep_ens = {
+    return {
         "n_train":       n_train_total,
         "n_val":         int(mask.sum()),
         "n_val_groups":  int(len(unique_groups)),
@@ -1051,9 +1032,6 @@ def train_one_fold(H, offsets, targets, has_target, train_idx, val_idx,
             np.bincount(inv, weights=preds_ls[mask], minlength=len(unique_groups)) / counts)),
         "best_epoch_last_stable": ls_ep + 1,
     }
-    if _hybrid_alpha is not None:
-        _rep_ens["hybrid_alpha"] = _hybrid_alpha
-    return _rep_ens
 
 
 def train_one_fold_lora(ds, model, train_idx, val_idx, args, device,
