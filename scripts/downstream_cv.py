@@ -123,6 +123,41 @@ class AtomwiseHead(nn.Module):
         return scatter_sum(per_atom, batch_idx, dim=0)      # [N_mols]
 
 
+class HybridHead(nn.Module):
+    """Attention-invariant baseline + size-extensive atomwise residual.
+
+        ŷ = attention(H)  +  α · atomwise(H)
+
+    Combines the two single-head architectures into one joint model so the
+    invariant component (size-normalized; warm-init-able from the pretrained
+    thermo head) and the extensive component (per-atom sum; physically motivated
+    for additive targets) share the same backbone H and train end-to-end.
+
+    α is a learned scalar initialized small (default 0.1) so the attention path
+    dominates early; the additive correction grows as it becomes useful.
+    Single ckpt, single forward pass per molecule — cheaper than running two
+    heads independently and then averaging.
+
+    The 0518 head_pool ablation showed attention wins MAE on 8/10 thermo
+    targets and atomwise wins RMSE/R² on 4/10 extensive targets — exactly the
+    asymmetric error-mode complementarity that motivates this hybrid.
+    """
+
+    def __init__(self, dim=256, hidden=256, n_mp_layers=2, n_heads=4,
+                 n_blocks=4, alpha_init=0.1):
+        super().__init__()
+        self.attn = SingleTargetHead(dim=dim, hidden=hidden,
+                                      n_mp_layers=n_mp_layers, n_heads=n_heads)
+        self.atom = AtomwiseHead(dim=dim, hidden=hidden, n_blocks=n_blocks)
+        # Learned mixing scalar.  alpha_init=0.1 keeps the head close to pure
+        # attention at start (so warm-init from thermo ckpt stays meaningful)
+        # and lets gradient descent grow the additive correction as needed.
+        self.alpha = nn.Parameter(torch.tensor(float(alpha_init)))
+
+    def forward(self, H, batch_idx):
+        return self.attn(H, batch_idx) + self.alpha * self.atom(H, batch_idx)
+
+
 def make_head(head_type: str, dim: int, hidden: int,
               n_mp_layers: int, n_heads: int):
     """Factory: dispatch head class by --head-type flag.
@@ -132,6 +167,8 @@ def make_head(head_type: str, dim: int, hidden: int,
     'atomwise'  -> AtomwiseHead     (deeper residual per-atom MLP +
                    scatter_sum; size-extensive; good for additive thermo
                    targets like Hf_gas, H_combus, Vc).
+    'hybrid'    -> HybridHead       (attention + α·atomwise joint; α learned;
+                   single ckpt, single forward; warm-init applies to attn).
 
     The SumPoolHead variant was evaluated in the 0518 head_pool ablation
     and dominated by AtomwiseHead on every metric where it differed from
@@ -144,8 +181,13 @@ def make_head(head_type: str, dim: int, hidden: int,
                                 n_mp_layers=n_mp_layers, n_heads=n_heads)
     if head_type == "atomwise":
         return AtomwiseHead(dim=dim, hidden=hidden, n_blocks=max(2, n_mp_layers))
+    if head_type == "hybrid":
+        alpha_init = float(os.environ.get("HYBRID_ALPHA_INIT", "0.1"))
+        return HybridHead(dim=dim, hidden=hidden,
+                          n_mp_layers=n_mp_layers, n_heads=n_heads,
+                          n_blocks=max(2, n_mp_layers), alpha_init=alpha_init)
     raise ValueError(f"Unknown --head-type: {head_type!r}. "
-                     f"Choose from: attention (default), atomwise.")
+                     f"Choose from: attention (default), atomwise, hybrid.")
 
 
 def load_thermo_head_into(head: "SingleTargetHead", ckpt_path: str) -> int:
