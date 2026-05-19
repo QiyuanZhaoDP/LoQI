@@ -3,16 +3,17 @@
 **Source:** `downstream_ft/0515_final/per_property/*.csv`
 **Generated:** by `scripts/build_thermo_statistics.py`
 
-**Unique molecules:** 21,269     **Properties:** 43     **Total cells:** 64,477
+**Unique molecules:** 20,841     **Properties:** 42     **Total cells:** 62,925
 
 ## 1. Confidence-star distribution (overall, all cells)
 
 | ★ | Count | Share | Tier labels |
 |---:|---:|---:|---|
-| ★★★★★ | 34,272 | 53.2% | tier1, tier1+confirmed |
-| ★★★★☆ | 11,222 | 17.4% | tier1+disputed, tier2, tier2+confirmed |
-| ★★★☆☆ | 9,173 | 14.2% | tier2+disputed, secondary_tight |
-| — | 9,810 | 15.2% | downstream (no upstream tier; ML-bench targets) |
+| ★★★★★ | 34,251 | 54.4% | tier1, tier1+confirmed |
+| ★★★★☆ | 11,220 | 17.8% | tier1+disputed, tier2, tier2+confirmed |
+| ★★★☆☆ | 9,173 | 14.6% | tier2+disputed, secondary_tight |
+| ★☆☆☆☆ | 73 | 0.1% | secondary_single |
+| — | 8,208 | 13.0% | downstream (no upstream tier; ML-bench targets) |
 
 ## 2. Per-property tier composition
 
@@ -46,7 +47,7 @@ Columns: n = total rows, mol = unique molecules, 5★/4★/3★/2★/1★/dn = c
 | `Vc_cm3mol` | 1,236 | 1,236 | 1,236 |  |  |  |  |  |
 | `autoignition_K` | 497 | 497 | 497 |  |  |  |  |  |
 | `density_liq_298K_gcm3` | 1,034 | 1,034 | 1,023 | 11 |  |  |  |  |
-| `dielectric_298K` | 1,362 | 1,362 | 1,234 | 89 | 39 |  |  |  |
+| `dielectric_298K` | 1,435 | 1,435 | 1,234 | 89 | 39 |  | 73 |  |
 | `dipole_moment_D` | 753 | 753 | 749 | 3 | 1 |  |  |  |
 | `expand_coeff_liq_K-1` | 989 | 989 | 989 |  |  |  |  |  |
 | `flash_point_K` | 1,040 | 1,040 | 1,040 |  |  |  |  |  |
@@ -61,8 +62,7 @@ Columns: n = total rows, mol = unique molecules, 5★/4★/3★/2★/1★/dn = c
 | `log_solubility_water_ppm` | 816 | 816 | 816 |  |  |  |  |  |
 | `omega` | 1,264 | 1,264 | 1,264 |  |  |  |  |  |
 | `visc_gas_298K_uPas` | 626 | 626 | 626 |  |  |  |  |  |
-| `visc_liq_298K_cP` | 1,211 | 1,211 | 1,005 | 120 | 86 |  |  |  |
-| `visc_liq_298K_cP_manual` | 1,602 | 1,602 |  |  |  |  |  | 1,602 |
+| `visc_liq_298K_cP` | 1,188 | 1,188 | 984 | 118 | 86 |  |  |  |
 
 ## 3. Per-property value statistics
 
@@ -94,7 +94,7 @@ Columns: n = total rows, mol = unique molecules, 5★/4★/3★/2★/1★/dn = c
 | `Vc_cm3mol` | 1,236 | 446 | 217.7 | 16.5 | 300 | 404 | 524 | 1460 |
 | `autoignition_K` | 497 | 658.8 | 128.4 | 349.8 | 555.4 | 664.3 | 738.1 | 1283 |
 | `density_liq_298K_gcm3` | 1,034 | 0.926 | 0.2809 | 0.493 | 0.7545 | 0.851 | 0.994 | 3.306 |
-| `dielectric_298K` | 1,362 | 11 | 17.51 | 1.423 | 3.292 | 5.642 | 10.57 | 187.9 |
+| `dielectric_298K` | 1,435 | 11.37 | 17.69 | 1.423 | 3.34 | 5.72 | 11 | 187.9 |
 | `dipole_moment_D` | 753 | 1.596 | 1.23 | 0 | 0.55 | 1.6 | 2.23 | 6.39 |
 | `expand_coeff_liq_K-1` | 989 | 0.001165 | 0.0005748 | 0.000429 | 0.000896 | 0.001056 | 0.00122 | 0.009359 |
 | `flash_point_K` | 1,040 | 329.9 | 71.83 | 137 | 284.3 | 316.8 | 374.8 | 658.1 |
@@ -109,8 +109,7 @@ Columns: n = total rows, mol = unique molecules, 5★/4★/3★/2★/1★/dn = c
 | `log_solubility_water_ppm` | 816 | 2.103 | 2.329 | -6.699 | 0.0961 | 2.141 | 3.822 | 8 |
 | `omega` | 1,264 | 0.4701 | 0.2409 | 0.011 | 0.2967 | 0.403 | 0.5952 | 1.578 |
 | `visc_gas_298K_uPas` | 626 | 6.77 | 2.335 | 3.236 | 5.358 | 6.14 | 7.66 | 17.27 |
-| `visc_liq_298K_cP` | 1,211 | 4.213 | 13.68 | 0.039 | 0.538 | 0.951 | 2.912 | 187.8 |
-| `visc_liq_298K_cP_manual` | 1,602 | 6.021 | 81.84 | 0.05212 | 0.4521 | 0.7463 | 1.9 | 3018 |
+| `visc_liq_298K_cP` | 1,188 | 2.528 | 4.823 | 0.039 | 0.525 | 0.906 | 2.582 | 49.8 |
 
 ## 4. Per-property top sources (rows by upstream provider)
 
@@ -160,7 +159,6 @@ Top-3 sources per property, plus total number of distinct sources.
 | `omega` | 0 | (no sources column — downstream) |
 | `visc_gas_298K_uPas` | 0 | (no sources column — downstream) |
 | `visc_liq_298K_cP` | 0 | (no sources column — downstream) |
-| `visc_liq_298K_cP_manual` | 0 | (no sources column — downstream) |
 
 ## 5. Split sizes (random + scaffold, 5-fold)
 
@@ -192,7 +190,7 @@ Top-3 sources per property, plus total number of distinct sources.
 | `Vc_cm3mol` | 1236 | 117 | `248|247|247|247|247` | `809|206|74|74|73` |
 | `autoignition_K` | 497 | 46 | `100|100|99|99|99` | `333|86|26|26|26` |
 | `density_liq_298K_gcm3` | 1034 | 71 | `207|207|207|207|206` | `756|127|51|50|50` |
-| `dielectric_298K` | 1362 | 91 | `273|273|272|272|272` | `877|261|75|75|74` |
+| `dielectric_298K` | 1435 | 94 | `287|287|287|287|287` | `927|270|80|79|79` |
 | `dipole_moment_D` | 753 | 88 | `151|151|151|150|150` | `466|144|48|48|47` |
 | `expand_coeff_liq_K-1` | 989 | 69 | `198|198|198|198|197` | `714|128|49|49|49` |
 | `flash_point_K` | 1040 | 106 | `208|208|208|208|208` | `680|187|58|58|57` |
@@ -207,8 +205,7 @@ Top-3 sources per property, plus total number of distinct sources.
 | `log_solubility_water_ppm` | 816 | 57 | `164|163|163|163|163` | `576|135|35|35|35` |
 | `omega` | 1264 | 116 | `253|253|253|253|252` | `836|204|75|75|74` |
 | `visc_gas_298K_uPas` | 626 | 44 | `126|125|125|125|125` | `471|66|30|30|29` |
-| `visc_liq_298K_cP` | 1211 | 75 | `243|242|242|242|242` | `902|135|58|58|58` |
-| `visc_liq_298K_cP_manual` | 1602 | 78 | `321|321|320|320|320` | `1255|138|70|70|69` |
+| `visc_liq_298K_cP` | 1188 | 74 | `238|238|238|237|237` | `885|131|58|57|57` |
 
 ## 6. Per-property value distributions
 
@@ -236,7 +233,6 @@ Click any property name to open the standalone PNG.
 | **[k_gas_298K](distributions/k_gas_298K.png)**<br><img src="distributions/k_gas_298K.png" width="280"> | **[k_liq_298K](distributions/k_liq_298K.png)**<br><img src="distributions/k_liq_298K.png" width="280"> | **[log_Henry_atmmolfrac](distributions/log_Henry_atmmolfrac.png)**<br><img src="distributions/log_Henry_atmmolfrac.png" width="280"> |
 | **[log_Koc](distributions/log_Koc.png)**<br><img src="distributions/log_Koc.png" width="280"> | **[log_solubility_water_molL](distributions/log_solubility_water_molL.png)**<br><img src="distributions/log_solubility_water_molL.png" width="280"> | **[log_solubility_water_ppm](distributions/log_solubility_water_ppm.png)**<br><img src="distributions/log_solubility_water_ppm.png" width="280"> |
 | **[omega](distributions/omega.png)**<br><img src="distributions/omega.png" width="280"> | **[visc_gas_298K_uPas](distributions/visc_gas_298K_uPas.png)**<br><img src="distributions/visc_gas_298K_uPas.png" width="280"> | **[visc_liq_298K_cP](distributions/visc_liq_298K_cP.png)**<br><img src="distributions/visc_liq_298K_cP.png" width="280"> |
-| **[visc_liq_298K_cP_manual](distributions/visc_liq_298K_cP_manual.png)**<br><img src="distributions/visc_liq_298K_cP_manual.png" width="280"> |  |  |
 
 ## 7. Top 20 upstream sources across all properties
 

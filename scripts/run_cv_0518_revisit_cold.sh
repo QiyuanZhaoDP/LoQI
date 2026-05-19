@@ -6,9 +6,6 @@
 #
 #   visc_liq_298K_cP        — 2099 → 1211 rows  (200.0 visc_LB fix +
 #                              intra-tier drop + NO_STAR_FILTER removal)
-#   visc_liq_298K_cP_manual — 1602 rows         (manually curated CSV at
-#                              /Users/zhao922/Desktop/Data_20260515_Vcp.csv;
-#                              added via scripts/add_manual_property.py)
 #   ST_298K_mNm             — 2304 → 2264 rows  (intra-tier drop)
 #   dielectric_298K         — 1386 → 1362 rows  (intra-tier drop)
 #   Hvap_at_TB_kJmol        — 1430 → 1414 rows  (intra-tier drop)
@@ -60,9 +57,10 @@ export DUMP_PREDS="${DUMP_PREDS:-1}"
 export INPUT_DIR=downstream_ft/0515_final/Clean
 export SPLIT_DIR_ROOT=downstream_ft/0515_final/Split
 
-# Five datasets: 4 changed today + the new manually curated visc.
+# Four datasets: visc + ST + dielectric + Hvap_at_TB (the upstream-data
+# cleanup targets — manual visc curated variant has been removed).
 # Sorted descending by row count for LPT scheduling.
-export DATASETS_FILTER="ST_298K_mNm,visc_liq_298K_cP_manual,Hvap_at_TB_kJmol,dielectric_298K,visc_liq_298K_cP"
+export DATASETS_FILTER="ST_298K_mNm,Hvap_at_TB_kJmol,dielectric_298K,visc_liq_298K_cP"
 
 # Fresh RUN_TAG → fresh pkl/pt caches under data/0518rev_pkl_cold_combined_k8/
 # + data/0518rev_pt_cold_combined_k8/.  Override to RUN_TAG=0515 if you
