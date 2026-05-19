@@ -1,6 +1,0 @@
-property,n_raw,n_kept,drop_element_filter,drop_element_breakdown,drop_duplicate_ik
-freesolv_dG_kcalmol,641,641,0,{},0
-ESOL_logS,1115,1115,0,{},0
-Lipophilicity_logD,4199,4191,8,"{""charged"": 7, ""non_allowed_Se"": 1}",0
-CEP_PCE,882,875,7,"{""charged"": 7}",0
-PPBR_pct,1412,1386,26,"{""charged"": 26}",0

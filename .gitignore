@@ -36,6 +36,10 @@ downstream_ft/0301/
 downstream_ft/0403/
 downstream_ft/0506/
 downstream_ft/0511/
+# 0515_final is the dev mirror (lots of intermediate / iteration); the
+# canonical 42-property snapshot lives at downstream_data/cv_0519/.
+# Keep 0515_final locally for splitter iteration but stop tracking it.
+downstream_ft/0515_final/
 
 # Model checkpoints and large binaries
 *.ckpt
