@@ -1,21 +1,17 @@
 #!/usr/bin/env python3
-"""Visualize OOD nature of balanced scaffold splits — 3-panel layout per ds.
+"""Visualize OOD nature of scaffold splits — 3-panel layout per dataset.
 
 For each dataset, plots THREE panels side-by-side:
-  (a) random_cv5  MOLECULE-level (1 pt per mol)
-       -> folds should be uniformly MIXED (no OOD)
-  (b) scaffold_balanced_cv5 MOLECULE-level
-       -> folds look partly mixed because ECFP fingerprints capture more
-          than scaffold (side-chain similarity bleeds across folds)
-  (c) scaffold_balanced_cv5 SCAFFOLD-level (1 pt per unique Murcko scaffold)
-       -> folds are CLEANLY SEPARATED by construction — each scaffold
-          belongs to exactly one fold. This is the visualization that
-          directly reflects the OOD principle.
+  (a) random_cv5             -> baseline; folds uniformly mixed (no OOD)
+  (b) scaffold_diverse_cv5   -> LPT bin-packing on Butina super-clusters
+                                (sim=0.30); median test→train Tanimoto
+                                distance ≈ 0.60, balance ≈ 1.04×.
+  (c) scaffold_hybrid_cv5    -> Lloyd→rebalance→OOD-swap; pushes distance
+                                to ≈ 0.63 (+5%) at cost of balance ≈ 1.20×.
 
-The progression (a) -> (b) -> (c) tells the story:
-  - random is mixed (no OOD)
-  - scaffold-at-mol-level looks mixed (FP space is shared across scaffolds)
-  - scaffold-at-scaffold-level is clean (the actual OOD partitioning)
+Compared to (a), hull/color separation in (b) and (c) reflects the OOD
+partition; the right-shift between curves in scripts/viz_scaffold_distance_dist.py
+gives the quantitative OOD-strength comparison.
 """
 import argparse
 from pathlib import Path
