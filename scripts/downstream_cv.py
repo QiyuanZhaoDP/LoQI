@@ -1413,14 +1413,14 @@ def main():
     p.add_argument("--mp-n-heads", type=int, default=4)
     p.add_argument("--head-hidden", type=int, default=256)
     p.add_argument("--head-type", type=str, default="attention",
-                   choices=["attention", "sum", "atomwise"],
+                   choices=["attention", "atomwise", "hybrid"],
                    help="Head pooling scheme. 'attention' (default) = "
                         "AtomMolMP attention-weighted MEAN pool (size-invariant). "
-                        "'sum' = per-atom MLP + scatter_sum (size-extensive). "
                         "'atomwise' = deeper residual per-atom MLP + scatter_sum "
-                        "(NequIP/SchNet-style). For size-extensive thermo targets "
-                        "(Hf, Gf, S, Cv, H_combus, ...), 'sum' or 'atomwise' are "
-                        "physically more appropriate. --init-head-from-thermo is "
+                        "(NequIP/SchNet-style; size-extensive — use for Hf, "
+                        "H_combus, S, Cv, Vc, ...). 'hybrid' = attention + "
+                        "α · atomwise joint head (α learned, init via "
+                        "HYBRID_ALPHA_INIT env). --init-head-from-thermo is "
                         "auto-skipped for non-attention heads (no architectural "
                         "parity with the pretrained combined_head).")
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
