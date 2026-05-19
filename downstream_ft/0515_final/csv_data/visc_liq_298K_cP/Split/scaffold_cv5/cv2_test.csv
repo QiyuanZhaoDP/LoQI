@@ -61,7 +61,6 @@ CCOc1ccccc1,1.176
 ClCc1ccccc1,1.07735
 CCc1cc(C)ccc1C,1.052
 CCc1ccc(C)cc1C,0.958
-CCCCCCCCOC(=O)c1ccccc1C(=O)OCCCCCCCC,71.844
 Sc1ccccc1,1.144
 CCc1c(C)cccc1C,1.108
 C=C(C)c1ccccc1,0.734
@@ -101,7 +100,6 @@ Fc1cccc(F)c1,0.649
 Cc1ccc(C)c(C)c1C,1.328
 CCc1cc(CC)cc(CC)c1,1.499
 CCCCCCCCCCCCCc1ccccc1,5.743
-CC(C)CCCCCOC(=O)c1ccccc1C(=O)OCCCCCC(C)C,54.673
 Fc1ccccc1F,0.617
 Nc1ccccc1Cl,3.13
 C#Cc1ccccc1,0.675
@@ -113,7 +111,6 @@ O=[N+]([O-])c1cccc(C(F)(F)F)c1,2.522
 CCCCCCCCCCCCCCc1ccccc1,6.946
 CCCCCCCCCCCCCCCc1ccccc1,7.937
 O=[N+]([O-])c1cc(C(F)(F)F)ccc1Cl,6.71
-CC(C)CCCCCCCOC(=O)c1ccccc1C(=O)OCCCCCCCC(C)C,84.1135
 Cc1ccc(C=O)cc1,1.493
 CCc1ccc(CC)c(CC)c1CC,2.211
 FC(F)(F)c1ccc(Cl)cc1Cl,2.364
@@ -124,7 +121,6 @@ CCc1cc(CC)c(CC)c(CC)c1,2.199
 CCc1cccc(CC)c1CC,1.524
 Cc1c(C)c(C)c(C)c(C)c1C,2.539
 CCNc1ccccc1,2.05
-CCCCC(CC)COC(=O)c1ccccc1C(=O)OCC(CC)CCCC,57.58
 CC(O)c1ccccc1,8.703
 Cc1cccc(Cl)c1,0.8105
 COc1ccc(C=O)cc1,3.7042

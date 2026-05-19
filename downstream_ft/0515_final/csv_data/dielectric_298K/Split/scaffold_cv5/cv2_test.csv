@@ -64,6 +64,7 @@ CCCCCCCc1ccccc1,2.26
 CCCCCCCCc1ccccc1,2.26
 COC(=O)c1ccccc1C(=O)OC,8.66
 NNc1ccccc1,7.15
+CCc1ccccc1N,4.09
 O=C=Nc1ccccc1,8.94
 CCCCCCc1ccccc1,2.3
 ClC(Cl)c1ccccc1,6.9
@@ -90,6 +91,7 @@ Oc1cccc(Cl)c1,6.255
 COc1ccccc1O,11.95
 CC=Cc1ccccc1,2.73
 Cc1ccc(F)cc1,5.88
+CCc1ccc(O)cc1,10.51
 Oc1ccc(Cl)cc1,11.3
 CC(C)(O)c1ccccc1,5.61
 CSc1ccccc1,4.815
@@ -113,6 +115,7 @@ COc1ccc(C)cc1,3.972
 COc1ccc(Br)cc1,7.4
 CC(=O)OCCc1ccccc1,4.93
 CCCOC(=O)c1ccccc1,5.765
+CCOC(=O)C=Cc1ccccc1,5.63
 C=CCc1ccc(O)c(OC)c1,9.55
 CCCCCCOC(=O)c1ccccc1C(=O)OCCCCCC,5.62
 Cc1ccccc1F,4.23
@@ -131,6 +134,7 @@ O=[N+]([O-])c1ccccc1O,16.75
 SCc1ccccc1,4.705
 CCSc1ccccc1,4.95
 Cc1ccccc1Br,4.7
+NCCCc1ccccc1,4.83
 CCc1ccc(N)cc1,4.84
 O=COCc1ccccc1,6.34
 Cc1cccc(Br)c1,5.566
@@ -182,8 +186,10 @@ COC(=O)c1ccccc1OC,7.7
 CC(C)(O)Cc1ccccc1,5.71
 CCCC(=O)OCc1ccccc1,4.55
 C[Si](C)(C)c1ccccc1,2.3533
+CCCCOC(=O)C=Cc1ccccc1,5.13
 CCOC(=O)/C=C/c1ccccc1,5.63
 CCCCCOC(=O)C=Cc1ccccc1,4.89
+CCCCCCOC(=O)C=Cc1ccccc1,4.73
 COC(=O)c1ccccc1[N+](=O)[O-],27.76
 Cc1ccc(Cl)c([N+](=O)[O-])c1,28.07
 CCCCCCCOC(=O)c1ccccc1C(=O)OCCCCCCC,5.22
@@ -214,6 +220,7 @@ CC(O)Cc1ccccc1,9.35
 O=C(CO)c1ccccc1,21.33
 CCCC(=O)Oc1ccccc1,4.48
 CCCCCOC(=O)Cc1ccccc1,4.48
+CCCOC(=O)C=Cc1ccccc1,5.45
 O=C=NCc1cccc(CN=C=O)c1,13.787
 O=C=Nc1cccc(C(F)(F)F)c1,8.34
 Cc1c(C)c(C)c(Cl)c(C)c1C,5.8
@@ -242,8 +249,10 @@ CCCCC/C(C=O)=C\c1ccccc1,11.0
 CCCCCCCCCC(=O)Oc1ccccc1,3.52
 CCCCCCCCCOC(=O)c1ccccc1,4.2
 CCCCCCCCCCOC(=O)c1ccccc1,4.05
+CCCCCCCOC(=O)C=Cc1ccccc1,4.58
 CCCCCCOC(=O)/C=C/c1ccccc1,4.73
 CCCCCCCCCCCC(=O)Oc1ccccc1,3.28
+CCCCCCCCOC(=O)C=Cc1ccccc1,4.38
 O=C=NP(=O)(N=C=O)Oc1ccccc1,8.82
 CCCCCCCOC(=O)/C=C/c1ccccc1,4.58
 O=C(OCC(F)(F)F)c1ccc(Cl)cc1,3.96
