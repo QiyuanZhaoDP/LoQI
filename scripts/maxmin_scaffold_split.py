@@ -77,7 +77,7 @@ def get_fp(smi):
 
 
 def load_full(ds_dir: Path):
-    src = ds_dir / "scaffold_cv5"
+    src = ds_dir / "random_cv5"
     rows, seen = [], set()
     for kind in ["train", "valid", "test"]:
         fp = src / f"cv1_{kind}.csv"

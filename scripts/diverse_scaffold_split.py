@@ -72,7 +72,7 @@ def load_full(ds_dir: Path):
     """Return list[(smi, target)] for the full dataset (union of any single
     fold's train+valid+test in scaffold_cv5 — they're disjoint by fold but
     union recovers the full data)."""
-    src = ds_dir / "scaffold_cv5"
+    src = ds_dir / "random_cv5"
     rows, seen = [], set()
     for kind in ["train", "valid", "test"]:
         fp = src / f"cv1_{kind}.csv"
