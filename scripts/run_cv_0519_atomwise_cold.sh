@@ -1,18 +1,23 @@
 #!/usr/bin/env bash
-# 0519 atomwise variant — same datasets, same config as the baseline, but
-# uses --head-type atomwise (size-extensive per-atom MLP + scatter_sum).
+# 0519 atomwise variant — runs --head-type atomwise on ONLY the
+# size-extensive subset of properties (12 of 42).
 #
-# Together with scripts/run_cv_0519_baseline_cold.sh this is the A1
-# experiment: train both heads on the same folds with DUMP_PREDS=1, then
-# scripts/ensemble_preds.py averages the per-sample predictions to compute
-# ensemble MAE / RMSE / R².  If the post-hoc average beats either single
-# head, A3 (joint HybridHead) is worth running.
+# Why only extensive: atomwise = per-atom MLP + scatter_sum, so the output
+# scales linearly with N_atoms.  This is the right physical inductive bias
+# for formation energies, heat capacities, entropies, critical volume etc.
+# (which are themselves extensive), but actively WRONG for intensive
+# properties like BP_K / ε / viscosity / density / partition coefficients
+# where running atomwise would introduce a spurious size dependence.
 #
-# Cache discipline: reuses RUN_TAG=0519 caches (Stage A/B/B.5) from the
-# baseline.  Only Stage C trains the new head.
+# Intensive properties (30 of 42) keep the attention head — see
+# scripts/run_cv_0519_baseline_cold.sh.
 #
-# Workload: 42 ds × 1 ckpt × 1 K = 42 jobs.  Stage A/B/B.5 skipped.
-# On 8 GPUs × 4 slots → ~1.5 rounds Stage C; wall ~30-60 min.
+# Pair-comparison setup with cv_0519_baseline_cold on the SAME 12
+# extensive datasets so scripts/ensemble_preds.py can do a head-to-head
+# ensemble (A1 experiment).  RUN_TAG=0519 shares Stage A/B/B.5 caches.
+#
+# Workload: 12 ds × 1 ckpt × 1 K = 12 jobs.  Stage A/B/B.5 skipped.
+# On 8 GPUs × 4 slots → 1 round Stage C; wall ~15-30 min.
 #
 # Usage:
 #   nohup bash scripts/run_cv_0519_atomwise_cold.sh \
@@ -44,7 +49,10 @@ export INPUT_DIR=downstream_data/cv_0519/Clean
 export SPLIT_DIR_ROOT=downstream_data/cv_0519/Split
 export SPLIT_KIND="${SPLIT_KIND:-random_cv5}"
 
-export DATASETS_FILTER="log_solubility_water_molL,BP_K,Lipophilicity_logD,Hf_gas_kJmol,Pvap_log10mmHg,ST_298K_mNm,fusion_T_K,Hf_liq_kJmol,dielectric_298K,Hvap_at_TB_kJmol,PPBR_pct,H_combus_kJmol,Tc_K,Pc_bar,Vc_cm3mol,Sf_gas_JmolK,Gf_gas_kJmol,ESOL_logS,visc_liq_298K_cP,omega,UEL_volpct,Cp_liq_298K,LEL_volpct,flash_point_K,density_liq_298K_gcm3,expand_coeff_liq_K-1,gyration_radius_A,k_liq_298K,S_gas_JmolK,RI_298K,CEP_PCE,Cp_gas_298K,log_solubility_water_ppm,Q_10ppmv_mgg,dipole_moment_D,log_Koc,Hfus_at_TF_kJmol,freesolv_dG_kcalmol,visc_gas_298K_uPas,log_Henry_atmmolfrac,autoignition_K,k_gas_298K"
+# Extensive subset (12).  Sorted descending by row count.
+# Includes: formation H/G/S (gas+liq), Cp, Hvap, Hfus, H_combus, Vc, R_g.
+# Excludes intensive properties (BP, Tc, ε, η, ρ, ω, RI, partition, ...).
+export DATASETS_FILTER="Hf_gas_kJmol,Hf_liq_kJmol,Hvap_at_TB_kJmol,H_combus_kJmol,Vc_cm3mol,Sf_gas_JmolK,Gf_gas_kJmol,Cp_liq_298K,gyration_radius_A,S_gas_JmolK,Cp_gas_298K,Hfus_at_TF_kJmol"
 
 # Shares pkl/pt caches with the baseline (same RUN_TAG); different OUT_ROOT.
 export RUN_TAG="${RUN_TAG:-0519}"

@@ -5,13 +5,20 @@
 #
 # where α is a learned scalar initialized at 0.1 (overridable via
 # HYBRID_ALPHA_INIT env var).  Single backbone H, single forward pass,
-# one ckpt — cheaper than running attention + atomwise separately and
-# averaging at inference time.
+# one ckpt.
 #
-# Pair-comparison setup with the same RUN_TAG=0519 caches as the baseline
-# and atomwise wrappers, distinct OUT_ROOT + wandb group so all three
-# (attention / atomwise / hybrid) can be summarized side-by-side via
-# scripts/summarize_cv_reports.py.
+# Scope: ONLY the 12 size-extensive properties (same set as
+# run_cv_0519_atomwise_cold.sh).  The additive `α·atomwise(H)` term
+# introduces a per-atom-summed component that physically only makes sense
+# for extensive quantities (Hf, H_combus, Cp, S, Vc, ...).  Adding it to
+# intensive properties like BP / ε / viscosity / density would let α drift
+# to compensate for size dependence the target doesn't actually have —
+# at best wasted capacity, at worst injects noise.
+#
+# Pair-comparison setup with cv_0519_baseline_cold + cv_0519_atomwise_cold
+# on the SAME 12 datasets; same RUN_TAG=0519 caches; distinct OUT_ROOT
+# + wandb group so the four (baseline / atomwise / hybrid / [HP cells])
+# can be summarized side-by-side.
 #
 # Usage:
 #   nohup bash scripts/run_cv_0519_hybrid_cold.sh \
@@ -46,7 +53,8 @@ export INPUT_DIR=downstream_data/cv_0519/Clean
 export SPLIT_DIR_ROOT=downstream_data/cv_0519/Split
 export SPLIT_KIND="${SPLIT_KIND:-random_cv5}"
 
-export DATASETS_FILTER="log_solubility_water_molL,BP_K,Lipophilicity_logD,Hf_gas_kJmol,Pvap_log10mmHg,ST_298K_mNm,fusion_T_K,Hf_liq_kJmol,dielectric_298K,Hvap_at_TB_kJmol,PPBR_pct,H_combus_kJmol,Tc_K,Pc_bar,Vc_cm3mol,Sf_gas_JmolK,Gf_gas_kJmol,ESOL_logS,visc_liq_298K_cP,omega,UEL_volpct,Cp_liq_298K,LEL_volpct,flash_point_K,density_liq_298K_gcm3,expand_coeff_liq_K-1,gyration_radius_A,k_liq_298K,S_gas_JmolK,RI_298K,CEP_PCE,Cp_gas_298K,log_solubility_water_ppm,Q_10ppmv_mgg,dipole_moment_D,log_Koc,Hfus_at_TF_kJmol,freesolv_dG_kcalmol,visc_gas_298K_uPas,log_Henry_atmmolfrac,autoignition_K,k_gas_298K"
+# Extensive subset (12).  Same set as run_cv_0519_atomwise_cold.sh.
+export DATASETS_FILTER="Hf_gas_kJmol,Hf_liq_kJmol,Hvap_at_TB_kJmol,H_combus_kJmol,Vc_cm3mol,Sf_gas_JmolK,Gf_gas_kJmol,Cp_liq_298K,gyration_radius_A,S_gas_JmolK,Cp_gas_298K,Hfus_at_TF_kJmol"
 
 export RUN_TAG="${RUN_TAG:-0519}"
 export OUT_ROOT="${OUT_ROOT:-outputs/cv_0519_hybrid_cold}"
