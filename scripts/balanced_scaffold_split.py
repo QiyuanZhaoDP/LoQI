@@ -48,7 +48,7 @@ def get_scaffold(smiles: str) -> str:
 
 def load_full_dataset(ds_dir: Path) -> list:
     """Recover full (SMILES, TARGET) list from any existing fold's union."""
-    src = ds_dir / "scaffold_cv5"
+    src = ds_dir / "random_cv5"
     rows = []
     seen = set()
     for kind in ["train", "valid", "test"]:
@@ -123,7 +123,7 @@ def write_fold(out_dir: Path, fold_idx: int, fold_data: dict):
 
 
 def process_dataset(ds_dir: Path, verbose: bool = True) -> dict:
-    src = ds_dir / "scaffold_cv5"
+    src = ds_dir / "random_cv5"
     if not src.exists():
         return None
     rows = load_full_dataset(ds_dir)
